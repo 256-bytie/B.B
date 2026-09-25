@@ -189,3 +189,60 @@ def serialize_monthly_reward(status):
         'next_claim_at': _iso_utc(status['next_claim_at']),
         'last_claimed_at': _iso_utc(status['last_claimed_at']),
     }
+
+
+def serialize_community(row, icon_bg, viewer_role):
+    """Convert a communities row (+ member count) to the shape
+    static/js/community.js expects.
+
+    Args:
+        row: tuple (id, slug, name, description, topic, type, icon_emoji,
+            created_at, member_count)
+        icon_bg: Tailwind class picked from the topic palette
+            (community_service.TOPIC_STYLES) - derived, not stored.
+        viewer_role: 'creator' / 'moderator' / 'member', or None for a
+            non-member or logged-out viewer.
+
+    `id` is the slug on purpose: the frontend uses id and slug
+    interchangeably as the URL param. The integer PK never leaves the server.
+    """
+    (_pk, slug, name, description, topic, community_type, icon_emoji,
+     created_at, member_count) = row
+    return {
+        'id': slug,
+        'slug': slug,
+        'name': name,
+        'description': description,
+        'topic': topic,
+        'type': community_type,
+        'icon_emoji': icon_emoji,
+        'icon_bg': icon_bg,
+        'member_count': member_count,
+        'created_at': _iso_utc(created_at),
+        'membership': {
+            'is_member': viewer_role is not None,
+            'role': viewer_role,
+        },
+    }
+
+
+def serialize_community_post(row):
+    """Community feed row. `author`/`avatar_seed` are the handle (username,
+    falling back to the email local-part like serialize_post); `avatar_url`
+    is only present when the author has uploaded a real profile picture.
+
+    Args:
+        row: tuple (post_id, content, created_at, username, email, profile_picture)
+    """
+    post_id, content, created_at, username, email, profile_picture = row
+    handle = username or email.split('@')[0]
+    result = {
+        'id': post_id,
+        'author': handle,
+        'avatar_seed': handle,
+        'content': content,
+        'created_at': _iso_utc(created_at),
+    }
+    if profile_picture:
+        result['avatar_url'] = profile_picture
+    return result

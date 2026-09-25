@@ -178,7 +178,9 @@ def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cu
     '''
     params = [current_user_id]
 
-    where_clauses = []
+    # Community posts (posts.community_id set) belong to their community's
+    # feed only (GET /api/communities/<slug>/posts), never the main feed.
+    where_clauses = ['posts.community_id IS NULL']
     if audience_filter:
         where_clauses.append('posts.audience = ?')
         params.append(audience_filter)
@@ -189,8 +191,7 @@ def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cu
         where_clauses.append('posts.id < ?')
         params.append(cursor_id)
 
-    if where_clauses:
-        query += ' WHERE ' + ' AND '.join(where_clauses)
+    query += ' WHERE ' + ' AND '.join(where_clauses)
 
     query += ' ORDER BY posts.created_at DESC, posts.id DESC LIMIT ?'
     params.append(limit + 1)  # one extra row, to detect a next page

@@ -92,6 +92,7 @@ re-verified against the current tree.
 | Share sheet (feed card Share button → Repost/Quote sheet; slide-up, swipe-down, tap-outside, Esc) | `templates/partials/share_sheet.html`, `static/js/share-sheet.js`, `.share-sheet*` in `static/css/style.css`. Uses `.is-open` (not `hidden`) so it can animate; Repost/Quote show the standard "Coming soon" toast |
 | Wallet: balance / monthly free credits / history API | `app/routes/wallet.py` (HTTP) → `app/wallet.py` (logic, Flask-free) |
 | Wallet screen (side-nav → `openWalletView()`) | `templates/partials/wallet.html`, `static/js/wallet.js`, `showView('wallet')` hook in `static/js/core.js` |
+| Communities API (create/get/join/leave/mine, per-community posts) | `app/routes/communities.py` (HTTP) → `app/community_service.py` (logic, Flask-free); schema in `migrations/003_communities.sql`; frontend `static/js/community.js` |
 
 ## Key data flow — post images (still true, same shape, new file locations)
 
@@ -150,6 +151,30 @@ one batched `IN (...)` query against `post_images`, not N+1.
   refetches from scratch (no client cache), so refreshes and account
   switches always show server truth. Not URL-synced (like Courses/Library).
   Back returns to the screen the drawer was opened from (`walletReturnView`).
+
+## Communities
+
+- Schema lives in `migrations/003_communities.sql` (not `init_db()`):
+  `communities`, `community_members` (role `creator`/`moderator`/`member`),
+  and nullable `posts.community_id`. NULL = main feed. `list_posts`
+  (`app/post_service.py`) always adds `posts.community_id IS NULL`, so
+  community posts never appear in `GET /api/posts` (including profile
+  `?user_id=` feeds). Search (`app/search_service.py`) does NOT filter
+  them yet.
+- `member_count` is `COUNT(*)` over `community_members` at read time, not
+  a stored column (same no-drift reasoning as the wallet ledger).
+- The serialized `id` is the **slug**; the integer PK never leaves the
+  server. Slugs are `[a-z0-9]+`, max 21 chars, de-duped with `2`, `3`, ...
+  suffixes; `mine` is reserved (it would shadow `/api/communities/mine`).
+- `icon_emoji` is stored at creation, `icon_bg` is derived at read time;
+  both come from `TOPIC_STYLES` in `community_service.py`. Custom topics get
+  `👥` / `bg-gray-100`.
+- `GET /api/communities/<slug>` and `GET .../posts` work while logged out.
+  `type` is stored but **not enforced**: every community acts as public.
+- A creator can't leave their own community (400). Handing ownership to
+  someone else is not built yet.
+- Not built yet: members list, events, banners, edit/settings, and
+  restricted/private gating.
 
 ## Non-obvious decisions worth preserving
 
@@ -273,6 +298,7 @@ DB_PATH=beebo_test.db python app.py &
 ./test_spa_routes.sh
 ./test_file_cleanup.sh
 ./test_wallet.sh
+./test_communities.sh
 python3 test_wallet_logic.py   # no server needed; uses its own temp DB
 # or: ./run_all_tests.sh
 

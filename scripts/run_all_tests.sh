@@ -34,6 +34,7 @@ TESTS=(
     "test_highlights_video.sh"
     "test_file_cleanup.sh"
     "test_wallet.sh"
+    "test_communities.sh"
 )
 
 PASSED=0

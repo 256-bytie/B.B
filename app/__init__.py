@@ -75,13 +75,14 @@ def create_app():
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
     # Register blueprints
-    from app.routes import auth, posts, users, library, search, wallet
+    from app.routes import auth, posts, users, library, search, wallet, communities
     app.register_blueprint(auth.bp)
     app.register_blueprint(posts.bp)
     app.register_blueprint(users.bp)
     app.register_blueprint(library.bp)
     app.register_blueprint(search.bp)
     app.register_blueprint(wallet.bp)
+    app.register_blueprint(communities.bp)
 
     # CSRF protection: validate token on mutating requests
     @app.before_request
