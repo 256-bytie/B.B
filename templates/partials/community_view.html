@@ -1,0 +1,149 @@
+<!-- BEGIN: Community View -->
+<!-- Single screen for both a member and the creator - communityRenderHeader()
+     in community.js swaps the action button (Join/Joined vs Manage) and the
+     "Created by you" line based on membership.role from GET
+     /api/communities/<id>, same pattern as profile_own vs profile_user
+     being two templates for one concept, collapsed here into one template
+     with a data-driven branch since the rest of the screen is identical. -->
+<div id="community-view" class="view-section bg-white min-h-screen flex justify-center">
+<main class="w-full max-w-[640px] bg-white min-h-screen flex flex-col relative pb-10">
+
+	<header class="flex items-center justify-between px-4 h-14 bg-white sticky top-0 z-10 border-b border-gray-100 shrink-0">
+		<button type="button" aria-label="Back" onclick="closeCommunityView()" class="p-2 -ml-2 text-gray-800 hover:opacity-80 transition-opacity active:scale-95 duration-100">
+			<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+				<path d="m15 18-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"></path>
+			</svg>
+		</button>
+		<h1 id="community-topbar-title" class="flex-1 text-center text-[15px] font-semibold text-gray-900 truncate px-2">&nbsp;</h1>
+		<div class="flex items-center gap-1">
+			<button type="button" aria-label="Search" onclick="showToast('Coming soon')" class="p-2 text-gray-800 hover:opacity-80 transition-opacity active:scale-95 duration-100">
+				<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<circle cx="11" cy="11" r="7"></circle>
+					<path d="m21 21-4.3-4.3" stroke-linecap="round"></path>
+				</svg>
+			</button>
+			<button type="button" aria-label="More" onclick="showToast('Coming soon')" class="p-2 -mr-1 text-gray-800 hover:opacity-80 transition-opacity active:scale-95 duration-100">
+				<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle>
+				</svg>
+			</button>
+		</div>
+	</header>
+
+	<div id="community-error" class="hidden">
+		<div class="flex flex-col items-center text-center px-6 pt-24">
+			<div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 mb-4">
+				<svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+			</div>
+			<p class="text-[17px] font-semibold text-gray-900">Couldn't load this community</p>
+			<p class="text-[14px] text-gray-500 mt-1">Check your connection and try again.</p>
+			<button type="button" onclick="loadCommunityView()" class="h-11 px-6 rounded-full bg-brand-red text-white text-[15px] font-semibold mt-5 active:scale-[0.98] transition-transform duration-100">Try again</button>
+		</div>
+	</div>
+
+	<div id="community-content" class="hidden">
+		<!-- BEGIN: Banner + identity -->
+		<div id="community-banner" class="h-36 relative overflow-hidden bg-gradient-to-b from-sky-300 via-sky-100 to-white flex items-center justify-center">
+			<svg id="community-banner-icon" class="w-14 h-14 text-white/50" fill="none" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"></svg>
+		</div>
+
+		<div class="px-4 pt-4 pb-1">
+			<div class="flex items-start gap-3">
+				<div id="community-icon" class="w-16 h-16 -mt-11 rounded-2xl border-[3px] border-white shadow-sm flex items-center justify-center text-2xl shrink-0 bg-gray-100"></div>
+				<div class="flex-1 min-w-0 pt-0.5">
+					<h2 id="community-name" class="text-[19px] font-bold text-gray-900 truncate">&nbsp;</h2>
+					<p id="community-meta" class="text-gray-400 text-[13px] mt-0.5">&nbsp;</p>
+				</div>
+				<div class="flex items-center gap-2 shrink-0 pt-1">
+					<button type="button" id="community-action-btn" onclick="communityHandleActionBtn()" class="h-9 pl-3.5 pr-4 rounded-full border border-gray-200 flex items-center gap-1.5 text-[13px] font-semibold text-gray-900 hover:bg-gray-50 transition-colors active:scale-[0.98] duration-100"></button>
+					<button type="button" aria-label="More options" onclick="showToast('Coming soon')" class="w-9 h-9 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-colors active:scale-[0.98] duration-100">
+						<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+							<circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle>
+						</svg>
+					</button>
+				</div>
+			</div>
+			<p id="community-description" class="text-gray-700 text-[14px] leading-relaxed mt-3"></p>
+			<p id="community-member-count" class="text-gray-400 text-[13px] mt-2 flex items-center gap-1.5">
+				<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031a11.944 11.944 0 0 1-6 1.548c-2.17 0-4.207-.576-5.963-1.584M6 18.72a5.97 5.97 0 0 1-.941-3.197m0 0A5.995 5.995 0 0 1 12 12.75a5.995 5.995 0 0 1 5.058 2.772M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+				<span></span>
+			</p>
+		</div>
+		<!-- END: Banner + identity -->
+
+		<!-- BEGIN: Tabs -->
+		<div class="flex border-b border-gray-100 px-2 sticky top-14 bg-white z-[5]">
+			<button type="button" class="community-tab flex-1 text-[13px] font-semibold py-3 border-b-2 border-red-500 text-red-500" data-tab="posts" onclick="switchCommunityTab('posts')">Posts</button>
+			<button type="button" class="community-tab flex-1 text-[13px] font-medium py-3 border-b-2 border-transparent text-gray-500" data-tab="about" onclick="switchCommunityTab('about')">About</button>
+			<button type="button" class="community-tab flex-1 text-[13px] font-medium py-3 border-b-2 border-transparent text-gray-500" data-tab="members" onclick="switchCommunityTab('members')">Members</button>
+			<button type="button" class="community-tab flex-1 text-[13px] font-medium py-3 border-b-2 border-transparent text-gray-500" data-tab="events" onclick="switchCommunityTab('events')">Events</button>
+		</div>
+		<!-- END: Tabs -->
+
+		<!-- BEGIN: Posts tab -->
+		<div id="community-panel-posts" class="community-panel">
+			<div class="flex items-center gap-3 px-4 py-3 border-b border-gray-100">
+				<img id="community-composer-avatar" src="" alt="" class="w-9 h-9 rounded-full object-cover bg-gray-100 shrink-0">
+				<textarea id="community-composer-input" rows="1" placeholder="What's on your mind?" class="flex-1 min-w-0 resize-none bg-gray-50 rounded-full px-4 py-2.5 text-[14px] text-gray-900 placeholder:text-gray-400 border-0 focus:outline-none focus:ring-2 focus:ring-brand-red/20" style="height:40px" oninput="communityComposerAutoGrow(this)"></textarea>
+				<button type="button" aria-label="Add photo" onclick="showToast('Coming soon')" class="text-gray-400 shrink-0 p-1">
+					<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+						<rect x="3" y="3" width="18" height="18" rx="2"></rect>
+						<circle cx="8.5" cy="8.5" r="1.5"></circle>
+						<path d="m21 15-5-5L5 21" stroke-linecap="round" stroke-linejoin="round"></path>
+					</svg>
+				</button>
+				<button type="button" id="community-composer-post-btn" onclick="submitCommunityPost()" disabled class="shrink-0 h-9 px-4 rounded-full bg-brand-red text-white text-[13px] font-semibold disabled:opacity-40 disabled:pointer-events-none active:scale-[0.98] transition-transform duration-100">Post</button>
+			</div>
+
+			<div id="community-posts-loading" class="hidden py-14 flex items-center justify-center text-gray-400">
+				<svg class="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+					<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+				</svg>
+			</div>
+			<div id="community-posts-empty" class="hidden flex-col items-center text-center px-8 py-16">
+				<svg class="w-10 h-10 text-gray-300 mb-3" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM21 12c0 4.556-4.03 8.25-9 8.25a9.76 9.76 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+				<p class="text-[15px] font-semibold text-gray-900">No posts yet</p>
+				<p class="text-[13px] text-gray-500 mt-1">Be the first to post in this community.</p>
+			</div>
+			<ul id="community-posts-list" class="divide-y divide-gray-100"></ul>
+			<div id="community-posts-footer" class="py-6 flex justify-center"></div>
+		</div>
+		<!-- END: Posts tab -->
+
+		<!-- BEGIN: About tab (empty-screen: minimal placeholder, backend field
+		     already returned by GET /api/communities/<id> per the contract,
+		     UI kept to this pass; not a "coming soon" stub) -->
+		<div id="community-panel-about" class="community-panel hidden px-4 py-5">
+			<h3 class="text-[13px] font-semibold text-gray-400 tracking-wide mb-2">DESCRIPTION</h3>
+			<p id="community-about-description" class="text-[14px] text-gray-800 leading-relaxed"></p>
+			<h3 class="text-[13px] font-semibold text-gray-400 tracking-wide mt-6 mb-2">COMMUNITY TYPE</h3>
+			<p id="community-about-type" class="text-[14px] text-gray-800"></p>
+			<h3 class="text-[13px] font-semibold text-gray-400 tracking-wide mt-6 mb-2">CREATED</h3>
+			<p id="community-about-created" class="text-[14px] text-gray-800"></p>
+		</div>
+		<!-- END: About tab -->
+
+		<!-- BEGIN: Members tab (empty-screen placeholder: list wired to
+		     GET /api/communities/<id>/members once that lands; count-only
+		     for this pass) -->
+		<div id="community-panel-members" class="community-panel hidden px-4 py-8 text-center">
+			<p class="text-[14px] text-gray-500">Member list is coming soon.</p>
+		</div>
+		<!-- END: Members tab -->
+
+		<!-- BEGIN: Events tab (empty-screen placeholder, no events backend yet) -->
+		<div id="community-panel-events" class="community-panel hidden px-4 py-8 text-center">
+			<p class="text-[14px] text-gray-500">No events scheduled.</p>
+		</div>
+		<!-- END: Events tab -->
+	</div>
+</main>
+</div>
+<!-- END: Community View -->

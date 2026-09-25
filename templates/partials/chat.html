@@ -1,0 +1,66 @@
+<!-- BEGIN: Chat View -->
+<div id="chat-view" class="view-section bg-white min-h-screen relative">
+	<!-- BEGIN: Main Header -->
+	<header class="bg-white sticky top-0 z-10 w-full shadow-sm">
+		<div class="flex justify-between items-center px-4 py-3">
+			<h1 class="text-lg font-bold text-gray-900">Chat</h1>
+			<div class="flex items-center space-x-4">
+				<button id="chat-search-toggle" type="button" class="text-gray-500 hover:text-gray-700 focus:outline-none" onclick="toggleChatSearch()" aria-label="Search messages">
+					<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+						<path d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" stroke-linecap="round" stroke-linejoin="round"></path>
+					</svg>
+				</button>
+				<button type="button" class="text-gray-500 hover:text-gray-700 focus:outline-none" aria-label="More options">
+					<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+						<path d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" stroke-linecap="round" stroke-linejoin="round"></path>
+					</svg>
+				</button>
+			</div>
+		</div>
+
+		<!-- Messages / Requests tabs -->
+		<nav class="flex border-b border-gray-100 px-4">
+			<button type="button" id="chat-tab-messages" class="text-red-500 font-semibold px-2 py-3 border-b-2 border-red-500 mr-6 text-sm" onclick="switchChatTab('messages')">Messages</button>
+			<button type="button" id="chat-tab-requests" class="text-gray-500 font-medium px-2 py-3 text-sm" onclick="switchChatTab('requests')">Requests</button>
+		</nav>
+
+		<!-- Inline search field, hidden by default -->
+		<div id="chat-search-row" class="hidden px-4 pt-3 pb-3">
+			<div class="flex items-center bg-gray-50 rounded-[12px] px-3 py-2.5">
+				<svg class="w-4 h-4 text-gray-400 mr-2 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+				<input id="chat-search-input" type="text" class="bg-transparent border-none outline-none text-sm w-full p-0 text-gray-800 placeholder:text-gray-400 focus:ring-0" placeholder="Search messages" oninput="filterChatMessages(this.value)">
+			</div>
+		</div>
+	</header>
+	<!-- END: Main Header -->
+
+	<!-- Messages tab content -->
+	<main id="chat-messages-view" class="bg-white">
+		<div id="chat-messages-list"></div>
+	</main>
+
+	<!-- Requests tab content -->
+	<main id="chat-requests-view" class="hidden bg-white">
+		<!-- Empty state -->
+		<div id="chat-requests-empty" class="hidden flex-col items-center text-center px-8 pt-20">
+			<div class="w-24 h-24 rounded-full bg-gray-100 flex items-center justify-center relative mb-6">
+				<svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+				<span class="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-brand-red text-white flex items-center justify-center ring-4 ring-white">
+					<svg class="w-4 h-4" fill="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+						<path d="M4.913 2.658c2.075-.27 4.19-.408 6.337-.408 2.147 0 4.262.139 6.337.408 1.922.25 3.291 1.861 3.405 3.727a4.403 4.403 0 00-1.032-.211 50.89 50.89 0 00-8.42 0c-2.358.196-4.04 2.19-4.04 4.434v4.286a4.47 4.47 0 002.433 3.984L7.28 21.53A.75.75 0 016 21v-4.03a48.527 48.527 0 01-1.087-.128C2.905 16.58 1.5 14.833 1.5 12.862V6.638c0-1.97 1.405-3.718 3.413-3.979z"></path>
+					</svg>
+				</span>
+			</div>
+			<h2 class="text-lg font-bold text-gray-900 mb-2">No new requests</h2>
+			<p class="text-sm text-gray-500 leading-relaxed">When someone messages you for the first time, their request will appear here.</p>
+		</div>
+
+		<!-- Populated state -->
+		<div id="chat-requests-list"></div>
+	</main>
+</div>
+<!-- END: Chat View -->

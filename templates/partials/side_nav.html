@@ -1,0 +1,231 @@
+<!-- BEGIN: Side Navigation Drawer -->
+<!-- Tap-to-close area behind the panel. Its opacity is driven by
+     side-nav.js in lockstep with the panel's drag position (see
+     setSideNavWidth), not by a CSS class, so it can track the finger
+     in real time along with the panel. -->
+<div id="side-nav-backdrop" class="fixed inset-0 bg-black z-40 opacity-0 pointer-events-none"></div>
+
+<!-- #side-nav is a clipping shell: its WIDTH (not a transform) is driven
+     by side-nav.js and animates through three snap points - closed (0),
+     mini (icon rail, see #side-nav-mini), and full (labeled drawer, see
+     #side-nav-full). Growing the shell's width is what makes the drawer
+     read as "progressively expanding" rather than swapping layouts. -->
+<aside id="side-nav" class="fixed top-0 left-0 h-full bg-white z-50 rounded-r-3xl shadow-[4px_0_24px_rgba(0,0,0,0.12)] overflow-hidden" style="width: 0px;">
+
+	<!-- Mini icon rail: first swipe stop. Fixed width, cross-fades out as
+	     the shell grows past it toward the full drawer (see
+	     setSideNavWidth). Same nav destinations as the full drawer, icon-only. -->
+	<div id="side-nav-mini" class="absolute top-0 left-0 h-full flex flex-col items-center" style="width: 76px;">
+		<div class="pt-8 pb-4 shrink-0">
+			<img src="/static/images/beebo-icon.png" alt="Beebo" class="w-9 h-9 rounded-full object-cover">
+		</div>
+		<nav class="flex-1 flex flex-col items-center gap-2 pt-2">
+			<button id="side-nav-mini-home" type="button" data-nav-key="home" class="side-nav-link flex items-center justify-center w-11 h-11 rounded-xl text-brand-red bg-red-50" onclick="closeSideNav(); showView('feed');" aria-label="Home">
+				<svg class="w-5 h-5 shrink-0" fill="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="M11.47 3.84a.75.75 0 011.06 0l8.69 8.69a.75.75 0 101.06-1.06l-8.689-8.69a2.25 2.25 0 00-3.182 0l-8.69 8.69a.75.75 0 001.061 1.06l8.69-8.689z"></path>
+					<path d="M12 5.432l8.159 8.159c.03.03.06.058.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 01-.75-.75v-4.5a.75.75 0 00-.75-.75h-3a.75.75 0 00-.75.75V21a.75.75 0 01-.75.75H5.625a1.875 1.875 0 01-1.875-1.875v-6.198a2.29 2.29 0 00.091-.086L12 5.43z"></path>
+				</svg>
+			</button>
+			<button id="side-nav-mini-courses" type="button" data-nav-key="courses" class="side-nav-link flex items-center justify-center w-11 h-11 rounded-xl text-gray-500" onclick="closeSideNav(); showView('courses');" aria-label="Courses">
+				<svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+			</button>
+			<button type="button" data-nav-key="library" class="side-nav-link flex items-center justify-center w-11 h-11 rounded-xl text-gray-500" onclick="closeSideNav(); showView('library');" aria-label="Library">
+				<svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+			</button>
+			<button type="button" data-nav-key="businesses" class="side-nav-link flex items-center justify-center w-11 h-11 rounded-xl text-gray-500" onclick="closeSideNav(); openBusinessesView();" aria-label="Businesses">
+				<svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="M15 21v-5a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v5" stroke-linecap="round" stroke-linejoin="round"></path>
+					<path d="M17.774 10.31a1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.451 0 1.12 1.12 0 0 0-1.548 0 2.5 2.5 0 0 1-3.452 0 1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.77-3.248l2.889-4.184A2 2 0 0 1 7 2h10a2 2 0 0 1 1.653.873l2.895 4.192a2.5 2.5 0 0 1-3.774 3.244" stroke-linecap="round" stroke-linejoin="round"></path>
+					<path d="M4 10.95V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8.05" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+			</button>
+			<button type="button" data-nav-key="wallet" class="side-nav-link flex items-center justify-center w-11 h-11 rounded-xl text-gray-500" onclick="closeSideNav(); openWalletView();" aria-label="Wallet">
+				<svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1" stroke-linecap="round" stroke-linejoin="round"></path>
+					<path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+			</button>
+
+			<div class="w-8 my-1 border-t border-gray-100"></div>
+
+			<button type="button" class="flex items-center justify-center w-11 h-11 rounded-xl text-gray-500" onclick="closeSideNav(); openCommunityCreateView();" aria-label="Create Community">
+				<svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+			</button>
+			<button type="button" class="flex items-center justify-center w-11 h-11 rounded-xl text-gray-500" onclick="showToast('Coming soon')" aria-label="My Communities">
+				<svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+			</button>
+
+			<div class="w-8 my-1 border-t border-gray-100"></div>
+
+			<button type="button" class="flex items-center justify-center w-11 h-11 rounded-xl text-gray-500" onclick="showToast('Coming soon')" aria-label="Settings">
+				<svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.28z" stroke-linecap="round" stroke-linejoin="round"></path>
+					<path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+			</button>
+			<button type="button" class="flex items-center justify-center w-11 h-11 rounded-xl text-gray-500" onclick="showToast('Coming soon')" aria-label="Help & Support">
+				<svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+			</button>
+
+			<div class="w-8 my-1 border-t border-gray-100"></div>
+		</nav>
+		<div class="pb-5 shrink-0 flex flex-col items-center gap-3">
+			<button type="button" class="theme-toggle-btn flex items-center justify-center w-8 h-8 rounded-full text-gray-500 hover:bg-gray-100" onclick="toggleTheme()" aria-label="Switch to dark mode">
+				<i class="theme-toggle-icon fa-solid fa-moon text-[15px]"></i>
+			</button>
+			<img id="side-nav-mini-avatar" src="" alt="" class="w-9 h-9 rounded-full object-cover bg-gray-100">
+		</div>
+	</div>
+
+	<!-- Full labeled drawer: second swipe stop. Fixed at its natural full
+	     width regardless of the shell's current width, so growing the
+	     shell reveals more of it from the left edge while it cross-fades
+	     in over the mini rail. Unchanged from the previously shipped drawer. -->
+	<div id="side-nav-full" class="absolute top-0 left-0 h-full w-[82vw] max-w-[300px] bg-white flex flex-col">
+		<div class="px-6 pt-8 pb-2 shrink-0 flex justify-center">
+			<img src="/static/images/beebo-logo.png" alt="Beebo" class="logo-light h-9 w-auto object-contain">
+			<img src="/static/images/beebo-logo-dark.png" alt="Beebo" class="logo-dark h-9 w-auto object-contain">
+		</div>
+		<nav class="flex-1 px-4 pt-4 space-y-1 overflow-y-auto">
+			<button id="side-nav-home" type="button" data-nav-key="home" class="side-nav-link w-full flex items-center gap-4 px-3 py-3 rounded-xl text-brand-red bg-red-50 font-semibold" onclick="closeSideNav(); showView('feed');">
+				<svg class="w-6 h-6 shrink-0" fill="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="M11.47 3.84a.75.75 0 011.06 0l8.69 8.69a.75.75 0 101.06-1.06l-8.689-8.69a2.25 2.25 0 00-3.182 0l-8.69 8.69a.75.75 0 001.061 1.06l8.69-8.689z"></path>
+					<path d="M12 5.432l8.159 8.159c.03.03.06.058.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 01-.75-.75v-4.5a.75.75 0 00-.75-.75h-3a.75.75 0 00-.75.75V21a.75.75 0 01-.75.75H5.625a1.875 1.875 0 01-1.875-1.875v-6.198a2.29 2.29 0 00.091-.086L12 5.43z"></path>
+				</svg>
+				<span class="text-[15px]">Home</span>
+			</button>
+			<button id="side-nav-courses" type="button" data-nav-key="courses" class="side-nav-link w-full flex items-center gap-4 px-3 py-3 rounded-xl text-gray-500 font-medium" onclick="closeSideNav(); showView('courses');">
+				<svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+				<span class="text-[15px]">Courses</span>
+			</button>
+			<button type="button" data-nav-key="library" class="side-nav-link w-full flex items-center gap-4 px-3 py-3 rounded-xl text-gray-500 font-medium" onclick="closeSideNav(); showView('library');">
+				<svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+				<span class="text-[15px]">Library</span>
+			</button>
+			<button type="button" data-nav-key="businesses" class="side-nav-link w-full flex items-center gap-4 px-3 py-3 rounded-xl text-gray-500 font-medium" onclick="closeSideNav(); openBusinessesView();">
+				<svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="M15 21v-5a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v5" stroke-linecap="round" stroke-linejoin="round"></path>
+					<path d="M17.774 10.31a1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.451 0 1.12 1.12 0 0 0-1.548 0 2.5 2.5 0 0 1-3.452 0 1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.77-3.248l2.889-4.184A2 2 0 0 1 7 2h10a2 2 0 0 1 1.653.873l2.895 4.192a2.5 2.5 0 0 1-3.774 3.244" stroke-linecap="round" stroke-linejoin="round"></path>
+					<path d="M4 10.95V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8.05" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+				<span class="text-[15px]">Businesses</span>
+			</button>
+			<button type="button" data-nav-key="wallet" class="side-nav-link w-full flex items-center gap-4 px-3 py-3 rounded-xl text-gray-500 font-medium" onclick="closeSideNav(); openWalletView();">
+				<svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1" stroke-linecap="round" stroke-linejoin="round"></path>
+					<path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+				<span class="text-[15px]">Wallet</span>
+			</button>
+
+			<div class="my-3 border-t border-gray-100"></div>
+
+			<!-- Communities: no community backend exists yet, so every row
+			     is a UI-only stub (same "Coming soon" toast convention used
+			     for other unbuilt actions elsewhere in the app). The
+			     chevron only toggles local visibility of the list below -
+			     it doesn't persist and isn't wired to any data source. -->
+			<div class="px-3 pt-1 pb-1 flex items-center justify-between">
+				<p class="text-[13px] font-semibold text-gray-400">Your Communities</p>
+				<button type="button" id="side-nav-communities-toggle" class="p-1 -mr-1 text-gray-400" onclick="toggleSideNavCommunities()" aria-expanded="true" aria-controls="side-nav-communities-list" aria-label="Collapse Your Communities">
+					<svg class="side-nav-communities-chevron w-4 h-4 shrink-0 transition-transform duration-200" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+						<path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round"></path>
+					</svg>
+				</button>
+			</div>
+			<div id="side-nav-communities-list" class="space-y-1">
+				<button type="button" class="w-full flex items-center gap-4 px-3 py-3 rounded-xl text-gray-500 font-medium" onclick="closeSideNav(); openCommunityCreateView();">
+					<span class="w-7 h-7 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center shrink-0">
+						<svg class="w-3.5 h-3.5" fill="currentColor" viewbox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+							<path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"></path>
+						</svg>
+					</span>
+					<span class="text-[15px]">Create a community</span>
+				</button>
+
+				<div class="w-full flex items-center gap-1 pl-3 pr-2 py-1 rounded-xl">
+					<button type="button" class="flex-1 min-w-0 flex items-center gap-3 py-2 text-left" onclick="communitySideNavOpen('campus')">
+						<span class="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center text-sm shrink-0">🔴</span>
+						<span class="flex-1 min-w-0 text-[15px] font-medium text-gray-700 truncate">b/campus</span>
+					</button>
+					<button type="button" class="side-nav-star-btn shrink-0 p-2 text-gray-300" onclick="toggleSideNavStar(this)" aria-pressed="false" aria-label="Favorite b/campus">
+						<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+							<path d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.98 21.539a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.562.562 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" stroke-linecap="round" stroke-linejoin="round"></path>
+						</svg>
+					</button>
+				</div>
+
+				<div class="w-full flex items-center gap-1 pl-3 pr-2 py-1 rounded-xl">
+					<button type="button" class="flex-1 min-w-0 flex items-center gap-3 py-2 text-left" onclick="communitySideNavOpen('housing')">
+						<span class="w-7 h-7 rounded-full bg-teal-50 flex items-center justify-center text-sm shrink-0">🌱</span>
+						<span class="flex-1 min-w-0 text-[15px] font-medium text-gray-700 truncate">b/housing</span>
+					</button>
+					<button type="button" class="side-nav-star-btn shrink-0 p-2 text-gray-300" onclick="toggleSideNavStar(this)" aria-pressed="false" aria-label="Favorite b/housing">
+						<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+							<path d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.98 21.539a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.562.562 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" stroke-linecap="round" stroke-linejoin="round"></path>
+						</svg>
+					</button>
+				</div>
+
+				<div class="w-full flex items-center gap-1 pl-3 pr-2 py-1 rounded-xl">
+					<button type="button" class="flex-1 min-w-0 flex items-center gap-3 py-2 text-left" onclick="communitySideNavOpen('oldschoolcool')">
+						<span class="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-sm shrink-0">🎓</span>
+						<span class="flex-1 min-w-0 text-[15px] font-medium text-gray-700 truncate">b/oldschoolcool</span>
+					</button>
+					<button type="button" class="side-nav-star-btn shrink-0 p-2 text-gray-300" onclick="toggleSideNavStar(this)" aria-pressed="false" aria-label="Favorite b/oldschoolcool">
+						<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+							<path d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.98 21.539a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.562.562 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" stroke-linecap="round" stroke-linejoin="round"></path>
+						</svg>
+					</button>
+				</div>
+			</div>
+
+			<div class="my-3 border-t border-gray-100"></div>
+
+			<!-- Settings / Help & Support: also UI-only stubs for now. -->
+			<button type="button" class="w-full flex items-center gap-4 px-3 py-3 rounded-xl text-gray-500 font-medium" onclick="showToast('Coming soon')">
+				<svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.28z" stroke-linecap="round" stroke-linejoin="round"></path>
+					<path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+				<span class="text-[15px]">Settings</span>
+			</button>
+			<button type="button" class="w-full flex items-center gap-4 px-3 py-3 rounded-xl text-gray-500 font-medium" onclick="showToast('Coming soon')">
+				<svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+				<span class="text-[15px]">Help &amp; Support</span>
+			</button>
+
+			<div class="my-3 border-t border-gray-100"></div>
+		</nav>
+		<div class="border-t border-gray-100 px-4 py-4 flex items-center gap-3 shrink-0">
+			<img id="side-nav-avatar" src="" alt="" class="w-11 h-11 rounded-full object-cover shrink-0 bg-gray-100">
+			<div class="flex-1 min-w-0">
+				<p id="side-nav-name" class="font-bold text-[15px] text-gray-900 truncate"></p>
+				<p id="side-nav-handle" class="text-[13px] text-gray-500 truncate"></p>
+			</div>
+			<button type="button" class="theme-toggle-btn text-gray-400 hover:text-gray-600 p-2 shrink-0" onclick="toggleTheme()" aria-label="Switch to dark mode">
+				<i class="theme-toggle-icon fa-solid fa-moon text-lg"></i>
+			</button>
+			<button type="button" onclick="handleLogout()" class="text-gray-400 hover:text-gray-600 p-2 -mr-2 shrink-0" aria-label="Log out">
+				<i class="fa-solid fa-arrow-right-from-bracket text-lg"></i>
+			</button>
+		</div>
+	</div>
+</aside>
+<!-- END: Side Navigation Drawer -->

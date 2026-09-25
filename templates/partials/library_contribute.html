@@ -1,0 +1,221 @@
+<!-- BEGIN: Library Contribute View -->
+<div id="library-contribute-view" class="view-section bg-white min-h-screen flex justify-center">
+<main class="w-full max-w-[430px] bg-white min-h-screen flex flex-col relative">
+
+	<!-- BEGIN: TopAppBar -->
+	<header class="flex items-start gap-3 px-4 pt-5 pb-4 sticky top-0 bg-white z-10 border-b border-gray-100">
+		<button type="button" aria-label="Back" onclick="closeLibraryContributeView()" class="p-1 -ml-1 mt-0.5 text-gray-800 hover:opacity-80 transition-opacity active:scale-95 duration-100">
+			<i class="fa-solid fa-chevron-left text-lg"></i>
+		</button>
+		<div>
+			<h1 class="text-[19px] font-bold text-gray-900 leading-tight">Contribute</h1>
+			<p class="text-[13.5px] text-gray-500">Share a resource with the community</p>
+		</div>
+	</header>
+	<!-- END: TopAppBar -->
+
+	<!-- BEGIN: StepIndicator -->
+	<div id="library-contribute-steps" class="flex items-center px-8 pt-6 pb-2">
+		<div class="flex flex-col items-center gap-1.5" data-step-indicator="1">
+			<span class="step-dot w-7 h-7 rounded-full flex items-center justify-center text-[13px] font-bold">1</span>
+			<span class="step-label text-[12px] font-medium">Details</span>
+		</div>
+		<div class="step-connector flex-1 h-[2px] mx-2 -mt-5 bg-gray-200"></div>
+		<div class="flex flex-col items-center gap-1.5" data-step-indicator="2">
+			<span class="step-dot w-7 h-7 rounded-full flex items-center justify-center text-[13px] font-bold">2</span>
+			<span class="step-label text-[12px] font-medium">Preview</span>
+		</div>
+		<div class="step-connector flex-1 h-[2px] mx-2 -mt-5 bg-gray-200"></div>
+		<div class="flex flex-col items-center gap-1.5" data-step-indicator="3">
+			<span class="step-dot w-7 h-7 rounded-full flex items-center justify-center text-[13px] font-bold">3</span>
+			<span class="step-label text-[12px] font-medium">Submit</span>
+		</div>
+	</div>
+	<!-- END: StepIndicator -->
+
+	<div class="flex-1 overflow-y-auto px-4 pb-28">
+
+		<!-- BEGIN: Step1 Details -->
+		<section id="library-contribute-step-1" class="pt-4">
+			<h2 class="text-[14px] font-semibold text-gray-900 mb-2.5">Upload File</h2>
+			<div id="library-dropzone" class="relative rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 flex flex-col items-center justify-center text-center px-4 py-9 mb-1.5 cursor-pointer hover:border-gray-300 transition-colors" onclick="document.getElementById('library-file-input').click()">
+				<input id="library-file-input" type="file" class="hidden" accept=".pdf,.doc,.docx,.ppt,.pptx,.zip">
+				<div id="library-dropzone-empty">
+					<div class="w-11 h-11 mx-auto mb-3 rounded-full bg-white flex items-center justify-center text-gray-400 shadow-sm">
+						<i class="fa-solid fa-cloud-arrow-up text-[19px]"></i>
+					</div>
+					<p class="text-[14.5px] text-gray-700 font-medium">Drag &amp; drop your file here</p>
+					<p class="text-[13px] text-gray-400 my-1">or</p>
+					<button type="button" onclick="event.stopPropagation(); document.getElementById('library-file-input').click();" class="text-[13.5px] font-semibold text-gray-900 bg-white border border-gray-200 rounded-xl px-4 py-2 shadow-sm hover:bg-gray-50">Choose File</button>
+				</div>
+				<div id="library-dropzone-filled" class="hidden w-full items-center gap-3 text-left">
+					<div id="library-selected-file-icon" class="w-11 h-11 rounded-xl flex items-center justify-center text-white shrink-0 bg-gray-400">
+						<i class="fa-solid fa-file text-[17px]"></i>
+					</div>
+					<div class="flex-1 min-w-0">
+						<p id="library-selected-file-name" class="text-[14px] font-semibold text-gray-900 truncate"></p>
+						<p id="library-selected-file-size" class="text-[12.5px] text-gray-500"></p>
+					</div>
+					<button type="button" onclick="event.stopPropagation(); clearLibrarySelectedFile();" aria-label="Remove file" class="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100">
+						<i class="fa-solid fa-xmark text-[15px]"></i>
+					</button>
+				</div>
+			</div>
+			<p class="text-[12.5px] text-gray-400 mb-6">PDF, DOC, DOCX, PPT, ZIP (Max 50MB)</p>
+
+			<h2 class="text-[14px] font-semibold text-gray-900 mb-3">Document Details</h2>
+			<div class="space-y-4 mb-4">
+				<div>
+					<label class="block text-[13px] text-gray-600 mb-1.5">Title <span class="text-red-500">*</span></label>
+					<input id="library-input-title" type="text" placeholder="Enter document title" class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-[14.5px] text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-100 focus:border-red-300">
+				</div>
+				<div>
+					<label class="block text-[13px] text-gray-600 mb-1.5">Category <span class="text-red-500">*</span></label>
+					<select id="library-input-category" class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-[14.5px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-100 focus:border-red-300 appearance-none">
+						<option value="" disabled selected>Select a category</option>
+						<option value="Past Questions">Past Questions</option>
+						<option value="Lecture Notes">Lecture Notes</option>
+						<option value="Books">Books</option>
+						<option value="Projects">Projects</option>
+						<option value="Other">Other</option>
+					</select>
+				</div>
+				<div>
+					<label class="block text-[13px] text-gray-600 mb-1.5">Department (Optional)</label>
+					<select id="library-input-department" class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-[14.5px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-100 focus:border-red-300 appearance-none">
+						<option value="" selected>Select department (optional)</option>
+						<option value="Radiography">Radiography</option>
+						<option value="Computer Science">Computer Science</option>
+						<option value="Biochemistry">Biochemistry</option>
+						<option value="Mathematics">Mathematics</option>
+						<option value="Physics">Physics</option>
+						<option value="Forensic Science">Forensic Science</option>
+						<option value="Other">Other</option>
+					</select>
+				</div>
+				<div>
+					<label class="block text-[13px] text-gray-600 mb-1.5">Course (Optional)</label>
+					<input id="library-input-course" type="text" placeholder="Enter course code or name" class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-[14.5px] text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-100 focus:border-red-300">
+				</div>
+				<div>
+					<label class="block text-[13px] text-gray-600 mb-1.5">Level (Optional)</label>
+					<select id="library-input-level" class="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-[14.5px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-100 focus:border-red-300 appearance-none">
+						<option value="" selected>Select level</option>
+						<option value="100 Level">100 Level</option>
+						<option value="200 Level">200 Level</option>
+						<option value="300 Level">300 Level</option>
+						<option value="400 Level">400 Level</option>
+						<option value="500 Level">500 Level</option>
+					</select>
+				</div>
+			</div>
+			<p id="library-step1-error" class="hidden text-[13px] text-red-600 mb-2"></p>
+		</section>
+		<!-- END: Step1 Details -->
+
+		<!-- BEGIN: Step2 Preview -->
+		<section id="library-contribute-step-2" class="hidden pt-4">
+			<h2 class="text-[14px] font-semibold text-gray-900 mb-3">Preview</h2>
+			<div class="bg-gray-50 border border-gray-100 rounded-2xl p-4 flex items-center gap-3 mb-5">
+				<div id="library-preview-file-icon" class="w-12 h-12 rounded-xl flex items-center justify-center text-white shrink-0 bg-gray-400">
+					<i class="fa-solid fa-file text-[19px]"></i>
+				</div>
+				<div class="flex-1 min-w-0">
+					<p id="library-preview-file-name" class="text-[14.5px] font-semibold text-gray-900 truncate"></p>
+					<p id="library-preview-file-size" class="text-[12.5px] text-gray-500"></p>
+				</div>
+			</div>
+			<dl class="divide-y divide-gray-100 border border-gray-100 rounded-2xl overflow-hidden mb-4">
+				<div class="flex justify-between items-center px-4 py-3.5">
+					<dt class="text-[13.5px] text-gray-500">Title</dt>
+					<dd id="library-preview-title" class="text-[14px] font-medium text-gray-900 text-right max-w-[65%] truncate"></dd>
+				</div>
+				<div class="flex justify-between items-center px-4 py-3.5">
+					<dt class="text-[13.5px] text-gray-500">Category</dt>
+					<dd id="library-preview-category" class="text-[14px] font-medium text-gray-900"></dd>
+				</div>
+				<div class="flex justify-between items-center px-4 py-3.5">
+					<dt class="text-[13.5px] text-gray-500">Department</dt>
+					<dd id="library-preview-department" class="text-[14px] font-medium text-gray-900">—</dd>
+				</div>
+				<div class="flex justify-between items-center px-4 py-3.5">
+					<dt class="text-[13.5px] text-gray-500">Course</dt>
+					<dd id="library-preview-course" class="text-[14px] font-medium text-gray-900">—</dd>
+				</div>
+				<div class="flex justify-between items-center px-4 py-3.5">
+					<dt class="text-[13.5px] text-gray-500">Level</dt>
+					<dd id="library-preview-level" class="text-[14px] font-medium text-gray-900">—</dd>
+				</div>
+			</dl>
+			<p id="library-step2-error" class="hidden text-[13px] text-red-600 mb-2"></p>
+		</section>
+		<!-- END: Step2 Preview -->
+
+		<!-- BEGIN: Step3 Success -->
+		<section id="library-contribute-step-3" class="hidden pt-8 text-center">
+			<div class="relative w-24 h-24 mx-auto mb-5">
+				<span class="absolute -top-1 -left-3 w-2 h-2 rounded-full bg-blue-400"></span>
+				<span class="absolute -top-2 right-2 w-1.5 h-3 rounded-full bg-orange-400 rotate-12"></span>
+				<span class="absolute top-4 -right-4 w-2 h-2 rounded-full bg-green-400"></span>
+				<span class="absolute bottom-1 -left-4 w-1.5 h-3 rounded-full bg-red-400 -rotate-12"></span>
+				<span class="absolute -bottom-2 right-3 w-2 h-2 rounded-full bg-yellow-400"></span>
+				<div class="w-24 h-24 rounded-full bg-green-50 flex items-center justify-center">
+					<div class="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center">
+						<i class="fa-solid fa-check text-white text-2xl"></i>
+					</div>
+				</div>
+			</div>
+			<h2 class="text-[21px] font-bold text-gray-900 mb-1.5">Thank you!</h2>
+			<p class="text-[14.5px] text-gray-500 mb-6 px-4">Your document has been submitted successfully.</p>
+
+			<div class="bg-white border border-gray-100 rounded-2xl p-5 text-left mb-6 course-card-shadow">
+				<h3 class="text-[14px] font-semibold text-gray-900 mb-4">What happens next?</h3>
+				<div class="flex items-start gap-3 mb-4">
+					<div class="w-9 h-9 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center shrink-0">
+						<i class="fa-regular fa-eye text-[14px]"></i>
+					</div>
+					<div>
+						<p class="text-[14px] font-semibold text-gray-900">Your document will be reviewed</p>
+						<p class="text-[13px] text-gray-500">Our team will review it to ensure quality and relevance.</p>
+					</div>
+				</div>
+				<div class="flex items-start gap-3 mb-4">
+					<div class="w-9 h-9 rounded-full bg-purple-50 text-purple-500 flex items-center justify-center shrink-0">
+						<i class="fa-solid fa-user-group text-[14px]"></i>
+					</div>
+					<div>
+						<p class="text-[14px] font-semibold text-gray-900">It will be available to everyone</p>
+						<p class="text-[13px] text-gray-500">Once approved, students from all departments can access it.</p>
+					</div>
+				</div>
+				<div class="flex items-start gap-3">
+					<div class="w-9 h-9 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center shrink-0">
+						<i class="fa-solid fa-bell text-[14px]"></i>
+					</div>
+					<div>
+						<p class="text-[14px] font-semibold text-gray-900">You'll get notified</p>
+						<p class="text-[13px] text-gray-500">We'll notify you once your document is published.</p>
+					</div>
+				</div>
+			</div>
+
+			<button type="button" onclick="goToLibraryFromContribute()" class="w-full bg-brand-red text-white text-[15px] font-semibold py-3.5 rounded-2xl hover:bg-red-700 transition-colors mb-2.5">Go to Library</button>
+			<button type="button" onclick="uploadAnotherLibraryDocument()" class="w-full text-center text-[15px] font-semibold text-gray-700 border border-gray-200 py-3.5 rounded-2xl hover:bg-gray-50 transition-colors">Upload Another Document</button>
+		</section>
+		<!-- END: Step3 Success -->
+
+	</div>
+
+	<!-- BEGIN: FooterActions -->
+	<div id="library-contribute-footer" class="sticky bottom-0 bg-white border-t border-gray-100 px-4 pt-3 pb-5">
+		<button id="library-contribute-primary-btn" type="button" onclick="handleLibraryContributePrimaryClick()" class="w-full flex items-center justify-center gap-2 bg-brand-red text-white text-[15px] font-semibold py-3.5 rounded-2xl hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+			<span id="library-contribute-primary-spinner" class="hidden w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin"></span>
+			<span id="library-contribute-primary-label">Next</span>
+		</button>
+		<button id="library-contribute-secondary-btn" type="button" onclick="handleLibraryContributeSecondaryClick()" class="hidden w-full text-center text-[15px] font-semibold text-gray-700 border border-gray-200 py-3.5 rounded-2xl mt-2.5 hover:bg-gray-50 transition-colors">Back</button>
+	</div>
+	<!-- END: FooterActions -->
+
+</main>
+</div>
+<!-- END: Library Contribute View -->

@@ -1,0 +1,42 @@
+<!-- BEGIN: Bottom Navigation -->
+<!-- Five equal columns (Home / Search / Compose / Chat / Profile),
+     icon-only. Icons are the provided Phosphor "regular" SVGs inlined with
+     fill="currentColor" so the active/inactive color (and dark mode) come
+     from the text-gray-* classes toggled by updateBottomNav() in core.js.
+     Hidden by default; core.js shows it only on the views it links to
+     (feed, search, chat, profile) - Compose opens the create-post takeover screen,
+     same as the feed FAB, so like that FAB it has no active/highlighted
+     state of its own. Home's active state adds a filled house behind the
+     outline (.bn-active-fill); chat/search embolden with a stroke
+     instead. Profile is the odd one out: it's the user's own avatar photo
+     rather than a currentColor glyph, styled as a ringed circular button
+     (see .bottom-nav-avatar-ring in style.css) - its src is kept in sync
+     with the session avatar by updateBottomNavAvatar() in
+     comment-actions.js. -->
+<nav id="bottom-nav" class="bottom-nav hidden fixed bottom-0 inset-x-0 z-10 bg-white border-t border-gray-100" aria-label="Primary">
+	<div class="grid grid-cols-5">
+		<!-- Home -->
+		<button type="button" id="bottom-nav-home" class="bottom-nav-item text-gray-500" onclick="showView('feed')" aria-label="Home">
+			<svg class="bottom-nav-icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><path class="bn-active-fill" d="M48,120L128,40L208,120V208H160V152a8,8,0,0,0-8-8H104a8,8,0,0,0-8,8V208H48Z"></path><path d="M219.31,108.68l-80-80a16,16,0,0,0-22.62,0l-80,80A15.87,15.87,0,0,0,32,120v96a8,8,0,0,0,8,8h64a8,8,0,0,0,8-8V160h32v56a8,8,0,0,0,8,8h64a8,8,0,0,0,8-8V120A15.87,15.87,0,0,0,219.31,108.68ZM208,208H160V152a8,8,0,0,0-8-8H104a8,8,0,0,0-8,8v56H48V120l80-80,80,80Z"></path></svg>
+		</button>
+		<!-- Search -->
+		<button type="button" id="bottom-nav-search" class="bottom-nav-item text-gray-500" onclick="showView('search')" aria-label="Search">
+			<svg class="bottom-nav-icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><path class="bn-active-stroke" d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z"></path></svg>
+		</button>
+		<!-- Compose Post (alternative entry point to Compose, alongside the feed FAB - see feed.html#compose-fab) -->
+		<button type="button" id="bottom-nav-compose" class="bottom-nav-item text-gray-500" onclick="showView('create-post')" aria-label="Compose Post">
+			<svg class="bottom-nav-icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><path class="bn-active-stroke" fill-rule="evenodd" d="M88,32 H168 A56,56 0 0 1 224,88 V168 A56,56 0 0 1 168,224 H88 A56,56 0 0 1 32,168 V88 A56,56 0 0 1 88,32 Z M88,48 H168 A40,40 0 0 1 208,88 V168 A40,40 0 0 1 168,208 H88 A40,40 0 0 1 48,168 V88 A40,40 0 0 1 88,48 Z M176,128a8,8,0,0,1-8,8H136v32a8,8,0,0,1-16,0V136H88a8,8,0,0,1,0-16h32V88a8,8,0,0,1,16,0v32h32A8,8,0,0,1,176,128Z"></path></svg>
+		</button>
+		<!-- Chat -->
+		<button type="button" id="bottom-nav-chat" class="bottom-nav-item text-gray-500" onclick="showView('chat')" aria-label="Chat">
+			<svg class="bottom-nav-icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><path class="bn-active-stroke" d="M140,128a12,12,0,1,1-12-12A12,12,0,0,1,140,128ZM84,116a12,12,0,1,0,12,12A12,12,0,0,0,84,116Zm88,0a12,12,0,1,0,12,12A12,12,0,0,0,172,116Zm60,12A104,104,0,0,1,79.12,219.82L45.07,231.17a16,16,0,0,1-20.24-20.24l11.35-34.05A104,104,0,1,1,232,128Zm-16,0A88,88,0,1,0,51.81,172.06a8,8,0,0,1,.66,6.54L40,216,77.4,203.53a7.85,7.85,0,0,1,2.53-.42,8,8,0,0,1,4,1.08A88,88,0,0,0,216,128Z"></path></svg>
+		</button>
+		<!-- Profile -->
+		<button type="button" id="bottom-nav-profile" class="bottom-nav-item text-gray-500" onclick="showView('profile')" aria-label="Profile">
+			<span class="bottom-nav-avatar-ring">
+				<img id="bottom-nav-avatar-img" class="bottom-nav-avatar-img" src="" alt="">
+			</span>
+		</button>
+	</div>
+</nav>
+<!-- END: Bottom Navigation -->

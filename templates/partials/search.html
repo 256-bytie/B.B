@@ -1,0 +1,108 @@
+<!-- BEGIN: Search View -->
+<div id="search-view" class="view-section bg-white min-h-screen">
+<main class="w-full max-w-[430px] mx-auto min-h-screen flex flex-col relative">
+
+	<!-- BEGIN: TopAppBar -->
+	<header class="bg-white sticky top-0 z-10 border-b border-gray-100">
+		<div class="flex items-center gap-2 px-2 py-2.5">
+			<button type="button" aria-label="Back" class="p-2 text-gray-800 hover:opacity-80 transition-opacity active:scale-95 duration-100 shrink-0" onclick="closeSearchView()">
+				<i class="fa-solid fa-chevron-left text-lg"></i>
+			</button>
+			<div class="relative flex-1">
+				<span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+					<i class="fa-solid fa-magnifying-glass text-[14px]"></i>
+				</span>
+				<input id="search-input" type="text" inputmode="search" autocomplete="off" placeholder="Search Beebo…" class="w-full pl-10 pr-9 py-2.5 rounded-full border border-gray-200 bg-gray-50 text-[15px] text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-100 focus:border-red-300 transition-colors">
+				<button id="search-clear-btn" type="button" aria-label="Clear search" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1">
+					<i class="fa-solid fa-circle-xmark text-[15px]"></i>
+				</button>
+			</div>
+		</div>
+		<!-- BEGIN: ResultTabs -->
+		<nav id="search-tabs-row" class="hidden flex overflow-x-auto no-scrollbar px-3 pb-0 whitespace-nowrap">
+			<button type="button" data-tab="all" class="search-tab-btn text-red-500 font-semibold px-3 py-2.5 border-b-2 border-red-500 mr-2 text-sm shrink-0">All</button>
+			<button type="button" data-tab="people" class="search-tab-btn text-gray-500 font-medium px-3 py-2.5 border-b-2 border-transparent hover:text-gray-700 mr-2 text-sm shrink-0">People</button>
+			<button type="button" data-tab="posts" class="search-tab-btn text-gray-500 font-medium px-3 py-2.5 border-b-2 border-transparent hover:text-gray-700 mr-2 text-sm shrink-0">Posts</button>
+			<button type="button" data-tab="topics" class="search-tab-btn text-gray-500 font-medium px-3 py-2.5 border-b-2 border-transparent hover:text-gray-700 text-sm shrink-0">Topics</button>
+		</nav>
+		<!-- END: ResultTabs -->
+	</header>
+	<!-- END: TopAppBar -->
+
+	<!-- BEGIN: Body -->
+	<div id="search-body" class="flex-1 overflow-y-auto pb-10">
+
+		<!-- BEGIN: EmptyState (no interaction yet) -->
+		<div id="search-empty-state" class="flex flex-col items-center justify-center text-center px-10 py-20">
+			<div class="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 mb-4">
+				<i class="fa-solid fa-magnifying-glass text-2xl"></i>
+			</div>
+			<h2 class="text-[16px] font-bold text-gray-900 mb-1">Search anything</h2>
+			<p class="text-[13.5px] text-gray-400 leading-snug">Find people, posts, topics, and more.</p>
+		</div>
+		<!-- END: EmptyState -->
+
+		<!-- BEGIN: HistoryAndPopular (input focused, empty) -->
+		<div id="search-history-popular" class="hidden px-4 pt-4">
+			<section id="search-recent-section" class="hidden mb-6">
+				<div class="flex items-center justify-between mb-3">
+					<h3 class="text-[13px] font-bold text-gray-500 uppercase tracking-wide">Recent searches</h3>
+					<button type="button" id="search-clear-history-btn" class="text-[13px] font-medium text-brand-red">Clear all</button>
+				</div>
+				<div id="search-recent-list" class="space-y-1"></div>
+			</section>
+			<section id="search-trending-section" class="hidden mb-6">
+				<h3 class="text-[13px] font-bold text-gray-500 uppercase tracking-wide mb-3">Trending topics</h3>
+				<div id="search-trending-chips" class="flex flex-wrap gap-2"></div>
+			</section>
+			<section id="search-popular-section" class="hidden">
+				<h3 class="text-[13px] font-bold text-gray-500 uppercase tracking-wide mb-3">Popular searches</h3>
+				<div id="search-popular-list" class="space-y-1"></div>
+			</section>
+		</div>
+		<!-- END: HistoryAndPopular -->
+
+		<!-- BEGIN: Suggestions (typing, not yet submitted) -->
+		<div id="search-suggestions-list" class="hidden py-1"></div>
+		<!-- END: Suggestions -->
+
+		<!-- BEGIN: Results -->
+		<div id="search-results" class="hidden">
+			<section id="search-results-people" class="hidden px-4 pt-4 pb-2 border-b border-gray-100">
+				<div class="flex items-center justify-between mb-2">
+					<h3 class="text-[13px] font-bold text-gray-500 uppercase tracking-wide">People</h3>
+					<button type="button" class="search-see-all-btn hidden text-[13px] font-medium text-red-600" data-tab-target="people">See all</button>
+				</div>
+				<div id="search-people-list" class="space-y-1"></div>
+			</section>
+			<section id="search-results-topics" class="hidden px-4 pt-4 pb-2 border-b border-gray-100">
+				<div class="flex items-center justify-between mb-2">
+					<h3 class="text-[13px] font-bold text-gray-500 uppercase tracking-wide">Topics</h3>
+					<button type="button" class="search-see-all-btn hidden text-[13px] font-medium text-red-600" data-tab-target="topics">See all</button>
+				</div>
+				<div id="search-topics-list" class="space-y-1"></div>
+			</section>
+			<section id="search-results-posts" class="pt-1">
+				<h3 id="search-posts-heading" class="hidden text-[13px] font-bold text-gray-500 uppercase tracking-wide px-4 pt-3 pb-2">Posts</h3>
+				<div id="search-posts-container"></div>
+				<div id="search-posts-loading-more" class="hidden flex items-center justify-center py-4 text-gray-400 text-sm">Loading more…</div>
+			</section>
+		</div>
+		<!-- END: Results -->
+
+		<!-- BEGIN: NoResults -->
+		<div id="search-no-results" class="hidden flex flex-col items-center justify-center text-center px-10 py-20">
+			<div class="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 mb-4">
+				<i class="fa-regular fa-file-lines text-2xl"></i>
+			</div>
+			<h2 class="text-[16px] font-bold text-gray-900 mb-1">No results found</h2>
+			<p id="search-no-results-text" class="text-[13.5px] text-gray-400 leading-snug">Try a different keyword or check your spelling.</p>
+		</div>
+		<!-- END: NoResults -->
+
+	</div>
+	<!-- END: Body -->
+
+</main>
+</div>
+<!-- END: Search View -->

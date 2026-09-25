@@ -1,0 +1,48 @@
+<!-- BEGIN: Feed View -->
+<div id="feed-view" class="view-section">
+<!-- BEGIN: MainHeader & Top Navigation -->
+<header id="feed-header" class="feed-header-bar bg-white sticky top-0 z-10 w-full shadow-sm">
+<!-- Top Bar -->
+<div class="flex justify-between items-center px-4 py-3">
+<button type="button" class="relative shrink-0 text-gray-500 hover:text-gray-700 focus:outline-none" onclick="openSideNav()" aria-label="Open menu">
+<svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M5 8H13.75M5 12H19M10.25 16L19 16" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+<img src="/static/images/beebo-logo-mark.png" alt="Beebo" class="logo-light h-8 w-auto object-contain">
+<img src="/static/images/beebo-logo-mark-dark.png" alt="Beebo" class="logo-dark h-8 w-auto object-contain">
+<div class="flex items-center space-x-4">
+<!-- Notification Icon with Badge -->
+<button class="text-gray-500 hover:text-gray-700 focus:outline-none relative">
+<svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+<!-- Red Dot Badge -->
+<span class="absolute top-0 right-0 block h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white transform translate-x-1/4 -translate-y-1/4"></span>
+</button>
+</div>
+</div>
+<!-- Horizontal Scrollable Tabs -->
+<nav id="feed-tabs-nav" class="flex border-b border-gray-100">
+<a id="feed-tab-for-you" class="flex-1 flex justify-center pt-3 cursor-pointer" onclick="switchFeedTab('for-you')">
+<span class="text-gray-900 font-bold text-base border-b-2 border-gray-900 pb-2.5 px-4">For You</span>
+</a>
+<a id="feed-tab-following" class="flex-1 flex justify-center pt-3 cursor-pointer" onclick="switchFeedTab('following')">
+<span class="text-gray-500 font-medium text-base border-b-2 border-transparent pb-2.5 hover:text-gray-700">Following</span>
+</a>
+</nav>
+</header>
+<!-- END: MainHeader & Top Navigation -->
+<!-- BEGIN: Main Feed Content -->
+<main class="flex-1 overflow-y-auto bg-white pb-24" id="feed-posts-container">
+<!-- Dynamic post cards are rendered here by renderFeedPosts() -->
+</main>
+<!-- END: Main Feed Content -->
+
+<!-- BEGIN: Compose FAB -->
+<button id="compose-fab" class="fixed w-14 h-14 bg-brand-red text-white rounded-full card-shadow flex items-center justify-center hover:bg-red-700 transition-colors z-9" style="bottom: calc(var(--bottom-nav-h) + 32px + env(safe-area-inset-bottom, 0px)); right: 20px;" onclick="showView('create-post')">
+	<i class="fa-solid fa-plus text-xl"></i>
+</button>
+<!-- END: Compose FAB -->
+</div>
+<!-- END: Feed View -->

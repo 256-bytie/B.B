@@ -1,0 +1,200 @@
+<!-- BEGIN: Profile View -->
+<div id="profile-view" class="view-section bg-gray-50 min-h-screen flex justify-center">
+<main class="w-full max-w-[430px] bg-gray-50 min-h-screen flex flex-col relative pb-24">
+
+	<!-- BEGIN: TopAppBar (own-profile only - see renderProfileView, gated on
+	     the server-backed session, not a client-side assumption) -->
+	<header id="profile-topbar" class="hidden items-center px-4 h-14 bg-white sticky top-0 z-10 border-b border-gray-100">
+		<div class="w-16 shrink-0"></div>
+		<h1 id="profile-topbar-title" class="flex-1 text-center text-[15px] font-semibold text-gray-900 truncate">&nbsp;</h1>
+		<div class="flex items-center gap-1 w-16 shrink-0 justify-end">
+			<button type="button" id="profile-notifications-btn" aria-label="Notifications" class="p-2 text-gray-800 hover:opacity-80 transition-opacity active:scale-95 duration-100">
+				<i class="fa-regular fa-bell text-lg"></i>
+			</button>
+			<button type="button" id="profile-topbar-menu-btn" aria-label="Switch account" aria-haspopup="true" aria-expanded="false" class="p-2 -mr-2 text-gray-800 hover:opacity-80 transition-opacity active:scale-95 duration-100">
+				<i class="fa-solid fa-chevron-down text-sm"></i>
+			</button>
+		</div>
+	</header>
+	<!-- END: TopAppBar -->
+
+	<!-- BEGIN: ProfileHeaderCard -->
+	<div class="bg-white">
+		<!-- Cover banner -->
+		<div class="h-32 bg-gradient-to-b from-sky-300 via-sky-100 to-white relative overflow-hidden">
+			<img id="profile-cover-img" alt="" class="hidden absolute inset-0 w-full h-full object-cover"/>
+			<div id="profile-cover-upload-overlay" class="absolute inset-0 bg-black/30 items-center justify-center" style="display:none;">
+				<svg class="w-6 h-6 animate-spin text-white" fill="none" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+					<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+				</svg>
+			</div>
+			<button type="button" id="profile-cover-camera-btn" aria-label="Change cover photo" class="absolute bottom-2.5 right-2.5 w-8 h-8 rounded-full bg-white/90 border border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.16)] flex items-center justify-center text-gray-700 hover:bg-white transition-colors active:scale-95 duration-100">
+				<i class="fa-solid fa-camera text-[13px]"></i>
+			</button>
+		</div>
+
+		<div class="flex flex-col items-center px-6 -mt-14">
+			<!-- Avatar with camera badge -->
+			<div class="relative">
+				<div class="w-28 h-28 rounded-full border-[5px] border-white shadow-sm overflow-hidden bg-gray-100 relative">
+					<img id="profile-avatar-img" alt="" class="w-full h-full object-cover" src=""/>
+					<div id="profile-avatar-upload-overlay" class="absolute inset-0 bg-black/30 items-center justify-center" style="display:none;">
+						<svg class="w-6 h-6 animate-spin text-white" fill="none" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+						</svg>
+					</div>
+				</div>
+				<button type="button" id="profile-avatar-camera-btn" aria-label="Change profile photo" class="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-white border border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.12)] flex items-center justify-center text-gray-600 hover:bg-gray-50 transition-colors active:scale-95 duration-100">
+					<i class="fa-solid fa-camera text-[13px]"></i>
+				</button>
+			</div>
+
+			<input type="file" id="profile-avatar-input" accept="image/*" class="hidden"/>
+			<input type="file" id="profile-cover-input" accept="image/*" class="hidden"/>
+
+			<!-- Name & handle -->
+			<h2 id="profile-name" class="text-[20px] font-bold text-gray-900 mt-3">&nbsp;</h2>
+			<p id="profile-handle" class="text-gray-400 text-[14px] mb-5">&nbsp;</p>
+			<!-- Bio. Hidden (and margin-less) when the user has no bio set, so
+			     the layout matches the no-bio design exactly - see
+			     renderProfileBio(). -->
+			<p id="profile-bio" class="hidden text-gray-900 text-[14px] text-center leading-snug whitespace-pre-line px-2 mb-5"></p>
+
+			<!-- Stats -->
+			<div class="w-full flex items-center mb-5">
+				<div class="flex-1 flex flex-col items-center">
+					<span id="profile-posts-count" class="text-xl font-bold text-gray-900 leading-tight">0</span>
+					<span class="text-[11px] font-medium text-gray-400 tracking-wide">POSTS</span>
+				</div>
+				<div class="w-px h-9 bg-gray-200"></div>
+				<div class="flex-1 flex flex-col items-center">
+					<span id="profile-followers-count" class="text-xl font-bold text-gray-900 leading-tight">0</span>
+					<span class="text-[11px] font-medium text-gray-400 tracking-wide">FOLLOWERS</span>
+				</div>
+				<div class="w-px h-9 bg-gray-200"></div>
+				<div class="flex-1 flex flex-col items-center">
+					<span id="profile-following-count" class="text-xl font-bold text-gray-900 leading-tight">0</span>
+					<span class="text-[11px] font-medium text-gray-400 tracking-wide">FOLLOWING</span>
+				</div>
+			</div>
+
+			<!-- Edit Profile + Settings -->
+			<div class="w-full flex items-center gap-2 mb-6">
+				<button type="button" id="profile-edit-btn" class="flex-1 h-11 rounded-full border border-gray-200 flex items-center justify-center gap-2 text-[13px] font-semibold text-gray-800 tracking-wide hover:bg-gray-50 transition-colors active:scale-[0.98] duration-100">
+					<i class="fa-regular fa-pen-to-square text-[13px]"></i> EDIT PROFILE
+				</button>
+				<button type="button" id="profile-settings-btn" aria-label="Settings" class="w-11 h-11 shrink-0 rounded-full border border-gray-200 flex items-center justify-center text-gray-700 hover:bg-gray-50 transition-colors active:scale-95 duration-100">
+					<i class="fa-solid fa-gear text-[16px]"></i>
+				</button>
+				<!-- Duplicate of the ProfileTopAppBar down-arrow (see
+				     #profile-topbar-menu-btn). Now wired to collapse/expand
+				     the Status/Highlight section below - see
+				     toggleProfileStatusSection. Unrelated to the account
+				     switcher; purely a local UI toggle on this profile screen. -->
+				<button type="button" id="profile-settings-row-chevron" aria-label="Collapse status section" aria-expanded="true" aria-controls="profile-status-section" class="w-8 h-8 shrink-0 rounded-3xl border border-black-200 bg-white flex items-center justify-center text-gray-800 hover:bg-gray-50 transition-colors active:scale-95 duration-100">
+					<i class="fa-solid fa-chevron-down text-sm transition-transform duration-300"></i>
+				</button>
+			</div>
+
+			<!-- Highlights row. Collapsible via #profile-settings-row-chevron -
+			     height/opacity/padding are animated together (see
+			     toggleProfileStatusSection) so the ProfileTabs below slide up
+			     to exactly where this section started, with no leftover gap
+			     or jump. Content is rendered by renderProfileHighlights() from
+			     the signed-in user's actual highlight data (see
+			     loadUserHighlights) - never hardcoded here. -->
+			<div id="profile-status-section" class="w-full overflow-hidden" style="transition: height 300ms ease-in-out, opacity 300ms ease-in-out;">
+				<div id="profile-highlights-row" class="w-full flex items-start gap-5 overflow-x-auto no-scrollbar px-1 pb-6" role="list" aria-label="Highlights"></div>
+			</div>
+		</div>
+
+		<!-- BEGIN: ProfileTabs -->
+		<div class="flex border-t border-gray-100">
+			<button type="button" id="profile-tab-posts" class="profile-tab flex-1 flex items-center justify-center gap-2 py-3.5 text-[12px] font-semibold tracking-wide text-gray-900 border-b-2 border-gray-900 transition-colors" data-tab="posts">
+				<i class="fa-solid fa-table-cells text-[14px]"></i> POSTS
+			</button>
+			<button type="button" id="profile-tab-saved" class="profile-tab flex-1 flex items-center justify-center gap-2 py-3.5 text-[12px] font-semibold tracking-wide text-gray-400 border-b-2 border-transparent transition-colors" data-tab="saved">
+				<i class="fa-regular fa-bookmark text-[14px]"></i> SAVED
+			</button>
+			<button type="button" id="profile-tab-likes" class="profile-tab flex-1 flex items-center justify-center gap-2 py-3.5 text-[12px] font-semibold tracking-wide text-gray-400 border-b-2 border-transparent transition-colors" data-tab="likes">
+				<i class="fa-regular fa-heart text-[14px]"></i> LIKES
+			</button>
+		</div>
+		<!-- END: ProfileTabs -->
+	</div>
+	<!-- END: ProfileHeaderCard -->
+
+	<!-- BEGIN: ProfileTabPanels -->
+	<div id="profile-posts-panel" class="bg-white">
+		<div id="profile-posts-container"></div>
+	</div>
+	<div id="profile-saved-panel" class="hidden flex flex-col items-center justify-center py-20 px-8 text-center text-gray-400 text-[14px] gap-2">
+		<i class="fa-regular fa-bookmark text-3xl text-gray-300"></i>
+		Saved posts are coming soon.
+	</div>
+	<div id="profile-likes-panel" class="hidden flex flex-col items-center justify-center py-20 px-8 text-center text-gray-400 text-[14px] gap-2">
+		<i class="fa-regular fa-heart text-3xl text-gray-300"></i>
+		Liked posts are coming soon.
+	</div>
+	<!-- END: ProfileTabPanels -->
+
+	<!-- BEGIN: Account Switcher Bottom Sheet (opened from the down-arrow in
+	     ProfileTopAppBar - see toggleAccountSwitcher). Same backdrop/sheet/
+	     Cancel-row convention as Post Action Menu Bottom Sheet. Logout is
+	     NOT here - the side-nav drawer's logout button (side_nav.html) is
+	     the sole logout entry point. -->
+	<div id="account-switcher-backdrop" class="hidden fixed inset-0 z-40 bg-black/20 transition-opacity" onclick="closeAccountSwitcher()"></div>
+	<div id="account-switcher-sheet" class="hidden fixed left-0 right-0 bottom-0 z-50 bg-white rounded-t-[24px] shadow-[0_-8px_24px_rgba(0,0,0,0.12)] pt-2 pb-6 max-w-[430px] mx-auto transition-transform origin-bottom" role="dialog" aria-modal="true" aria-label="Switch account">
+		<div class="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-2"></div>
+		<h3 class="text-sm font-bold text-gray-500 px-5 pt-1 pb-1">Switch account</h3>
+		<div id="account-switcher-list" class="py-1"></div>
+		<div class="border-t border-gray-100 py-2">
+			<button type="button" id="account-switcher-add-btn" class="group w-full flex items-center gap-3 px-5 py-3 text-left transition-colors duration-100 active:bg-gray-50">
+				<span class="w-10 h-10 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 shrink-0 transition-transform duration-150 group-active:scale-90">
+					<i class="fa-solid fa-plus text-[14px]"></i>
+				</span>
+				<span class="text-[15px] font-semibold text-gray-900">Add Account</span>
+			</button>
+		</div>
+		<div class="border-t border-gray-100 pt-2 px-3 flex flex-col gap-1">
+			<button type="button" id="account-switcher-cancel-btn" class="w-full py-3.5 text-center text-[15px] font-semibold text-gray-500 rounded-xl transition-colors duration-100 active:bg-gray-100">Cancel</button>
+		</div>
+	</div>
+	<!-- END: Account Switcher Bottom Sheet -->
+
+	<!-- BEGIN: Highlight Upload Bottom Sheet (opened from the "New" circle in
+	     the Highlights row - see openHighlightUploadSheet). Same
+	     backdrop/sheet/Cancel-row convention as Account Switcher Bottom
+	     Sheet above. Choosing Photo/Video routes into the existing profile
+	     photo file-input pattern (see handleProfileImageSelected) rather
+	     than a new upload mechanism. -->
+	<div id="highlight-upload-backdrop" class="hidden fixed inset-0 z-40 bg-black/20 transition-opacity" onclick="closeHighlightUploadSheet()"></div>
+	<div id="highlight-upload-sheet" class="hidden fixed left-0 right-0 bottom-0 z-50 bg-white rounded-t-[24px] shadow-[0_-8px_24px_rgba(0,0,0,0.12)] pt-2 pb-6 max-w-[430px] mx-auto transition-transform origin-bottom" role="dialog" aria-modal="true" aria-label="Add to highlights">
+		<div class="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-2"></div>
+		<h3 class="text-sm font-bold text-gray-500 px-5 pt-1 pb-1">Add to highlights</h3>
+		<div class="py-1">
+			<button type="button" id="highlight-upload-photo-btn" class="group w-full flex items-center gap-3 px-5 py-3 text-left transition-colors duration-100 active:bg-gray-50">
+				<span class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 shrink-0 transition-transform duration-150 group-active:scale-90">
+					<i class="fa-regular fa-image text-[15px]"></i>
+				</span>
+				<span class="text-[15px] font-semibold text-gray-900">Photo</span>
+			</button>
+			<button type="button" id="highlight-upload-video-btn" class="group w-full flex items-center gap-3 px-5 py-3 text-left transition-colors duration-100 active:bg-gray-50">
+				<span class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 shrink-0 transition-transform duration-150 group-active:scale-90">
+					<i class="fa-solid fa-video text-[15px]"></i>
+				</span>
+				<span class="text-[15px] font-semibold text-gray-900">Video</span>
+			</button>
+		</div>
+		<div class="border-t border-gray-100 pt-2 px-3">
+			<button type="button" id="highlight-upload-cancel-btn" class="w-full py-3.5 text-center text-[15px] font-semibold text-gray-500 rounded-xl transition-colors duration-100 active:bg-gray-100">Cancel</button>
+		</div>
+	</div>
+	<input type="file" id="highlight-photo-input" accept="image/*" class="hidden"/>
+	<input type="file" id="highlight-video-input" accept="video/*" class="hidden"/>
+	<!-- END: Highlight Upload Bottom Sheet -->
+</main>
+</div>
+<!-- END: Profile View -->

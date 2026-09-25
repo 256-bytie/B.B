@@ -1,0 +1,37 @@
+<!-- BEGIN: Library File Action Menu Bottom Sheet -->
+<div id="library-file-menu-backdrop" class="hidden fixed inset-0 z-40 bg-black/20 transition-opacity" onclick="closeLibraryFileMenu()"></div>
+<div id="library-file-menu-sheet" class="hidden fixed left-0 right-0 bottom-0 z-50 bg-white rounded-t-[24px] shadow-[0_-8px_24px_rgba(0,0,0,0.12)] pt-2 pb-6 max-w-[430px] mx-auto transition-transform origin-bottom" role="dialog" aria-modal="true" aria-label="Document options">
+	<div class="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-2"></div>
+	<div class="py-2">
+		<button type="button" class="library-file-menu-action group w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors duration-100 active:bg-gray-50" data-action="open">
+			<span class="w-6 flex items-center justify-center text-gray-700 transition-transform duration-150 group-active:scale-90"><i class="fa-regular fa-eye text-[18px]"></i></span>
+			<span class="text-[15px] font-medium text-gray-900">Open</span>
+		</button>
+		<button type="button" class="library-file-menu-action group w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors duration-100 active:bg-gray-50" data-action="download">
+			<span class="w-6 flex items-center justify-center text-gray-700 transition-transform duration-150 group-active:scale-90"><i class="fa-solid fa-arrow-down-to-line text-[18px]"></i></span>
+			<span class="text-[15px] font-medium text-gray-900">Download</span>
+		</button>
+		<button type="button" class="library-file-menu-action group w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors duration-100 active:bg-gray-50" data-action="share">
+			<span class="w-6 flex items-center justify-center text-gray-700 transition-transform duration-150 group-active:scale-90"><i class="fa-solid fa-arrow-up-from-bracket text-[18px]"></i></span>
+			<span class="text-[15px] font-medium text-gray-900">Share</span>
+		</button>
+		<button type="button" class="library-file-menu-action group w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors duration-100 active:bg-gray-50" data-action="save">
+			<span class="w-6 flex items-center justify-center text-gray-700 transition-transform duration-150 group-active:scale-90"><i class="fa-regular fa-bookmark text-[18px]"></i></span>
+			<span class="text-[15px] font-medium text-gray-900">Save</span>
+		</button>
+	</div>
+	<div class="border-t border-gray-100 py-2">
+		<button type="button" class="library-file-menu-action group w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors duration-100 active:bg-gray-50" data-action="report">
+			<span class="w-6 flex items-center justify-center text-gray-700 transition-transform duration-150 group-active:scale-90"><i class="fa-regular fa-flag text-[18px]"></i></span>
+			<span class="text-[15px] font-medium text-gray-900">Report</span>
+		</button>
+		<button type="button" class="library-file-menu-action group w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors duration-100 active:bg-gray-50" data-action="delete">
+			<span class="w-6 flex items-center justify-center text-red-600 transition-transform duration-150 group-active:scale-90"><i class="fa-regular fa-trash-can text-[18px]"></i></span>
+			<span class="text-[15px] font-medium text-red-600">Delete</span>
+		</button>
+	</div>
+	<div class="border-t border-gray-100 pt-2 px-3">
+		<button type="button" id="library-file-menu-cancel-btn" onclick="closeLibraryFileMenu()" class="w-full py-3.5 text-center text-[15px] font-semibold text-gray-500 rounded-xl transition-colors duration-100 active:bg-gray-100">Cancel</button>
+	</div>
+</div>
+<!-- END: Library File Action Menu Bottom Sheet -->

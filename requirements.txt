@@ -1,0 +1,4 @@
+Flask==3.0.2
+flask-cors==6.0.5
+Flask-Session==0.8.0
+Werkzeug==3.0.1

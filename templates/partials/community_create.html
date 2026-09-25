@@ -1,0 +1,89 @@
+<!-- BEGIN: Community Create View -->
+<!-- 3-step wizard: topic -> type -> name/description. Mirrors the
+     step/back/next chrome used nowhere else in the app yet, so it's kept
+     self-contained here + community.js rather than reusing compose.js. -->
+<div id="community-create-view" class="view-section bg-white min-h-screen flex flex-col relative">
+	<header class="flex items-center justify-between px-4 h-14 bg-white sticky top-0 z-10 border-b border-gray-100 shrink-0">
+		<button type="button" aria-label="Back" onclick="communityCreateBack()" class="p-2 -ml-2 text-gray-800 hover:opacity-80 transition-opacity active:scale-95 duration-100">
+			<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+				<path d="m15 18-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"></path>
+			</svg>
+		</button>
+		<span id="community-create-step-badge" class="px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-[13px] font-semibold">1 of 3</span>
+		<button type="button" id="community-create-next-btn" onclick="communityCreateNext()" class="text-brand-red font-semibold text-[15px] px-1 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1.5" disabled aria-disabled="true">
+			<svg id="community-create-next-spinner" class="hidden w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+				<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+				<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+			</svg>
+			<span id="community-create-next-label">Next</span>
+		</button>
+	</header>
+
+	<div class="flex-1 overflow-y-auto">
+		<!-- BEGIN: Step 1 - topic -->
+		<section id="community-create-step-1" class="community-create-step px-5 py-6">
+			<h1 class="text-[26px] font-bold text-gray-900 leading-snug">What's your community about?</h1>
+			<p class="text-gray-500 text-[15px] mt-2">Choose a topic that best fits your community</p>
+
+			<div class="relative mt-5">
+				<svg class="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-gray-400" style="width:18px;height:18px" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<circle cx="11" cy="11" r="7"></circle>
+					<path d="m21 21-4.3-4.3" stroke-linecap="round"></path>
+				</svg>
+				<input type="text" id="community-create-topic-search" placeholder="Search for a topic..." autocomplete="off" class="w-full h-12 pl-11 pr-4 rounded-2xl bg-gray-50 border border-gray-100 text-[15px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red/40" oninput="renderCommunityCreateTopicGrid()">
+			</div>
+
+			<p class="text-[12px] font-semibold tracking-wide text-gray-400 mt-6 mb-3">POPULAR TOPICS</p>
+			<div id="community-create-topic-grid" class="grid grid-cols-2 gap-3"></div>
+
+			<div class="my-6 flex items-center gap-3 text-gray-300 text-[12px] font-medium">
+				<div class="flex-1 border-t border-gray-200"></div>OR<div class="flex-1 border-t border-gray-200"></div>
+			</div>
+
+			<button type="button" id="community-create-custom-topic-btn" onclick="communityCreateToggleCustomTopic()" class="w-full flex items-center justify-between px-4 py-4 rounded-2xl border border-gray-200 text-gray-900 font-semibold text-[15px] hover:bg-gray-50 transition-colors">
+				<span class="flex items-center gap-3">
+					<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+						<path d="M12 5v14M5 12h14" stroke-linecap="round"></path>
+					</svg>
+					Create custom topic
+				</span>
+				<svg id="community-create-custom-topic-chevron" class="w-4 h-4 text-gray-400 transition-transform duration-150" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="m9 18 6-6-6-6" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+			</button>
+			<div id="community-create-custom-topic-wrap" class="hidden mt-3">
+				<input type="text" id="community-create-custom-topic-input" maxlength="30" placeholder="Name your own topic" autocomplete="off" class="w-full h-12 px-4 rounded-2xl bg-gray-50 border border-gray-100 text-[15px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red/40" oninput="communityCreateCustomTopicInput(this.value)">
+			</div>
+			<p class="text-[13px] text-gray-400 mt-2">Add your own topic if it's not listed above.</p>
+		</section>
+		<!-- END: Step 1 -->
+
+		<!-- BEGIN: Step 2 - type -->
+		<section id="community-create-step-2" class="community-create-step hidden px-5 py-6">
+			<h1 class="text-[26px] font-bold text-gray-900 leading-snug">Select community type</h1>
+			<p class="text-gray-500 text-[15px] mt-2 leading-relaxed">Decide who can view and contribute in your community. Only public communities show up in search.</p>
+			<p class="text-[15px] mt-3 leading-relaxed"><span class="font-bold text-gray-900">Important:</span> <span class="text-gray-500">Once set, you will need to submit a request to change your community type.</span></p>
+
+			<div id="community-create-type-list" class="space-y-3 mt-5"></div>
+		</section>
+		<!-- END: Step 2 -->
+
+		<!-- BEGIN: Step 3 - name/description -->
+		<section id="community-create-step-3" class="community-create-step hidden px-5 py-6">
+			<h1 class="text-[26px] font-bold text-gray-900 leading-snug">Tell us about your community</h1>
+			<p class="text-gray-500 text-[15px] mt-2 leading-relaxed">A name and description help people understand what your community is all about.</p>
+
+			<label for="community-create-name" class="block text-[15px] font-semibold text-gray-900 mt-6 mb-2">Community Name <span class="text-brand-red">*</span></label>
+			<input type="text" id="community-create-name" maxlength="21" placeholder="e.g. Beebo Developers" autocomplete="off" class="w-full h-13 px-4 py-3.5 rounded-2xl bg-gray-50 border border-gray-100 text-[15px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red/40" oninput="communityCreateUpdateCounters()">
+			<div class="text-right text-[12px] text-gray-400 mt-1" id="community-create-name-count">0</div>
+
+			<label for="community-create-description" class="block text-[15px] font-semibold text-gray-900 mt-4 mb-2">Description <span class="text-brand-red">*</span></label>
+			<textarea id="community-create-description" maxlength="500" rows="5" placeholder="Tell people what your community is about..." class="w-full px-4 py-3.5 rounded-2xl bg-gray-50 border border-gray-100 text-[15px] text-gray-900 placeholder:text-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red/40" oninput="communityCreateUpdateCounters()"></textarea>
+			<div class="text-right text-[12px] text-gray-400 mt-1" id="community-create-desc-count">0</div>
+		</section>
+		<!-- END: Step 3 -->
+
+		<div id="community-create-error" role="alert" class="hidden mx-5 mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-[14px]"></div>
+	</div>
+</div>
+<!-- END: Community Create View -->

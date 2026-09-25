@@ -1,0 +1,101 @@
+<!-- BEGIN: User Profile View (another user's profile, opened from a post card) -->
+<div id="user-profile-view" class="view-section bg-gray-50 min-h-screen flex justify-center">
+<main class="w-full max-w-[430px] bg-gray-50 min-h-screen flex flex-col relative pb-24">
+
+	<!-- BEGIN: TopAppBar -->
+	<header class="flex items-center justify-between px-4 h-14 bg-white sticky top-0 z-10 border-b border-gray-100">
+		<button type="button" aria-label="Back" class="p-2 -ml-2 text-gray-800 hover:opacity-80 transition-opacity active:scale-95 duration-100" onclick="closeUserProfileView()">
+			<i class="fa-solid fa-arrow-left text-lg"></i>
+		</button>
+		<button type="button" id="user-profile-menu-btn" aria-label="More options" class="p-2 -mr-2 text-gray-800 hover:opacity-80 transition-opacity active:scale-95 duration-100">
+			<i class="fa-solid fa-ellipsis-vertical text-lg"></i>
+		</button>
+	</header>
+	<!-- END: TopAppBar -->
+
+	<!-- BEGIN: UserProfileHeaderCard -->
+	<div class="bg-white">
+		<!-- Cover banner. The avatar is absolutely positioned relative to
+		     this wrapper (not pulled up with a negative margin) and
+		     overflow-hidden is scoped to the inner image only, so the
+		     avatar overlapping the bottom edge is never clipped by the
+		     cover's own clipping box. -->
+		<div class="relative">
+			<div class="h-32 bg-gradient-to-b from-sky-300 via-sky-100 to-white overflow-hidden">
+				<img id="user-profile-cover-img" alt="" class="hidden w-full h-full object-cover"/>
+			</div>
+			<div class="absolute left-1/2 top-32 -translate-x-1/2 -translate-y-1/2 w-28 h-28 rounded-full border-[5px] border-white shadow-sm overflow-hidden bg-gray-100">
+				<img id="user-profile-avatar-img" alt="" class="w-full h-full object-cover" src=""/>
+			</div>
+		</div>
+
+		<div class="flex flex-col items-center px-6 pt-14">
+			<!-- Name & handle -->
+			<h2 id="user-profile-name" class="text-[20px] font-bold text-gray-900 mt-3">&nbsp;</h2>
+			<p id="user-profile-handle" class="text-gray-400 text-[14px] mb-5">&nbsp;</p>
+			<!-- Bio. Hidden (and margin-less) when the viewed user has no bio
+			     set, so the layout matches the no-bio design exactly - see
+			     renderUserProfileBio(). -->
+			<p id="user-profile-bio" class="hidden text-gray-900 text-[14px] text-center leading-snug whitespace-pre-line px-2 mb-5"></p>
+
+			<!-- Stats -->
+			<div class="w-full flex items-center mb-5">
+				<div class="flex-1 flex flex-col items-center">
+					<span id="user-profile-posts-count" class="text-xl font-bold text-gray-900 leading-tight">0</span>
+					<span class="text-[11px] font-medium text-gray-400 tracking-wide">POSTS</span>
+				</div>
+				<div class="w-px h-9 bg-gray-200"></div>
+				<div class="flex-1 flex flex-col items-center">
+					<span id="user-profile-followers-count" class="text-xl font-bold text-gray-900 leading-tight">0</span>
+					<span class="text-[11px] font-medium text-gray-400 tracking-wide">FOLLOWERS</span>
+				</div>
+				<div class="w-px h-9 bg-gray-200"></div>
+				<div class="flex-1 flex flex-col items-center">
+					<span id="user-profile-following-count" class="text-xl font-bold text-gray-900 leading-tight">0</span>
+					<span class="text-[11px] font-medium text-gray-400 tracking-wide">FOLLOWING</span>
+				</div>
+			</div>
+
+			<!-- Follow + Message -->
+			<div class="w-full flex items-center gap-2 mb-6">
+				<button type="button" id="user-profile-follow-btn" data-following="false" class="flex-1 h-11 rounded-full bg-brand-red border border-brand-red flex items-center justify-center gap-2 text-[13px] font-semibold text-white tracking-wide hover:bg-red-700 transition-colors active:scale-[0.98] duration-100" onclick="toggleUserProfileFollow()">
+					<i class="fa-solid fa-plus text-[12px]"></i> <span id="user-profile-follow-label">FOLLOW</span>
+				</button>
+				<button type="button" id="user-profile-message-btn" class="flex-1 h-11 rounded-full border border-gray-200 flex items-center justify-center gap-2 text-[13px] font-semibold text-gray-800 tracking-wide hover:bg-gray-50 transition-colors active:scale-[0.98] duration-100" onclick="showToast('Coming soon')">
+					<i class="fa-regular fa-envelope text-[13px]"></i> MESSAGE
+				</button>
+			</div>
+		</div>
+
+		<!-- BEGIN: UserProfileTabs -->
+		<div class="flex border-t border-gray-100">
+			<button type="button" id="user-profile-tab-posts" class="user-profile-tab flex-1 flex items-center justify-center gap-2 py-3.5 text-[12px] font-semibold tracking-wide text-gray-900 border-b-2 border-gray-900 transition-colors" data-tab="posts">
+				<i class="fa-solid fa-table-cells text-[14px]"></i> POSTS
+			</button>
+			<button type="button" id="user-profile-tab-saved" class="user-profile-tab flex-1 flex items-center justify-center gap-2 py-3.5 text-[12px] font-semibold tracking-wide text-gray-400 border-b-2 border-transparent transition-colors" data-tab="saved">
+				<i class="fa-regular fa-bookmark text-[14px]"></i> SAVED
+			</button>
+			<button type="button" id="user-profile-tab-likes" class="user-profile-tab flex-1 flex items-center justify-center gap-2 py-3.5 text-[12px] font-semibold tracking-wide text-gray-400 border-b-2 border-transparent transition-colors" data-tab="likes">
+				<i class="fa-regular fa-heart text-[14px]"></i> LIKES
+			</button>
+		</div>
+		<!-- END: UserProfileTabs -->
+	</div>
+	<!-- END: UserProfileHeaderCard -->
+
+	<!-- BEGIN: UserProfileTabPanels -->
+	<div id="user-profile-posts-panel" class="bg-white">
+		<div id="user-profile-posts-container"></div>
+	</div>
+	<div id="user-profile-saved-panel" class="hidden flex flex-col items-center justify-center py-20 px-8 text-center text-gray-400 text-[14px] gap-2">
+		<i class="fa-regular fa-bookmark text-3xl text-gray-300"></i>
+		Saved posts are private.
+	</div>
+	<div id="user-profile-likes-panel" class="hidden flex flex-col items-center justify-center py-20 px-8 text-center text-gray-400 text-[14px] gap-2">
+		<i class="fa-regular fa-heart text-3xl text-gray-300"></i>
+		Liked posts are private.
+	</div>
+	<!-- END: UserProfileTabPanels -->
+</main>
+</div>
+<!-- END: User Profile View -->

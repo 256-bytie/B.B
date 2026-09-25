@@ -1,0 +1,37 @@
+<!-- Image Viewer: full-screen, image-only view opened by tapping a post's
+     image (see the .post-card-images delegate in comments.js, and
+     openImageViewer()/closeImageViewer() in feed.js). Deliberately separate
+     from comment_overlay.html - the Comment button is the only entry point
+     into the Post/comments screen now, so this shows just the tapped image
+     (swipeable to the post's other images, if it has more) with no
+     comments/reply/follow/action-row chrome. -->
+<div id="image-viewer-overlay" class="hidden fixed inset-0 z-50 bg-black">
+<button type="button" id="close-image-viewer-btn" class="absolute top-4 left-4 z-10 w-9 h-9 flex items-center justify-center rounded-full bg-black/40 text-white" aria-label="Close">
+<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+<div class="absolute top-4 right-4 z-10 flex items-center gap-2">
+<div id="image-viewer-counter" class="hidden px-2.5 py-1 rounded-full bg-black/40 text-white text-xs font-medium"></div>
+<div class="relative">
+<button type="button" id="image-viewer-menu-btn" class="w-9 h-9 flex items-center justify-center rounded-full bg-black/40 text-white" aria-label="More options">
+<svg class="w-5 h-5" fill="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M12 6a2 2 0 110-4 2 2 0 010 4zm0 8a2 2 0 110-4 2 2 0 010 4zm0 8a2 2 0 110-4 2 2 0 010 4z"></path>
+</svg>
+</button>
+<!-- Save popover: dark, rounded, with a small tail pointing up at the
+     "..." button - same tap-outside-to-close pattern as the other
+     dropdown-style menus, wired in feed.js. -->
+<div id="image-viewer-menu-popover" class="hidden absolute right-0 top-11 w-36 bg-gray-900 rounded-2xl shadow-lg py-1.5 z-20">
+<div class="absolute -top-1.5 right-3 w-3 h-3 bg-gray-900 rotate-45"></div>
+<button type="button" id="image-viewer-save-btn" class="relative w-full flex items-center gap-3 px-4 py-2.5 text-left text-white text-[15px] font-medium rounded-2xl active:bg-white/10">
+<svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+Save
+</button>
+</div>
+</div>
+</div>
+<div id="image-viewer-track" class="h-full w-full flex overflow-x-auto snap-x snap-mandatory no-scrollbar"></div>
+</div>

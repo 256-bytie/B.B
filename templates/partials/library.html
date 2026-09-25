@@ -1,0 +1,116 @@
+<!-- BEGIN: Library View -->
+<div id="library-view" class="view-section bg-[#fafafa] min-h-screen">
+<main class="w-full max-w-[430px] mx-auto min-h-screen flex flex-col relative">
+
+	<div class="flex-1 p-4 pb-28">
+		<!-- BEGIN: HeaderSection -->
+		<header class="mb-5 px-1">
+			<h1 class="text-2xl font-bold tracking-tight text-gray-900">Library</h1>
+			<p class="text-[14px] text-gray-500 mt-0.5">Discover academic resources from all departments.</p>
+		</header>
+		<!-- END: HeaderSection -->
+
+		<!-- BEGIN: SearchBar -->
+		<div class="relative mb-5">
+			<span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+				<i class="fa-solid fa-magnifying-glass text-[15px]"></i>
+			</span>
+			<input id="library-search-input" type="text" placeholder="Search documents, subjects, courses..." class="w-full pl-11 pr-11 py-3.5 rounded-2xl border border-gray-200 bg-white text-[15px] text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-100 focus:border-red-300 transition-colors">
+			<button type="button" onclick="showToast('Coming soon')" aria-label="Filters" class="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+				<i class="fa-solid fa-sliders text-[15px]"></i>
+			</button>
+		</div>
+		<!-- END: SearchBar -->
+
+		<!-- BEGIN: CategoryRow -->
+		<div id="library-category-row" class="flex gap-5 overflow-x-auto no-scrollbar mb-5 px-1">
+			<button type="button" data-category="" class="library-category-btn flex flex-col items-center gap-2 shrink-0">
+				<span class="category-icon-circle w-14 h-14 rounded-full flex items-center justify-center bg-red-50 text-brand-red ring-2 ring-red-100">
+					<i class="fa-solid fa-grip text-[18px]"></i>
+				</span>
+				<span class="category-label text-[12.5px] font-medium text-gray-900">All</span>
+			</button>
+			<button type="button" data-category="Past Questions" class="library-category-btn flex flex-col items-center gap-2 shrink-0">
+				<span class="category-icon-circle w-14 h-14 rounded-full flex items-center justify-center bg-gray-50 text-gray-500 ring-1 ring-gray-200">
+					<i class="fa-regular fa-circle-question text-[18px]"></i>
+				</span>
+				<span class="category-label text-[12.5px] font-medium text-gray-500">Past Questions</span>
+			</button>
+			<button type="button" data-category="Lecture Notes" class="library-category-btn flex flex-col items-center gap-2 shrink-0">
+				<span class="category-icon-circle w-14 h-14 rounded-full flex items-center justify-center bg-gray-50 text-gray-500 ring-1 ring-gray-200">
+					<i class="fa-regular fa-file-lines text-[18px]"></i>
+				</span>
+				<span class="category-label text-[12.5px] font-medium text-gray-500">Lecture Notes</span>
+			</button>
+			<button type="button" data-category="Books" class="library-category-btn flex flex-col items-center gap-2 shrink-0">
+				<span class="category-icon-circle w-14 h-14 rounded-full flex items-center justify-center bg-gray-50 text-gray-500 ring-1 ring-gray-200">
+					<i class="fa-solid fa-book-open text-[18px]"></i>
+				</span>
+				<span class="category-label text-[12.5px] font-medium text-gray-500">Books</span>
+			</button>
+			<button type="button" data-category="Projects" class="library-category-btn flex flex-col items-center gap-2 shrink-0">
+				<span class="category-icon-circle w-14 h-14 rounded-full flex items-center justify-center bg-gray-50 text-gray-500 ring-1 ring-gray-200">
+					<i class="fa-solid fa-code text-[18px]"></i>
+				</span>
+				<span class="category-label text-[12.5px] font-medium text-gray-500">Projects</span>
+			</button>
+			<button type="button" data-category="Other" class="library-category-btn flex flex-col items-center gap-2 shrink-0">
+				<span class="category-icon-circle w-14 h-14 rounded-full flex items-center justify-center bg-gray-50 text-gray-500 ring-1 ring-gray-200">
+					<i class="fa-solid fa-ellipsis text-[18px]"></i>
+				</span>
+				<span class="category-label text-[12.5px] font-medium text-gray-500">More</span>
+			</button>
+		</div>
+		<!-- END: CategoryRow -->
+
+		<!-- BEGIN: ContributeBanner -->
+		<div class="flex items-center gap-3 bg-red-50 rounded-2xl p-4 mb-6">
+			<div class="w-10 h-10 rounded-full bg-white flex items-center justify-center text-brand-red shrink-0">
+				<i class="fa-solid fa-cloud-arrow-up text-[17px]"></i>
+			</div>
+			<div class="flex-1 min-w-0">
+				<p class="text-[14px] font-semibold text-gray-900">Help the community grow</p>
+				<p class="text-[12.5px] text-gray-500">Share your notes and resources with other students.</p>
+			</div>
+			<button type="button" onclick="showView('library-contribute')" class="shrink-0 flex items-center gap-1.5 bg-brand-red text-white text-[13px] font-semibold px-3.5 py-2.5 rounded-xl hover:bg-red-700 transition-colors">
+				<i class="fa-solid fa-upload text-[12px]"></i>
+				Contribute
+			</button>
+		</div>
+		<!-- END: ContributeBanner -->
+
+		<!-- BEGIN: BrowseByDepartment -->
+		<section class="mb-6">
+			<div class="flex justify-between items-center mb-3 px-1">
+				<h2 class="text-[17px] font-bold text-gray-900">Browse by Department</h2>
+				<button type="button" onclick="showToast('Coming soon')" class="text-[14px] font-medium text-red-600 hover:text-red-700">See all</button>
+			</div>
+			<div id="library-department-row" class="flex gap-3 overflow-x-auto no-scrollbar px-1">
+				<!-- Populated by renderLibraryDepartments() in library.js -->
+				<div class="text-[13px] text-gray-400 py-6 px-1">Loading departments…</div>
+			</div>
+		</section>
+		<!-- END: BrowseByDepartment -->
+
+		<!-- BEGIN: RecentlyAdded -->
+		<section>
+			<div class="flex justify-between items-center mb-3 px-1">
+				<h2 id="library-list-heading" class="text-[17px] font-bold text-gray-900">Recently Added</h2>
+				<button type="button" onclick="showToast('Coming soon')" class="text-[14px] font-medium text-red-600 hover:text-red-700">See all</button>
+			</div>
+			<div id="library-file-list" class="space-y-3">
+				<!-- Populated by renderLibraryFiles() in library.js -->
+			</div>
+		</section>
+		<!-- END: RecentlyAdded -->
+	</div>
+
+	<!-- BEGIN: ContributeFab -->
+	<button id="library-contribute-fab" type="button" class="hidden fixed w-14 h-14 bg-brand-red text-white rounded-full card-shadow flex items-center justify-center hover:bg-red-700 transition-colors z-9" style="bottom: 20px; right: 20px;" onclick="showView('library-contribute')" aria-label="Contribute a document">
+		<i class="fa-solid fa-upload text-lg"></i>
+	</button>
+	<!-- END: ContributeFab -->
+
+</main>
+</div>
+<!-- END: Library View -->

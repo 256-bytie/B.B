@@ -1,0 +1,1511 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" name="viewport"/>
+<title>Beebo - Campus Community</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+<script src="/static/js/tailwind-config.js"></script>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="text-gray-800 antialiased h-screen flex flex-col">
+
+<!-- BEGIN: Login View -->
+<div id="login-view" class="view-section active auth-bg min-h-screen flex items-center justify-center p-4 relative">
+<!-- Only shown when this screen was reached via "Add Account" while
+     already signed in (see openAddAccountFlow) - lets that flow be
+     cancelled without touching the accounts already signed into this
+     session. Hidden for the normal signed-out login path. -->
+<button type="button" id="login-close-btn" aria-label="Cancel" class="hidden absolute top-4 left-4 z-10 p-2 rounded-full hover:bg-black/5 text-gray-500 transition-colors active:scale-95 duration-100" onclick="cancelAddAccount()">
+<i class="fa-solid fa-xmark text-lg"></i>
+</button>
+<main class="w-full max-w-md mx-auto flex flex-col pt-12 pb-8 h-full min-h-screen sm:min-h-0">
+<header class="flex flex-col items-center mb-10 text-center">
+<div class="mb-8 relative w-48 h-32 flex justify-center items-center">
+<svg class="w-full h-full" fill="none" height="120" viewbox="0 0 180 120" width="180" xmlns="http://www.w3.org/2000/svg">
+<path d="M48 76C48 74.3431 49.3431 73 51 73H63C64.6569 73 66 74.3431 66 76C66 77.6569 64.6569 79 63 79H51C49.3431 79 48 77.6569 48 76Z" fill="#E5E7EB"></path>
+<path d="M52 73C52 71.3431 53.3431 70 55 70H59C60.6569 70 62 71.3431 62 73H52Z" fill="#E5E7EB"></path>
+<path d="M120 74C120 71.2386 122.239 69 125 69H143C145.761 69 148 71.2386 148 74C148 76.7614 145.761 79 143 79H125C122.239 79 120 76.7614 120 74Z" fill="#E5E7EB"></path>
+<path d="M125 69C125 66.2386 127.239 64 130 64H138C140.761 64 143 66.2386 143 69H125Z" fill="#E5E7EB"></path>
+<path d="M72 40L88 45V90L72 95V40Z" fill="#DA292E"></path>
+<path d="M88 45H104V90H88V45Z" fill="#F3F4F6"></path>
+<path d="M104 40L88 45V90L104 95V40Z" fill="#DA292E" opacity="0.1"></path>
+<path d="M88 20L108 28L88 36L68 28L88 20Z" fill="#374151"></path>
+<path d="M78 32V42C78 42 88 46 98 42V32" stroke="#374151" stroke-linecap="round" stroke-width="4"></path>
+<rect fill="#DA292E" height="12" width="2" x="105" y="28"></rect>
+</svg>
+</div>
+<h1 class="text-2xl font-bold mb-2">Welcome back</h1>
+<p class="text-brand-gray text-sm">Login to continue your journey</p>
+</header>
+
+<form id="login-form" class="flex flex-col gap-5 w-full px-2">
+<div id="login-error" class="hidden bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm"></div>
+<div class="relative">
+<div class="input-icon-container left-4">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+<input class="w-full pl-11 pr-4 py-3.5 border border-brand-border rounded-xl focus:ring-2 focus:ring-brand-red focus:border-brand-red outline-none transition-colors text-sm" id="login-email" name="email" placeholder="Email address" required="" type="email"/>
+</div>
+<div class="relative">
+<div class="input-icon-container left-4">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+<input class="w-full pl-11 pr-12 py-3.5 border border-brand-border rounded-xl focus:ring-2 focus:ring-brand-red focus:border-brand-red outline-none transition-colors text-sm" id="login-password" name="password" placeholder="Password" required="" type="password"/>
+<button aria-label="Toggle password visibility" class="input-icon-container right-4 hover:text-gray-700 focus:outline-none" type="button" onclick="togglePassword('login-password', this)">
+<svg class="w-5 h-5 eye-icon eye-slash" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M3.98 8.223A10.477 10.477 0 0 0 1.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.451 10.451 0 0 1 12 4.5c4.756 0 8.773 3.162 10.065 7.498a10.522 10.522 0 0 1-4.293 5.774M6.228 6.228 3 3m3.228 3.228 3.65 3.65m7.894 7.894L21 21m-3.228-3.228-3.65-3.65m0 0a3 3 0 1 0-4.243-4.243m4.242 4.242L9.88 9.88" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+<svg class="w-5 h-5 eye-icon eye-open hidden absolute" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" stroke-linecap="round" stroke-linejoin="round"></path>
+<path d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+</div>
+<div class="flex justify-end mt-1">
+<a class="text-brand-red text-sm font-medium hover:underline" href="#">Forgot password?</a>
+</div>
+<button class="w-full bg-brand-red hover:bg-red-700 text-white font-semibold py-4 rounded-xl mt-4 transition-colors" type="submit">
+Login
+</button>
+</form>
+
+<div class="mt-8 px-2 w-full flex flex-col items-center">
+<div class="relative flex items-center w-full mb-8">
+<div class="flex-grow border-t border-brand-border"></div>
+<span class="flex-shrink-0 mx-4 text-brand-gray text-sm">or</span>
+<div class="flex-grow border-t border-brand-border"></div>
+</div>
+<button class="w-full flex items-center justify-center gap-3 bg-white border border-brand-border hover:bg-gray-50 text-gray-800 font-medium py-3.5 rounded-xl transition-colors" type="button">
+<svg height="20" viewbox="0 0 24 24" width="20" xmlns="http://www.w3.org/2000/svg">
+<path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"></path>
+<path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"></path>
+<path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"></path>
+<path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"></path>
+</svg>
+Continue with Google
+</button>
+</div>
+
+<div class="flex-grow"></div>
+<footer class="mt-auto pt-8 pb-4 text-center">
+<p class="text-brand-gray text-sm">
+Don't have an account?
+<a class="text-brand-red font-medium hover:underline cursor-pointer" onclick="showView('signup')">Sign up</a>
+</p>
+</footer>
+</main>
+</div>
+<!-- END: Login View -->
+
+<!-- BEGIN: Signup View -->
+<div id="signup-view" class="view-section bg-gray-100 min-h-screen flex justify-center">
+<main class="w-full max-w-[430px] bg-[#F9F9FB] min-h-screen flex flex-col relative pb-8 shadow-sm">
+<header class="p-4 pt-6 flex items-center">
+<button aria-label="Go back" class="p-2 -ml-2 rounded-full hover:bg-gray-200 transition-colors" onclick="showView('login')">
+<svg class="text-gray-800" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+<line x1="19" x2="5" y1="12" y2="12"></line>
+<polyline points="12 19 5 12 12 5"></polyline>
+</svg>
+</button>
+</header>
+
+<section class="flex flex-col items-center mt-4 px-6 text-center">
+<div class="relative w-32 h-32 mb-4 flex items-center justify-center">
+<div class="absolute inset-0 bg-gray-100 rounded-full opacity-50 transform scale-110 blur-xl"></div>
+<div class="absolute w-2 h-2 rounded-full bg-red-200 top-4 right-6"></div>
+<div class="absolute w-1.5 h-1.5 rounded-full bg-gray-200 bottom-8 right-2"></div>
+<div class="absolute w-2 h-2 rounded-full bg-red-100 top-8 left-4"></div>
+<svg class="relative z-10 drop-shadow-sm" fill="none" height="80" viewbox="0 0 100 100" width="80">
+<path d="M25 60 C25 50, 45 50, 45 60 L45 75 C45 78, 42 80, 40 80 L25 80 C23 80, 20 78, 20 75 Z" fill="#D93025"></path>
+<circle cx="32" cy="42" fill="#D93025" r="8"></circle>
+<path d="M75 60 C75 50, 55 50, 55 60 L55 75 C55 78, 58 80, 60 80 L75 80 C77 80, 80 78, 80 75 Z" fill="#D93025"></path>
+<circle cx="68" cy="42" fill="#D93025" r="8"></circle>
+<path d="M50 50 C35 50, 30 65, 30 75 C30 82, 35 85, 40 85 L60 85 C65 85, 70 82, 70 75 C70 65, 65 50, 50 50 Z" fill="#E83D31"></path>
+<circle cx="50" cy="35" fill="#E83D31" r="11"></circle>
+</svg>
+</div>
+<h1 class="text-[28px] font-bold tracking-tight mb-2 text-gray-900">Create your account</h1>
+<p class="text-brand-gray text-[15px]">Join the campus community</p>
+</section>
+
+<section class="mt-8 px-6 w-full">
+<form id="signup-form" class="flex flex-col space-y-4">
+<div id="signup-error" class="hidden bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm"></div>
+<div class="relative">
+<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+<svg class="text-gray-400" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="20" xmlns="http://www.w3.org/2000/svg">
+<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+<circle cx="12" cy="7" r="4"></circle>
+</svg>
+</div>
+<input class="w-full pl-12 pr-4 py-3.5 bg-white border border-brand-border rounded-xl text-[15px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent transition-shadow shadow-sm" id="signup-fullname" placeholder="Full name" required="" type="text"/>
+</div>
+<div class="relative">
+<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+<svg class="text-gray-400" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="20" xmlns="http://www.w3.org/2000/svg">
+<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+<polyline points="22,6 12,13 2,6"></polyline>
+</svg>
+</div>
+<input class="w-full pl-12 pr-4 py-3.5 bg-white border border-brand-border rounded-xl text-[15px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent transition-shadow shadow-sm" id="signup-email" placeholder="Email address" required="" type="email"/>
+</div>
+<div class="relative">
+<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+<svg class="text-gray-400" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="20" xmlns="http://www.w3.org/2000/svg">
+<rect height="11" rx="2" ry="2" width="18" x="3" y="11"></rect>
+<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+</svg>
+</div>
+<input class="w-full pl-12 pr-12 py-3.5 bg-white border border-brand-border rounded-xl text-[15px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent transition-shadow shadow-sm" id="signup-password" placeholder="Password" required="" type="password"/>
+<button aria-label="Toggle password visibility" class="absolute inset-y-0 right-0 pr-4 flex items-center" type="button" onclick="togglePassword('signup-password', this)">
+<svg class="text-gray-400 hover:text-gray-600 eye-icon eye-slash" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="20" xmlns="http://www.w3.org/2000/svg">
+<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+<line x1="1" x2="23" y1="1" y2="23"></line>
+</svg>
+<svg class="text-gray-400 hover:text-gray-600 eye-icon eye-open hidden absolute" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="20" xmlns="http://www.w3.org/2000/svg">
+<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+<circle cx="12" cy="12" r="3"></circle>
+</svg>
+</button>
+</div>
+<div class="relative">
+<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+<svg class="text-gray-400" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="20" xmlns="http://www.w3.org/2000/svg">
+<rect height="11" rx="2" ry="2" width="18" x="3" y="11"></rect>
+<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+</svg>
+</div>
+<input class="w-full pl-12 pr-12 py-3.5 bg-white border border-brand-border rounded-xl text-[15px] placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent transition-shadow shadow-sm" id="signup-confirm-password" placeholder="Confirm password" required="" type="password"/>
+<button aria-label="Toggle password visibility" class="absolute inset-y-0 right-0 pr-4 flex items-center" type="button" onclick="togglePassword('signup-confirm-password', this)">
+<svg class="text-gray-400 hover:text-gray-600 eye-icon eye-slash" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="20" xmlns="http://www.w3.org/2000/svg">
+<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+<line x1="1" x2="23" y1="1" y2="23"></line>
+</svg>
+<svg class="text-gray-400 hover:text-gray-600 eye-icon eye-open hidden absolute" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewbox="0 0 24 24" width="20" xmlns="http://www.w3.org/2000/svg">
+<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+<circle cx="12" cy="12" r="3"></circle>
+</svg>
+</button>
+</div>
+<div class="flex items-start pt-2 pb-1">
+<div class="flex items-center h-5">
+<input aria-describedby="terms" class="w-5 h-5 bg-white border-gray-300 rounded text-brand-red focus:ring-brand-red focus:ring-2" id="terms" required="" type="checkbox"/>
+</div>
+<div class="ml-3 text-sm">
+<label class="text-gray-600" for="terms">I agree to the <a class="text-brand-red font-medium hover:underline" href="#">Terms of Service and Privacy Policy</a></label>
+</div>
+</div>
+<button class="w-full text-white bg-brand-red hover:bg-red-700 focus:ring-4 focus:outline-none focus:ring-red-300 font-semibold rounded-xl text-[16px] px-5 py-3.5 text-center transition-colors shadow-sm mt-2" type="submit">
+Sign up
+</button>
+</form>
+</section>
+
+<section class="mt-8 px-6 w-full flex flex-col items-center">
+<div class="inline-flex items-center justify-center w-full relative mb-6">
+<hr class="w-full h-px bg-gray-200 border-0"/>
+<span class="absolute px-3 font-medium text-gray-500 bg-[#F9F9FB] text-sm">or</span>
+</div>
+<button class="w-full flex items-center justify-center py-3.5 px-4 bg-white border border-brand-border rounded-xl shadow-sm hover:bg-gray-50 transition-colors focus:ring-2 focus:ring-gray-200" type="button">
+<svg class="w-5 h-5 mr-3" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"></path>
+<path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"></path>
+<path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"></path>
+<path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"></path>
+</svg>
+<span class="text-[15px] font-semibold text-gray-800">Continue with Google</span>
+</button>
+</section>
+
+<footer class="mt-auto pt-8 pb-6 text-center w-full">
+<p class="text-[15px] text-gray-600">
+Already have an account? <a class="text-brand-red font-medium hover:underline cursor-pointer" onclick="showView('login')">Login</a>
+</p>
+</footer>
+</main>
+</div>
+<!-- END: Signup View -->
+
+<!-- BEGIN: Profile View -->
+<div id="profile-view" class="view-section bg-gray-50 min-h-screen flex justify-center">
+<main class="w-full max-w-[430px] bg-gray-50 min-h-screen flex flex-col relative pb-24">
+
+	<!-- BEGIN: TopAppBar (own-profile only - see renderProfileView, gated on
+	     the server-backed session, not a client-side assumption) -->
+	<header id="profile-topbar" class="hidden items-center px-4 h-14 bg-white sticky top-0 z-10 border-b border-gray-100">
+		<div class="w-16 shrink-0"></div>
+		<h1 id="profile-topbar-title" class="flex-1 text-center text-[15px] font-semibold text-gray-900 truncate">&nbsp;</h1>
+		<div class="flex items-center gap-1 w-16 shrink-0 justify-end">
+			<button type="button" id="profile-notifications-btn" aria-label="Notifications" class="p-2 text-gray-800 hover:opacity-80 transition-opacity active:scale-95 duration-100">
+				<i class="fa-regular fa-bell text-lg"></i>
+			</button>
+			<button type="button" id="profile-topbar-menu-btn" aria-label="Switch account" aria-haspopup="true" aria-expanded="false" class="p-2 -mr-2 text-gray-800 hover:opacity-80 transition-opacity active:scale-95 duration-100">
+				<i class="fa-solid fa-chevron-down text-sm"></i>
+			</button>
+		</div>
+	</header>
+	<!-- END: TopAppBar -->
+
+	<!-- BEGIN: ProfileHeaderCard -->
+	<div class="bg-white">
+		<!-- Cover banner -->
+		<div class="h-32 bg-gradient-to-b from-sky-300 via-sky-100 to-white relative overflow-hidden">
+			<img id="profile-cover-img" alt="" class="hidden absolute inset-0 w-full h-full object-cover"/>
+			<div id="profile-cover-upload-overlay" class="absolute inset-0 bg-black/30 items-center justify-center" style="display:none;">
+				<svg class="w-6 h-6 animate-spin text-white" fill="none" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+					<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+				</svg>
+			</div>
+			<button type="button" id="profile-cover-camera-btn" aria-label="Change cover photo" class="absolute bottom-2.5 right-2.5 w-8 h-8 rounded-full bg-white/90 border border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.16)] flex items-center justify-center text-gray-700 hover:bg-white transition-colors active:scale-95 duration-100">
+				<i class="fa-solid fa-camera text-[13px]"></i>
+			</button>
+		</div>
+
+		<div class="flex flex-col items-center px-6 -mt-14">
+			<!-- Avatar with camera badge -->
+			<div class="relative">
+				<div class="w-28 h-28 rounded-full border-[5px] border-white shadow-sm overflow-hidden bg-gray-100 relative">
+					<img id="profile-avatar-img" alt="" class="w-full h-full object-cover" src=""/>
+					<div id="profile-avatar-upload-overlay" class="absolute inset-0 bg-black/30 items-center justify-center" style="display:none;">
+						<svg class="w-6 h-6 animate-spin text-white" fill="none" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+						</svg>
+					</div>
+				</div>
+				<button type="button" id="profile-avatar-camera-btn" aria-label="Change profile photo" class="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-white border border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.12)] flex items-center justify-center text-gray-600 hover:bg-gray-50 transition-colors active:scale-95 duration-100">
+					<i class="fa-solid fa-camera text-[13px]"></i>
+				</button>
+			</div>
+
+			<input type="file" id="profile-avatar-input" accept="image/*" class="hidden"/>
+			<input type="file" id="profile-cover-input" accept="image/*" class="hidden"/>
+
+			<!-- Name & handle -->
+			<h2 id="profile-name" class="text-[20px] font-bold text-gray-900 mt-3">&nbsp;</h2>
+			<p id="profile-handle" class="text-gray-400 text-[14px] mb-5">&nbsp;</p>
+			<!-- Bio. Hidden (and margin-less) when the user has no bio set, so
+			     the layout matches the no-bio design exactly - see
+			     renderProfileBio(). -->
+			<p id="profile-bio" class="hidden text-gray-900 text-[14px] text-center leading-snug whitespace-pre-line px-2 mb-5"></p>
+
+			<!-- Stats -->
+			<div class="w-full flex items-center mb-5">
+				<div class="flex-1 flex flex-col items-center">
+					<span id="profile-posts-count" class="text-xl font-bold text-gray-900 leading-tight">0</span>
+					<span class="text-[11px] font-medium text-gray-400 tracking-wide">POSTS</span>
+				</div>
+				<div class="w-px h-9 bg-gray-200"></div>
+				<div class="flex-1 flex flex-col items-center">
+					<span id="profile-followers-count" class="text-xl font-bold text-gray-900 leading-tight">0</span>
+					<span class="text-[11px] font-medium text-gray-400 tracking-wide">FOLLOWERS</span>
+				</div>
+				<div class="w-px h-9 bg-gray-200"></div>
+				<div class="flex-1 flex flex-col items-center">
+					<span id="profile-following-count" class="text-xl font-bold text-gray-900 leading-tight">0</span>
+					<span class="text-[11px] font-medium text-gray-400 tracking-wide">FOLLOWING</span>
+				</div>
+			</div>
+
+			<!-- Edit Profile + Settings -->
+			<div class="w-full flex items-center gap-2 mb-6">
+				<button type="button" id="profile-edit-btn" class="flex-1 h-11 rounded-full border border-gray-200 flex items-center justify-center gap-2 text-[13px] font-semibold text-gray-800 tracking-wide hover:bg-gray-50 transition-colors active:scale-[0.98] duration-100">
+					<i class="fa-regular fa-pen-to-square text-[13px]"></i> EDIT PROFILE
+				</button>
+				<button type="button" id="profile-settings-btn" aria-label="Settings" class="w-11 h-11 shrink-0 rounded-full border border-gray-200 flex items-center justify-center text-gray-700 hover:bg-gray-50 transition-colors active:scale-95 duration-100">
+					<i class="fa-solid fa-gear text-[16px]"></i>
+				</button>
+				<!-- Duplicate of the ProfileTopAppBar down-arrow (see
+				     #profile-topbar-menu-btn). Now wired to collapse/expand
+				     the Status/Highlight section below - see
+				     toggleProfileStatusSection. Unrelated to the account
+				     switcher; purely a local UI toggle on this profile screen. -->
+				<button type="button" id="profile-settings-row-chevron" aria-label="Collapse status section" aria-expanded="true" aria-controls="profile-status-section" class="w-8 h-8 shrink-0 rounded-3xl border border-black-200 bg-white flex items-center justify-center text-gray-800 hover:bg-gray-50 transition-colors active:scale-95 duration-100">
+					<i class="fa-solid fa-chevron-down text-sm transition-transform duration-300"></i>
+				</button>
+			</div>
+
+			<!-- Highlights row. Collapsible via #profile-settings-row-chevron -
+			     height/opacity/padding are animated together (see
+			     toggleProfileStatusSection) so the ProfileTabs below slide up
+			     to exactly where this section started, with no leftover gap
+			     or jump. Content is rendered by renderProfileHighlights() from
+			     the signed-in user's actual highlight data (see
+			     loadUserHighlights) - never hardcoded here. -->
+			<div id="profile-status-section" class="w-full overflow-hidden" style="transition: height 300ms ease-in-out, opacity 300ms ease-in-out;">
+				<div id="profile-highlights-row" class="w-full flex items-start gap-5 overflow-x-auto no-scrollbar px-1 pb-6" role="list" aria-label="Highlights"></div>
+			</div>
+		</div>
+
+		<!-- BEGIN: ProfileTabs -->
+		<div class="flex border-t border-gray-100">
+			<button type="button" id="profile-tab-posts" class="profile-tab flex-1 flex items-center justify-center gap-2 py-3.5 text-[12px] font-semibold tracking-wide text-gray-900 border-b-2 border-gray-900 transition-colors" data-tab="posts">
+				<i class="fa-solid fa-table-cells text-[14px]"></i> POSTS
+			</button>
+			<button type="button" id="profile-tab-saved" class="profile-tab flex-1 flex items-center justify-center gap-2 py-3.5 text-[12px] font-semibold tracking-wide text-gray-400 border-b-2 border-transparent transition-colors" data-tab="saved">
+				<i class="fa-regular fa-bookmark text-[14px]"></i> SAVED
+			</button>
+			<button type="button" id="profile-tab-likes" class="profile-tab flex-1 flex items-center justify-center gap-2 py-3.5 text-[12px] font-semibold tracking-wide text-gray-400 border-b-2 border-transparent transition-colors" data-tab="likes">
+				<i class="fa-regular fa-heart text-[14px]"></i> LIKES
+			</button>
+		</div>
+		<!-- END: ProfileTabs -->
+	</div>
+	<!-- END: ProfileHeaderCard -->
+
+	<!-- BEGIN: ProfileTabPanels -->
+	<div id="profile-posts-panel" class="p-3">
+		<div id="profile-posts-container" class="space-y-3"></div>
+	</div>
+	<div id="profile-saved-panel" class="hidden flex flex-col items-center justify-center py-20 px-8 text-center text-gray-400 text-[14px] gap-2">
+		<i class="fa-regular fa-bookmark text-3xl text-gray-300"></i>
+		Saved posts are coming soon.
+	</div>
+	<div id="profile-likes-panel" class="hidden flex flex-col items-center justify-center py-20 px-8 text-center text-gray-400 text-[14px] gap-2">
+		<i class="fa-regular fa-heart text-3xl text-gray-300"></i>
+		Liked posts are coming soon.
+	</div>
+	<!-- END: ProfileTabPanels -->
+
+	<!-- BEGIN: Account Switcher Bottom Sheet (opened from the down-arrow in
+	     ProfileTopAppBar - see toggleAccountSwitcher). Same backdrop/sheet/
+	     Cancel-row convention as Post Action Menu Bottom Sheet. Logout lives
+	     here now (below Cancel) instead of as a separate standalone button
+	     on the profile screen - see handleLogout, unchanged. -->
+	<div id="account-switcher-backdrop" class="hidden fixed inset-0 z-40 bg-black/20 transition-opacity" onclick="closeAccountSwitcher()"></div>
+	<div id="account-switcher-sheet" class="hidden fixed left-0 right-0 bottom-0 z-50 bg-white rounded-t-[24px] shadow-[0_-8px_24px_rgba(0,0,0,0.12)] pt-2 pb-6 max-w-[430px] mx-auto transition-transform origin-bottom" role="dialog" aria-modal="true" aria-label="Switch account">
+		<div class="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-2"></div>
+		<h3 class="text-sm font-bold text-gray-500 px-5 pt-1 pb-1">Switch account</h3>
+		<div id="account-switcher-list" class="py-1"></div>
+		<div class="border-t border-gray-100 py-2">
+			<button type="button" id="account-switcher-add-btn" class="group w-full flex items-center gap-3 px-5 py-3 text-left transition-colors duration-100 active:bg-gray-50">
+				<span class="w-10 h-10 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 shrink-0 transition-transform duration-150 group-active:scale-90">
+					<i class="fa-solid fa-plus text-[14px]"></i>
+				</span>
+				<span class="text-[15px] font-semibold text-gray-900">Add Account</span>
+			</button>
+		</div>
+		<div class="border-t border-gray-100 pt-2 px-3 flex flex-col gap-1">
+			<button type="button" id="account-switcher-cancel-btn" class="w-full py-3.5 text-center text-[15px] font-semibold text-gray-500 rounded-xl transition-colors duration-100 active:bg-gray-100">Cancel</button>
+			<button type="button" id="account-switcher-logout-btn" class="w-full py-3.5 text-center text-[15px] font-semibold text-brand-red rounded-xl transition-colors duration-100 active:bg-gray-100" onclick="handleLogout()">Log Out</button>
+		</div>
+	</div>
+	<!-- END: Account Switcher Bottom Sheet -->
+
+	<!-- BEGIN: Highlight Upload Bottom Sheet (opened from the "New" circle in
+	     the Highlights row - see openHighlightUploadSheet). Same
+	     backdrop/sheet/Cancel-row convention as Account Switcher Bottom
+	     Sheet above. Choosing Photo/Video routes into the existing profile
+	     photo file-input pattern (see handleProfileImageSelected) rather
+	     than a new upload mechanism. -->
+	<div id="highlight-upload-backdrop" class="hidden fixed inset-0 z-40 bg-black/20 transition-opacity" onclick="closeHighlightUploadSheet()"></div>
+	<div id="highlight-upload-sheet" class="hidden fixed left-0 right-0 bottom-0 z-50 bg-white rounded-t-[24px] shadow-[0_-8px_24px_rgba(0,0,0,0.12)] pt-2 pb-6 max-w-[430px] mx-auto transition-transform origin-bottom" role="dialog" aria-modal="true" aria-label="Add to highlights">
+		<div class="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-2"></div>
+		<h3 class="text-sm font-bold text-gray-500 px-5 pt-1 pb-1">Add to highlights</h3>
+		<div class="py-1">
+			<button type="button" id="highlight-upload-photo-btn" class="group w-full flex items-center gap-3 px-5 py-3 text-left transition-colors duration-100 active:bg-gray-50">
+				<span class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 shrink-0 transition-transform duration-150 group-active:scale-90">
+					<i class="fa-regular fa-image text-[15px]"></i>
+				</span>
+				<span class="text-[15px] font-semibold text-gray-900">Photo</span>
+			</button>
+			<button type="button" id="highlight-upload-video-btn" class="group w-full flex items-center gap-3 px-5 py-3 text-left transition-colors duration-100 active:bg-gray-50">
+				<span class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 shrink-0 transition-transform duration-150 group-active:scale-90">
+					<i class="fa-solid fa-video text-[15px]"></i>
+				</span>
+				<span class="text-[15px] font-semibold text-gray-900">Video</span>
+			</button>
+		</div>
+		<div class="border-t border-gray-100 pt-2 px-3">
+			<button type="button" id="highlight-upload-cancel-btn" class="w-full py-3.5 text-center text-[15px] font-semibold text-gray-500 rounded-xl transition-colors duration-100 active:bg-gray-100">Cancel</button>
+		</div>
+	</div>
+	<input type="file" id="highlight-photo-input" accept="image/*" class="hidden"/>
+	<input type="file" id="highlight-video-input" accept="video/*" class="hidden"/>
+	<!-- END: Highlight Upload Bottom Sheet -->
+</main>
+</div>
+<!-- END: Profile View -->
+
+<!-- BEGIN: Edit Profile View -->
+<div id="edit-profile-view" class="view-section bg-gray-50 min-h-screen flex justify-center">
+<main class="w-full max-w-[430px] bg-gray-50 min-h-screen flex flex-col relative">
+
+	<!-- BEGIN: TopAppBar -->
+	<header class="flex items-center px-2 h-14 bg-white sticky top-0 z-10 border-b border-gray-100">
+		<button type="button" aria-label="Back" class="p-2 text-gray-800 hover:opacity-80 transition-opacity active:scale-95 duration-100" onclick="closeEditProfileView()">
+			<i class="fa-solid fa-chevron-left text-lg"></i>
+		</button>
+		<h1 class="flex-1 text-center text-[16px] font-semibold text-gray-900 -ml-9">Edit Profile</h1>
+	</header>
+	<!-- END: TopAppBar -->
+
+	<!-- BEGIN: Scrollable Content -->
+	<div class="flex-1 overflow-y-auto pb-10">
+		<!-- Cover + Avatar -->
+		<div class="relative">
+			<div class="h-32 bg-gradient-to-b from-sky-300 via-sky-100 to-white relative overflow-hidden">
+				<img id="edit-profile-cover-img" alt="" class="hidden absolute inset-0 w-full h-full object-cover"/>
+				<div id="edit-profile-cover-upload-overlay" class="absolute inset-0 bg-black/30 items-center justify-center" style="display:none;">
+					<svg class="w-6 h-6 animate-spin text-white" fill="none" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+						<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+					</svg>
+				</div>
+				<button type="button" id="edit-profile-cover-camera-btn" aria-label="Change cover photo" class="absolute bottom-2.5 right-2.5 w-8 h-8 rounded-full bg-white/90 border border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.16)] flex items-center justify-center text-gray-700 hover:bg-white transition-colors active:scale-95 duration-100">
+					<i class="fa-solid fa-camera text-[13px]"></i>
+				</button>
+			</div>
+			<div class="absolute left-1/2 top-32 -translate-x-1/2 -translate-y-1/2">
+				<div class="w-24 h-24 rounded-full border-[5px] border-white shadow-sm overflow-hidden bg-gray-100 relative">
+					<img id="edit-profile-avatar-img" alt="" class="w-full h-full object-cover" src=""/>
+					<div id="edit-profile-avatar-upload-overlay" class="absolute inset-0 bg-black/30 items-center justify-center" style="display:none;">
+						<svg class="w-5 h-5 animate-spin text-white" fill="none" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+						</svg>
+					</div>
+				</div>
+				<button type="button" id="edit-profile-avatar-camera-btn" aria-label="Change profile photo" class="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-white border border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.12)] flex items-center justify-center text-gray-600 hover:bg-gray-50 transition-colors active:scale-95 duration-100">
+					<i class="fa-solid fa-camera text-[12px]"></i>
+				</button>
+			</div>
+		</div>
+
+		<input type="file" id="edit-profile-avatar-input" accept="image/*" class="hidden"/>
+		<input type="file" id="edit-profile-cover-input" accept="image/*" class="hidden"/>
+
+		<p class="text-center text-[12px] text-gray-400 mt-16 px-10 leading-snug">Tap on your profile picture or cover photo to change them.</p>
+
+		<!-- Form fields -->
+		<div class="px-5 mt-6 flex flex-col gap-5">
+			<div>
+				<label for="edit-profile-name-input" class="block text-[12px] font-medium text-gray-400 mb-1.5">Display Name</label>
+				<input type="text" id="edit-profile-name-input" maxlength="50" class="w-full px-4 py-3 rounded-full border border-gray-200 text-[14px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent transition-shadow"/>
+			</div>
+
+			<div>
+				<label for="edit-profile-username-input" class="block text-[12px] font-medium text-gray-400 mb-1.5">Username</label>
+				<input type="text" id="edit-profile-username-input" maxlength="30" class="w-full px-4 py-3 rounded-full border border-gray-200 text-[14px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent transition-shadow"/>
+				<p id="edit-profile-username-error" class="hidden text-[12px] text-brand-red mt-1.5 px-1"></p>
+			</div>
+
+			<div>
+				<label for="edit-profile-bio-input" class="block text-[12px] font-medium text-gray-400 mb-1.5">Bio</label>
+				<textarea id="edit-profile-bio-input" maxlength="150" rows="3" class="w-full px-4 py-3 rounded-2xl border border-gray-200 text-[14px] text-gray-900 resize-none focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent transition-shadow" placeholder="Tell people a bit about yourself"></textarea>
+				<p id="edit-profile-bio-counter" class="text-right text-[11px] text-gray-400 mt-1 tabular-nums">0/150</p>
+			</div>
+
+			<div>
+				<label class="block text-[12px] font-medium text-gray-400 mb-1.5">Links (coming soon)</label>
+				<div class="w-full px-4 py-3 rounded-2xl border border-gray-200 flex items-center justify-between text-[14px] text-gray-300 cursor-not-allowed select-none" aria-disabled="true">
+					Add your social links
+					<i class="fa-solid fa-chevron-right text-[12px] text-gray-300"></i>
+				</div>
+			</div>
+		</div>
+
+		<div id="edit-profile-error" role="alert" class="hidden mx-5 mt-5 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-[13px]"></div>
+
+		<div class="px-5 mt-7">
+			<button type="button" id="edit-profile-save-btn" class="w-full py-3.5 rounded-2xl bg-gray-900 text-white font-semibold text-[15px] tracking-wide hover:bg-gray-800 transition-colors active:scale-[0.98] duration-100 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2" onclick="handleSaveProfileChanges()">
+				<svg id="edit-profile-save-spinner" class="hidden w-4 h-4 animate-spin" fill="none" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+					<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+				</svg>
+				<span id="edit-profile-save-label">Save Changes</span>
+			</button>
+		</div>
+	</div>
+	<!-- END: Scrollable Content -->
+</main>
+</div>
+<!-- END: Edit Profile View -->
+
+<!-- BEGIN: User Profile View (another user's profile, opened from a post card) -->
+<div id="user-profile-view" class="view-section bg-gray-50 min-h-screen flex justify-center">
+<main class="w-full max-w-[430px] bg-gray-50 min-h-screen flex flex-col relative pb-24">
+
+	<!-- BEGIN: TopAppBar -->
+	<header class="flex items-center justify-between px-4 h-14 bg-white sticky top-0 z-10 border-b border-gray-100">
+		<button type="button" aria-label="Back" class="p-2 -ml-2 text-gray-800 hover:opacity-80 transition-opacity active:scale-95 duration-100" onclick="closeUserProfileView()">
+			<i class="fa-solid fa-arrow-left text-lg"></i>
+		</button>
+		<button type="button" id="user-profile-menu-btn" aria-label="More options" class="p-2 -mr-2 text-gray-800 hover:opacity-80 transition-opacity active:scale-95 duration-100">
+			<i class="fa-solid fa-ellipsis-vertical text-lg"></i>
+		</button>
+	</header>
+	<!-- END: TopAppBar -->
+
+	<!-- BEGIN: UserProfileHeaderCard -->
+	<div class="bg-white">
+		<!-- Cover banner. The avatar is absolutely positioned relative to
+		     this wrapper (not pulled up with a negative margin) and
+		     overflow-hidden is scoped to the inner image only, so the
+		     avatar overlapping the bottom edge is never clipped by the
+		     cover's own clipping box. -->
+		<div class="relative">
+			<div class="h-32 bg-gradient-to-b from-sky-300 via-sky-100 to-white overflow-hidden">
+				<img id="user-profile-cover-img" alt="" class="hidden w-full h-full object-cover"/>
+			</div>
+			<div class="absolute left-1/2 top-32 -translate-x-1/2 -translate-y-1/2 w-28 h-28 rounded-full border-[5px] border-white shadow-sm overflow-hidden bg-gray-100">
+				<img id="user-profile-avatar-img" alt="" class="w-full h-full object-cover" src=""/>
+			</div>
+		</div>
+
+		<div class="flex flex-col items-center px-6 pt-14">
+			<!-- Name & handle -->
+			<h2 id="user-profile-name" class="text-[20px] font-bold text-gray-900 mt-3">&nbsp;</h2>
+			<p id="user-profile-handle" class="text-gray-400 text-[14px] mb-5">&nbsp;</p>
+			<!-- Bio. Hidden (and margin-less) when the viewed user has no bio
+			     set, so the layout matches the no-bio design exactly - see
+			     renderUserProfileBio(). -->
+			<p id="user-profile-bio" class="hidden text-gray-900 text-[14px] text-center leading-snug whitespace-pre-line px-2 mb-5"></p>
+
+			<!-- Stats -->
+			<div class="w-full flex items-center mb-5">
+				<div class="flex-1 flex flex-col items-center">
+					<span id="user-profile-posts-count" class="text-xl font-bold text-gray-900 leading-tight">0</span>
+					<span class="text-[11px] font-medium text-gray-400 tracking-wide">POSTS</span>
+				</div>
+				<div class="w-px h-9 bg-gray-200"></div>
+				<div class="flex-1 flex flex-col items-center">
+					<span id="user-profile-followers-count" class="text-xl font-bold text-gray-900 leading-tight">0</span>
+					<span class="text-[11px] font-medium text-gray-400 tracking-wide">FOLLOWERS</span>
+				</div>
+				<div class="w-px h-9 bg-gray-200"></div>
+				<div class="flex-1 flex flex-col items-center">
+					<span id="user-profile-following-count" class="text-xl font-bold text-gray-900 leading-tight">0</span>
+					<span class="text-[11px] font-medium text-gray-400 tracking-wide">FOLLOWING</span>
+				</div>
+			</div>
+
+			<!-- Follow + Message -->
+			<div class="w-full flex items-center gap-2 mb-6">
+				<button type="button" id="user-profile-follow-btn" data-following="false" class="flex-1 h-11 rounded-full bg-brand-red border border-brand-red flex items-center justify-center gap-2 text-[13px] font-semibold text-white tracking-wide hover:bg-red-700 transition-colors active:scale-[0.98] duration-100" onclick="toggleUserProfileFollow()">
+					<i class="fa-solid fa-plus text-[12px]"></i> <span id="user-profile-follow-label">FOLLOW</span>
+				</button>
+				<button type="button" id="user-profile-message-btn" class="flex-1 h-11 rounded-full border border-gray-200 flex items-center justify-center gap-2 text-[13px] font-semibold text-gray-800 tracking-wide hover:bg-gray-50 transition-colors active:scale-[0.98] duration-100" onclick="showToast('Coming soon')">
+					<i class="fa-regular fa-envelope text-[13px]"></i> MESSAGE
+				</button>
+			</div>
+		</div>
+
+		<!-- BEGIN: UserProfileTabs -->
+		<div class="flex border-t border-gray-100">
+			<button type="button" id="user-profile-tab-posts" class="user-profile-tab flex-1 flex items-center justify-center gap-2 py-3.5 text-[12px] font-semibold tracking-wide text-gray-900 border-b-2 border-gray-900 transition-colors" data-tab="posts">
+				<i class="fa-solid fa-table-cells text-[14px]"></i> POSTS
+			</button>
+			<button type="button" id="user-profile-tab-saved" class="user-profile-tab flex-1 flex items-center justify-center gap-2 py-3.5 text-[12px] font-semibold tracking-wide text-gray-400 border-b-2 border-transparent transition-colors" data-tab="saved">
+				<i class="fa-regular fa-bookmark text-[14px]"></i> SAVED
+			</button>
+			<button type="button" id="user-profile-tab-likes" class="user-profile-tab flex-1 flex items-center justify-center gap-2 py-3.5 text-[12px] font-semibold tracking-wide text-gray-400 border-b-2 border-transparent transition-colors" data-tab="likes">
+				<i class="fa-regular fa-heart text-[14px]"></i> LIKES
+			</button>
+		</div>
+		<!-- END: UserProfileTabs -->
+	</div>
+	<!-- END: UserProfileHeaderCard -->
+
+	<!-- BEGIN: UserProfileTabPanels -->
+	<div id="user-profile-posts-panel" class="p-3">
+		<div id="user-profile-posts-container" class="space-y-3"></div>
+	</div>
+	<div id="user-profile-saved-panel" class="hidden flex flex-col items-center justify-center py-20 px-8 text-center text-gray-400 text-[14px] gap-2">
+		<i class="fa-regular fa-bookmark text-3xl text-gray-300"></i>
+		Saved posts are private.
+	</div>
+	<div id="user-profile-likes-panel" class="hidden flex flex-col items-center justify-center py-20 px-8 text-center text-gray-400 text-[14px] gap-2">
+		<i class="fa-regular fa-heart text-3xl text-gray-300"></i>
+		Liked posts are private.
+	</div>
+	<!-- END: UserProfileTabPanels -->
+</main>
+</div>
+<!-- END: User Profile View -->
+
+<!-- BEGIN: Feed View -->
+<div id="feed-view" class="view-section">
+<!-- BEGIN: MainHeader & Top Navigation -->
+<header class="bg-white sticky top-0 z-10 w-full shadow-sm">
+<!-- Top Bar -->
+<div class="flex justify-between items-center px-4 py-3">
+<div id="feed-header-greeting" class="flex flex-col leading-tight">
+<h1 class="text-lg font-bold text-gray-900">Discover</h1>
+</div>
+<div class="flex items-center space-x-4">
+<!-- Search Icon -->
+<button class="text-gray-500 hover:text-gray-700 focus:outline-none">
+<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+<!-- Notification Icon with Badge -->
+<button class="text-gray-500 hover:text-gray-700 focus:outline-none relative">
+<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+<!-- Red Dot Badge -->
+<span class="absolute top-0 right-0 block h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white transform translate-x-1/4 -translate-y-1/4"></span>
+</button>
+</div>
+</div>
+<!-- Horizontal Scrollable Tabs -->
+<nav class="flex overflow-x-auto no-scrollbar border-b border-gray-100 pl-4 pt-1 pb-0 whitespace-nowrap">
+<a class="text-red-500 font-semibold px-2 py-3 border-b-2 border-red-500 mr-4 text-sm" href="#">For You</a>
+<a class="text-gray-500 font-medium px-2 py-3 hover:text-gray-700 mr-4 text-sm" href="#">Announcements</a>
+<a class="text-gray-500 font-medium px-2 py-3 hover:text-gray-700 mr-4 text-sm" href="#">Academic</a>
+<a class="text-gray-500 font-medium px-2 py-3 hover:text-gray-700 mr-4 text-sm" href="#">Events</a>
+<a class="text-gray-500 font-medium px-2 py-3 hover:text-gray-700 mr-4 text-sm" href="#">Community</a>
+<a class="text-gray-500 font-medium px-2 py-3 hover:text-gray-700 pr-4 text-sm" onclick="showView('businesses')">Businesses</a>
+</nav>
+</header>
+<!-- END: MainHeader & Top Navigation -->
+<!-- BEGIN: Main Feed Content -->
+<main class="flex-1 overflow-y-auto bg-gray-50 p-3 pb-24 space-y-3" id="feed-posts-container">
+<!-- Dynamic post cards are rendered here by renderFeedPosts() -->
+</main>
+<!-- END: Main Feed Content -->
+
+<!-- BEGIN: Compose FAB -->
+<button id="compose-fab" class="fixed w-14 h-14 bg-brand-red text-white rounded-full card-shadow flex items-center justify-center hover:bg-red-700 transition-colors z-9" style="bottom: 88px; right: 20px;" onclick="showView('create-post')">
+	<i class="fa-solid fa-plus text-xl"></i>
+</button>
+<!-- END: Compose FAB -->
+</div>
+<!-- END: Feed View -->
+
+<!-- BEGIN: Create Post View -->
+<div id="create-post-view" class="view-section bg-white min-h-screen flex flex-col relative">
+	<!-- BEGIN: TopAppBar -->
+	<header class="flex items-center justify-between px-4 h-14 bg-white sticky top-0 z-10 border-b border-gray-100">
+		<button aria-label="Close" class="p-2 -ml-2 text-gray-800 hover:opacity-80 transition-opacity active:scale-95 duration-100" onclick="attemptCloseCompose()">
+			<i class="fa-solid fa-xmark text-2xl"></i>
+		</button>
+		<h1 class="text-[17px] font-semibold text-gray-800 absolute left-1/2 -translate-x-1/2">Create Post</h1>
+		<button id="submit-post-btn" class="p-2 -mr-2 text-brand-red font-medium text-[16px] hover:opacity-80 transition-opacity active:scale-95 duration-100 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1.5" onclick="handlePostSubmit()" disabled aria-disabled="true">
+			<svg id="submit-post-spinner" class="hidden w-4 h-4 animate-spin" fill="none" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+				<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+				<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+			</svg>
+			<span id="submit-post-label">Post</span>
+		</button>
+	</header>
+	<!-- END: TopAppBar -->
+
+	<!-- BEGIN: Scrollable Content -->
+	<div class="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4 bg-white">
+		<!-- BEGIN: User Info Header -->
+		<div class="flex items-center gap-3">
+			<!-- Avatar -->
+			<div class="w-12 h-12 rounded-full overflow-hidden shrink-0">
+				<img alt="John Mike" class="w-full h-full object-cover" src="https://api.dicebear.com/9.x/avataaars/svg?seed=johnmike"/>
+			</div>
+			<!-- User Details -->
+			<div class="flex flex-col">
+				<div class="flex items-center gap-1 cursor-pointer">
+					<span class="font-semibold text-[15px] leading-tight text-gray-900">John Mike</span>
+					<i class="fa-solid fa-chevron-down text-sm text-gray-500"></i>
+				</div>
+				<button id="audience-picker-btn" type="button" class="flex items-center gap-1 text-gray-500 cursor-pointer -ml-0" onclick="toggleAudiencePicker()" aria-haspopup="true" aria-expanded="false">
+					<span id="audience-label" class="text-[14px] leading-tight">Academic</span>
+					<i class="fa-solid fa-chevron-down text-xs text-gray-500"></i>
+				</button>
+			</div>
+		</div>
+		<!-- END: User Info Header -->
+
+		<!-- BEGIN: Text Input Area -->
+		<textarea id="create-post-textarea" maxlength="1000" aria-label="Post content" class="w-full flex-1 resize-none border-none focus:ring-0 p-0 text-[18px] text-gray-800 placeholder:text-gray-400 bg-transparent leading-relaxed" placeholder="What's your question or thought?"></textarea>
+		<!-- END: Text Input Area -->
+
+		<!-- BEGIN: Media Preview Grid -->
+		<div id="media-preview-grid" class="hidden grid grid-cols-4 gap-2"></div>
+		<!-- END: Media Preview Grid -->
+
+		<div id="create-post-error" role="alert" class="hidden bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm"></div>
+
+		<!-- BEGIN: Character Counter -->
+		<div id="char-counter" class="hidden text-right text-xs text-gray-400 -mt-2 tabular-nums">0/1000</div>
+		<!-- END: Character Counter -->
+	</div>
+	<!-- END: Scrollable Content -->
+
+	<!-- BEGIN: Add Menu Popover -->
+	<div id="add-menu-backdrop" class="hidden fixed inset-0 z-30" onclick="closeAddMenu()"></div>
+	<div id="add-menu-popover" class="hidden absolute z-40 bottom-[68px] left-4 bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.12)] border border-gray-100 py-2 w-56 origin-bottom-left">
+		<button type="button" class="w-full flex items-center gap-3 px-4 py-3 text-left text-[15px] text-gray-800 hover:bg-gray-50 transition-colors" onclick="triggerMediaPicker()">
+			<i class="fa-solid fa-image text-gray-500 w-5 text-center"></i> Photo
+		</button>
+		<button type="button" disabled class="w-full flex items-center justify-between gap-3 px-4 py-3 text-left text-[15px] text-gray-300 cursor-not-allowed">
+			<span class="flex items-center gap-3"><i class="fa-solid fa-square-poll-vertical text-gray-300 w-5 text-center"></i> Poll</span>
+			<span class="text-[11px] font-medium bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full">Soon</span>
+		</button>
+		<button type="button" disabled class="w-full flex items-center justify-between gap-3 px-4 py-3 text-left text-[15px] text-gray-300 cursor-not-allowed">
+			<span class="flex items-center gap-3"><i class="fa-solid fa-link text-gray-300 w-5 text-center"></i> Link</span>
+			<span class="text-[11px] font-medium bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full">Soon</span>
+		</button>
+	</div>
+	<!-- END: Add Menu Popover -->
+
+	<input type="file" id="media-file-input" accept="image/*" multiple class="hidden" onchange="handleMediaFilesSelected(event)"/>
+
+	<!-- BEGIN: Audience Picker Bottom Sheet -->
+	<div id="audience-backdrop" class="hidden fixed inset-0 z-40 bg-black/20 transition-opacity" onclick="toggleAudiencePicker()"></div>
+	<div id="audience-sheet" class="hidden fixed left-0 right-0 bottom-0 z-50 bg-white rounded-t-[24px] shadow-[0_-8px_24px_rgba(0,0,0,0.12)] p-4 pb-6 max-w-[430px] mx-auto transition-transform origin-bottom" role="dialog" aria-modal="true" aria-label="Choose post category">
+		<div class="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-5"></div>
+		<h3 class="text-sm font-bold text-gray-500 mb-3 px-1">Post to</h3>
+		<div class="flex flex-col" id="audience-options-list">
+			<button type="button" class="audience-option flex items-center justify-between px-3 py-3 rounded-xl hover:bg-gray-50 text-[15px] text-gray-800 text-left" data-value="Academic" onclick="selectAudience('Academic')">
+				Academic
+				<i class="fa-solid fa-check text-brand-red hidden"></i>
+			</button>
+			<button type="button" class="audience-option flex items-center justify-between px-3 py-3 rounded-xl hover:bg-gray-50 text-[15px] text-gray-800 text-left" data-value="Announcements" onclick="selectAudience('Announcements')">
+				Announcements
+				<i class="fa-solid fa-check text-brand-red hidden"></i>
+			</button>
+			<button type="button" class="audience-option flex items-center justify-between px-3 py-3 rounded-xl hover:bg-gray-50 text-[15px] text-gray-800 text-left" data-value="Events" onclick="selectAudience('Events')">
+				Events
+				<i class="fa-solid fa-check text-brand-red hidden"></i>
+			</button>
+			<button type="button" class="audience-option flex items-center justify-between px-3 py-3 rounded-xl hover:bg-gray-50 text-[15px] text-gray-800 text-left" data-value="Community" onclick="selectAudience('Community')">
+				Community
+				<i class="fa-solid fa-check text-brand-red hidden"></i>
+			</button>
+			<button type="button" class="audience-option flex items-center justify-between px-3 py-3 rounded-xl hover:bg-gray-50 text-[15px] text-gray-800 text-left" data-value="General" onclick="selectAudience('General')">
+				General
+				<i class="fa-solid fa-check text-brand-red hidden"></i>
+			</button>
+		</div>
+	</div>
+	<!-- END: Audience Picker Bottom Sheet -->
+
+	<!-- BEGIN: Discard Confirm Dialog -->
+	<div id="discard-backdrop" class="hidden fixed inset-0 z-50 bg-black/30"></div>
+	<div id="discard-dialog" class="hidden fixed inset-0 z-50 flex items-center justify-center px-8" role="alertdialog" aria-modal="true" aria-labelledby="discard-dialog-title">
+		<div class="bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.16)] w-full max-w-[320px] p-5 text-center">
+			<h3 id="discard-dialog-title" class="text-[16px] font-semibold text-gray-900 mb-1">Discard post?</h3>
+			<p class="text-sm text-gray-500 mb-5">Your draft will be saved so you can pick it up later, or you can discard it for good.</p>
+			<div class="flex flex-col gap-2">
+				<button type="button" class="w-full py-3 rounded-xl bg-red-50 text-brand-red font-semibold text-[15px] hover:bg-red-100 transition-colors" onclick="confirmDiscardPost()">Discard</button>
+				<button type="button" class="w-full py-3 rounded-xl bg-gray-100 text-gray-700 font-semibold text-[15px] hover:bg-gray-200 transition-colors" onclick="saveDraftAndClose()">Save as draft</button>
+				<button type="button" class="w-full py-3 text-gray-400 font-medium text-[15px]" onclick="closeDiscardDialog()">Keep editing</button>
+			</div>
+		</div>
+	</div>
+	<!-- END: Discard Confirm Dialog -->
+
+	<!-- BEGIN: BottomToolbar -->
+	<footer class="h-16 border-t border-gray-100 bg-white w-full flex items-center px-4 gap-4 sticky bottom-0 z-10 shrink-0">
+		<button id="add-menu-trigger" aria-label="Add to your post" aria-haspopup="true" aria-expanded="false" class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-800 hover:bg-gray-200 transition-colors active:scale-95 duration-100 shrink-0" onclick="toggleAddMenu()">
+			<i class="fa-solid fa-plus text-lg"></i>
+		</button>
+		<span id="media-toolbar-label" class="text-[15px] text-gray-400 cursor-pointer flex-1 truncate" onclick="toggleAddMenu()">
+			Add media, poll, link...
+		</span>
+	</footer>
+	<!-- END: BottomToolbar -->
+</div>
+<!-- END: Create Post View -->
+
+	<!-- BEGIN: Businesses View -->
+		<div id="businesses-view" class="view-section bg-white min-h-screen relative">
+			<!-- BEGIN: Main Header -->
+			<header class="bg-white sticky top-0 z-10 w-full shadow-sm">
+				<!-- Horizontal Scrollable Tabs -->
+				<nav class="flex overflow-x-auto no-scrollbar border-b border-gray-100 pl-4 pt-1 pb-0 whitespace-nowrap">
+					<a class="text-gray-500 font-medium px-2 py-3 hover:text-gray-700 mr-4 text-sm" onclick="showView('feed')">For You</a>
+					<a class="text-gray-500 font-medium px-2 py-3 hover:text-gray-700 mr-4 text-sm" href="#">Announcements</a>
+					<a class="text-gray-500 font-medium px-2 py-3 hover:text-gray-700 mr-4 text-sm" href="#">Academic</a>
+					<a class="text-gray-500 font-medium px-2 py-3 hover:text-gray-700 mr-4 text-sm" href="#">Events</a>
+					<a class="text-gray-500 font-medium px-2 py-3 hover:text-gray-700 mr-4 text-sm" href="#">Community</a>
+					<a class="text-red-500 font-semibold px-2 py-3 border-b-2 border-red-500 pr-4 text-sm" href="#">Businesses</a>
+				</nav>
+			</header>
+			<!-- END: Main Header -->
+
+			<!-- BEGIN: Search Overlay -->
+			<div class="fixed inset-0 z-40 bg-black/10 hidden transition-opacity" id="search-backdrop" onclick="toggleSearch()"></div>
+			<div class="absolute top-[68px] left-0 right-0 z-50 bg-white rounded-[24px] shadow-[0_8px_24px_rgba(0,0,0,0.12)] p-4 pb-6 mx-4 hidden transition-all origin-top" id="search-overlay">
+				<div class="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-5"></div>
+				<div class="flex items-center gap-3 mb-6">
+					<div class="flex-grow flex items-center bg-gray-50 rounded-[12px] px-3 py-2.5">
+						<i class="fas fa-magnifying-glass text-gray-400 text-[18px] mr-2"></i>
+						<input autofocus class="bg-transparent border-none outline-none text-sm w-full p-0 text-gray-800 placeholder:text-gray-400 focus:ring-0" placeholder="Search businesses..." type="text"/>
+					</div>
+					<button class="text-gray-500 text-sm font-medium px-2" onclick="toggleSearch()">Cancel</button>
+				</div>
+				<div class="mb-6">
+					<div class="flex items-center justify-between mb-3">
+						<h3 class="text-sm font-bold text-gray-500">Recent searches</h3>
+						<button class="text-sm font-medium text-brand-red">Clear all</button>
+					</div>
+					<div class="flex flex-wrap gap-2">
+						<button class="flex items-center bg-gray-50 text-gray-800 px-3 py-1.5 rounded-full text-sm">
+							<i class="far fa-clock text-[14px] text-gray-400 mr-1.5"></i> steak
+						</button>
+						<button class="flex items-center bg-gray-50 text-gray-800 px-3 py-1.5 rounded-full text-sm">
+							<i class="far fa-clock text-[14px] text-gray-400 mr-1.5"></i> mart
+						</button>
+						<button class="flex items-center bg-gray-50 text-gray-800 px-3 py-1.5 rounded-full text-sm">
+							<i class="far fa-clock text-[14px] text-gray-400 mr-1.5"></i> charging station
+						</button>
+						<button class="flex items-center bg-gray-50 text-gray-800 px-3 py-1.5 rounded-full text-sm">
+							<i class="far fa-clock text-[14px] text-gray-400 mr-1.5"></i> tech services
+						</button>
+					</div>
+				</div>
+				<div>
+					<h3 class="text-sm font-bold text-gray-500 mb-3">Popular searches</h3>
+					<div class="flex flex-wrap gap-2">
+						<button class="flex items-center bg-gray-50 text-gray-800 px-3 py-1.5 rounded-full text-sm">
+							<i class="fas fa-utensils text-[14px] text-brand-red mr-1.5"></i> Restaurants
+						</button>
+						<button class="flex items-center bg-gray-50 text-gray-800 px-3 py-1.5 rounded-full text-sm">
+							<i class="fas fa-bag-shopping text-[14px] text-brand-red mr-1.5"></i> Shops
+						</button>
+						<button class="flex items-center bg-gray-50 text-gray-800 px-3 py-1.5 rounded-full text-sm">
+							<i class="fas fa-screwdriver-wrench text-[14px] text-brand-red mr-1.5"></i> Services
+						</button>
+						<button class="flex items-center bg-gray-50 text-gray-800 px-3 py-1.5 rounded-full text-sm">
+							<i class="fas fa-bolt text-[14px] text-brand-red mr-1.5"></i> Charging Stations
+						</button>
+					</div>
+				</div>
+			</div>
+			<!-- END: Search Overlay -->
+
+			<!-- BEGIN: Filter Bar -->
+			<nav class="px-5 py-4 mb-2 flex items-center justify-between">
+				<div class="flex overflow-x-auto no-scrollbar space-x-2 pb-2 flex-1">
+					<button class="bg-red-50 text-brand-red px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap">All</button>
+					<button class="bg-gray-50 text-gray-600 px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap hover:bg-gray-100 transition-colors">Restaurants</button>
+					<button class="bg-gray-50 text-gray-600 px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap hover:bg-gray-100 transition-colors">Shops</button>
+					<button class="bg-gray-50 text-gray-600 px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap hover:bg-gray-100 transition-colors">Services</button>
+					<button class="bg-gray-50 text-gray-600 px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap hover:bg-gray-100 transition-colors">Charging</button>
+				</div>
+				<div class="flex items-center space-x-4 text-gray-800 ml-4 pb-2">
+					<button aria-label="Search" onclick="toggleSearch()">
+						<svg class="w-6 h-6" fill="none" stroke="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+							<path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+						</svg>
+					</button>
+					<button aria-label="Filter">
+						<svg class="w-6 h-6" fill="none" stroke="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+							<path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+						</svg>
+					</button>
+				</div>
+			</nav>
+			<!-- END: Filter Bar -->
+
+			<!-- BEGIN: Business List -->
+			<main class="px-4 space-y-4 pb-24">
+				<!-- Card 1: Restaurant -->
+				<article class="flex flex-row bg-white rounded-[16px] border border-gray-100 p-3 gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)]">
+					<img alt="Kang Il-Yong's Dad's Steak" class="w-[120px] h-[120px] rounded-[12px] object-cover bg-gray-100" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBc5pkSe3UU4mBwQyyZS-rbk9TqKE9qJJQZpox9udzwXvQpAuv19UuckL_2z-8zsiuG7SlRZpfwY2WRIl08c7oE0z3Q8gntpnba78ID4I86JDtxw5ImddIoNNM5R9OXjuw0j_QPChvWDMaO61GTiY0Tj6kHYZZdqhm9QhRgU9JWvc5axl6uBeOaXU9IpJQJRbG0sdnmojuNnH61cFMyOdVDGX1JPT07K-soUwdjXrBcsrUoXYm0u06N"/>
+					<div class="flex flex-col justify-between py-1 w-full">
+						<div>
+							<h2 class="text-base font-bold text-gray-900 mb-0.5">Kang Il-Yong's Dad's Steak</h2>
+							<p class="text-sm text-gray-500 mb-1">Restaurant</p>
+							<div class="flex items-center text-sm mb-2">
+								<span class="font-bold mr-1">4.2</span>
+								<div class="flex text-[#FFB400] text-sm">
+									<i class="fas fa-star text-[16px]"></i>
+									<i class="fas fa-star text-[16px]"></i>
+									<i class="fas fa-star text-[16px]"></i>
+									<i class="fas fa-star text-[16px]"></i>
+									<i class="far fa-star text-[16px] text-gray-200"></i>
+								</div>
+								<span class="text-gray-500 ml-1 text-xs">(128)</span>
+							</div>
+							<div class="flex items-center text-sm text-gray-500 mb-2">
+								<i class="fas fa-map-marker-alt text-[16px] mr-1"></i>
+								<span class="truncate text-xs">22 Korea Street, City 001</span>
+							</div>
+						</div>
+						<div class="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+							<span class="flex items-center text-gray-500"><i class="fas fa-check text-[14px] text-green-500 mr-0.5"></i> Dine in</span>
+							<span class="flex items-center text-gray-500"><i class="fas fa-times text-[14px] text-red-500 mr-0.5"></i> Take away</span>
+							<span class="flex items-center text-gray-500"><i class="fas fa-times text-[14px] text-red-500 mr-0.5"></i> Delivery</span>
+						</div>
+					</div>
+				</article>
+
+				<!-- Card 2: Shop -->
+				<article class="flex flex-row bg-white rounded-[16px] border border-gray-100 p-3 gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)]">
+					<img alt="Samgyupsal Mart" class="w-[120px] h-[120px] rounded-[12px] object-cover bg-gray-100" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBwWSGqc-irg5nfC2lPl4Umf0F6CevMIaiurTkLVrSTcu-AhFGgO3zcDaYxh5tI21zXsdhvNIDDPRRfnd1zKfN5oH_QHpfSGHuqPvpR_rnxPGtfLXpzwlO1VwrHARxmXGuV8hNXQLIikyk1hBvinxr3CSYKlLtJxdmUsrXQAPdZtwcuAan0fV7Zvss51BwBZYuN-LafDQUqkTVfPt_lYXkdITDFi-Vna09MdXBh-C_zkgiCSeYIdMx9"/>
+					<div class="flex flex-col justify-start py-1 w-full">
+						<h2 class="text-base font-bold text-gray-900 mb-0.5">Samgyupsal Mart</h2>
+						<p class="text-sm text-gray-500 mb-1">Shop</p>
+						<div class="flex items-center text-sm mb-2">
+							<span class="font-bold mr-1">4.1</span>
+							<div class="flex text-[#FFB400] text-sm">
+								<i class="fas fa-star text-[16px]"></i>
+								<i class="fas fa-star text-[16px]"></i>
+								<i class="fas fa-star text-[16px]"></i>
+								<i class="fas fa-star text-[16px]"></i>
+								<i class="far fa-star text-[16px] text-gray-200"></i>
+							</div>
+							<span class="text-gray-500 ml-1 text-xs">(86)</span>
+						</div>
+						<div class="flex items-center text-sm text-gray-500">
+							<i class="fas fa-map-marker-alt text-[16px] mr-1"></i>
+							<span class="truncate text-xs">12 Market Road, City 001</span>
+						</div>
+					</div>
+				</article>
+
+				<!-- Card 3: Charging -->
+				<article class="flex flex-row bg-white rounded-[16px] border border-gray-100 p-3 gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)]">
+					<img alt="ChargeUp Station" class="w-[120px] h-[120px] rounded-[12px] object-cover bg-gray-100" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAWiVcsa4SrzBi1vtGi0gfLubOuFb4heNKvD4_KirKWemiOB8fVEjxAAMU4MnXgOKe0XCS6aXO6h4j4tv9ojb_qgA7Ow5XTqFLzlerY4TkBIKm4eda7txiXQRJvLmP6Arpf-ea_iHznQuQyrbRr1SSb2mJzYwNxvEOom445aSyZsbevC5JJmRRKQTZFRmCGoN8b8vhaebAbN4EX5tv1p2q5X8yoDI3w4XRrfsVAYATQQnMow6U-FDUZ"/>
+					<div class="flex flex-col justify-between py-1 w-full">
+						<div>
+							<h2 class="text-base font-bold text-gray-900 mb-0.5">ChargeUp Station</h2>
+							<p class="text-sm text-gray-500 mb-1">Charging Station</p>
+							<div class="flex items-center text-sm mb-2">
+								<span class="font-bold mr-1">4.5</span>
+								<div class="flex text-[#FFB400] text-sm">
+									<i class="fas fa-star text-[16px]"></i>
+									<i class="fas fa-star text-[16px]"></i>
+									<i class="fas fa-star text-[16px]"></i>
+									<i class="fas fa-star text-[16px]"></i>
+									<i class="fas fa-star-half-alt text-[16px]"></i>
+								</div>
+								<span class="text-gray-500 ml-1 text-xs">(64)</span>
+							</div>
+							<div class="flex items-center text-sm text-gray-500 mb-2">
+								<i class="fas fa-map-marker-alt text-[16px] mr-1"></i>
+								<span class="truncate text-xs">88 Tech Avenue, City 001</span>
+							</div>
+						</div>
+						<div class="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+							<span class="flex items-center text-gray-500"><i class="fas fa-check text-[14px] text-green-500 mr-0.5"></i> Fast Charging</span>
+							<span class="flex items-center text-gray-500"><i class="fas fa-check text-[14px] text-green-500 mr-0.5"></i> 24/7 Service</span>
+						</div>
+					</div>
+				</article>
+
+				<!-- Card 4: Services -->
+				<article class="flex flex-row bg-white rounded-[16px] border border-gray-100 p-3 gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)]">
+					<img alt="FixIt Tech Services" class="w-[120px] h-[120px] rounded-[12px] object-cover bg-gray-100" src="https://lh3.googleusercontent.com/aida-public/AB6AXuChV6x5zl2s67MAKLDSnzbwsSVuhGyPHtRzahrQeiW7-02CTKbV-4XHStNLS-3saMB5udQcgIZ409pN4tr8aDl0_F9_jxR5lKNemo1ylnry5LfQbF-tn_1kycniWtoVFSyER3j7ueEwny0NiPqzqVhKWQMpiNu8SvWRN3VDGE5LRh6X3J8gcG0jlFaDlsoZsw2W_t8kNCckBbsHsf3s7mnfyXeFvXZGE6JbR62EDGAI1i60R49btB7d"/>
+					<div class="flex flex-col justify-between py-1 w-full">
+						<div>
+							<h2 class="text-base font-bold text-gray-900 mb-0.5">FixIt Tech Services</h2>
+							<p class="text-sm text-gray-500 mb-1">Electronics Service</p>
+							<div class="flex items-center text-sm mb-2">
+								<span class="font-bold mr-1">4.3</span>
+								<div class="flex text-[#FFB400] text-sm">
+									<i class="fas fa-star text-[16px]"></i>
+									<i class="fas fa-star text-[16px]"></i>
+									<i class="fas fa-star text-[16px]"></i>
+									<i class="fas fa-star text-[16px]"></i>
+									<i class="fas fa-star-half-alt text-[16px]"></i>
+								</div>
+								<span class="text-gray-500 ml-1 text-xs">(52)</span>
+							</div>
+							<div class="flex items-center text-sm text-gray-500 mb-2">
+								<i class="fas fa-map-marker-alt text-[16px] mr-1"></i>
+								<span class="truncate text-xs">7 Gadget Lane, City 001</span>
+							</div>
+						</div>
+						<div class="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+							<span class="flex items-center text-gray-500"><i class="fas fa-check text-[14px] text-green-500 mr-0.5"></i> Repairs</span>
+							<span class="flex items-center text-gray-500"><i class="fas fa-check text-[14px] text-green-500 mr-0.5"></i> Accessories</span>
+						</div>
+					</div>
+				</article>
+			</main>
+			<!-- END: Business List -->
+
+			<!-- BEGIN: Footer Divider -->
+			<footer class="mt-8 flex items-center justify-center mb-4">
+				<div class="h-px bg-gray-100 w-12"></div>
+				<span class="text-sm text-gray-400 px-4">No more businesses</span>
+				<div class="h-px bg-gray-100 w-12"></div>
+			</footer>
+			<!-- END: Footer Divider -->
+		</div>
+		<!-- END: Businesses View -->
+
+<!-- BEGIN: Courses View -->
+<div id="courses-view" class="view-section bg-[#fafafa] min-h-screen p-4">
+<!-- BEGIN: HeaderSection -->
+<header class="flex justify-between items-center mb-6 px-1">
+<h1 class="text-2xl font-bold tracking-tight text-gray-900">My Courses</h1>
+<a class="text-[15px] font-medium text-red-600 hover:text-red-700 transition-colors" href="#">View All</a>
+</header>
+<!-- END: HeaderSection -->
+<!-- BEGIN: CourseList -->
+<main class="space-y-4 pb-24">
+<!-- Course Card: Introduction to Computer Science -->
+<article class="bg-white rounded-3xl p-5 course-card-shadow border border-gray-100 flex items-start gap-4">
+<!-- Icon Container -->
+<div class="flex-shrink-0 w-14 h-14 rounded-full bg-red-50 flex items-center justify-center text-red-500">
+<svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+<!-- Content -->
+<div class="flex-grow min-w-0">
+<div class="flex justify-between items-start mb-1">
+<h2 class="text-[17px] font-semibold text-gray-900 truncate pr-2">Introduction to Computer Science</h2>
+<svg class="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M8.25 4.5l7.5 7.5-7.5 7.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+<p class="text-[14px] text-gray-500 mb-1">CSC 101</p>
+<div class="flex items-center text-gray-500 text-[13px] mb-4">
+<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+          Dr. John Smith
+        </div>
+<!-- Progress Bar -->
+<div class="flex items-center gap-3">
+<div class="flex-grow h-1.5 bg-gray-200 rounded-full overflow-hidden">
+<div class="h-full bg-red-600 rounded-full" style="width: 60%"></div>
+</div>
+<span class="text-[15px] font-bold text-red-600">60%</span>
+</div>
+</div>
+</article>
+<!-- Course Card: General Chemistry -->
+<article class="bg-white rounded-3xl p-5 course-card-shadow border border-gray-100 flex items-start gap-4">
+<div class="flex-shrink-0 w-14 h-14 rounded-full bg-teal-50 flex items-center justify-center text-teal-500">
+<svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+<div class="flex-grow min-w-0">
+<div class="flex justify-between items-start mb-1">
+<h2 class="text-[17px] font-semibold text-gray-900 truncate pr-2">General Chemistry</h2>
+<svg class="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M8.25 4.5l7.5 7.5-7.5 7.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+<p class="text-[14px] text-gray-500 mb-1">CHM 102</p>
+<div class="flex items-center text-gray-500 text-[13px] mb-4">
+<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+          Dr. Sarah Johnson
+        </div>
+<div class="flex items-center gap-3">
+<div class="flex-grow h-1.5 bg-gray-200 rounded-full overflow-hidden">
+<div class="h-full bg-red-600 rounded-full" style="width: 45%"></div>
+</div>
+<span class="text-[15px] font-bold text-red-600">45%</span>
+</div>
+</div>
+</article>
+<!-- Course Card: Calculus I -->
+<article class="bg-white rounded-3xl p-5 course-card-shadow border border-gray-100 flex items-start gap-4">
+<div class="flex-shrink-0 w-14 h-14 rounded-full bg-blue-50 flex items-center justify-center text-blue-500">
+<svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M15.75 15.75V18m-7.5-6.75h.008v.008H8.25v-.008zm0 2.25h.008v.008H8.25V13.5zm0 2.25h.008v.008H8.25v-.008zm0 2.25h.008v.008H8.25V18zm2.498-6.75h.007v.008h-.007v-.008zm0 2.25h.007v.008h-.007V13.5zm0 2.25h.007v.008h-.007v-.008zm0 2.25h.007v.008h-.007V18zm2.504-6.75h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008V13.5zm0 2.25h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008V18zm2.498-6.75h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008V13.5zM8.25 6h7.5v2.25h-7.5V6zM12 2.25c-1.892 0-3.758.11-5.593.322C5.307 2.7 4.5 3.65 4.5 4.757V19.5a2.25 2.25 0 002.25 2.25h10.5a2.25 2.25 0 002.25-2.25V4.757c0-1.108-.806-2.057-1.907-2.185A48.507 48.507 0 0012 2.25z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+<div class="flex-grow min-w-0">
+<div class="flex justify-between items-start mb-1">
+<h2 class="text-[17px] font-semibold text-gray-900 truncate pr-2">Calculus I</h2>
+<svg class="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M8.25 4.5l7.5 7.5-7.5 7.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+<p class="text-[14px] text-gray-500 mb-1">MTH 101</p>
+<div class="flex items-center text-gray-500 text-[13px] mb-4">
+<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+          Dr. Michael Brown
+        </div>
+<div class="flex items-center gap-3">
+<div class="flex-grow h-1.5 bg-gray-200 rounded-full overflow-hidden">
+<div class="h-full bg-red-600 rounded-full" style="width: 80%"></div>
+</div>
+<span class="text-[15px] font-bold text-red-600">80%</span>
+</div>
+</div>
+</article>
+<!-- Course Card: Use of English -->
+<article class="bg-white rounded-3xl p-5 course-card-shadow border border-gray-100 flex items-start gap-4">
+<div class="flex-shrink-0 w-14 h-14 rounded-full bg-orange-50 flex items-center justify-center text-orange-500">
+<svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.315 48.315 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+<div class="flex-grow min-w-0">
+<div class="flex justify-between items-start mb-1">
+<h2 class="text-[17px] font-semibold text-gray-900 truncate pr-2">Use of English</h2>
+<svg class="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M8.25 4.5l7.5 7.5-7.5 7.5" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+<p class="text-[14px] text-gray-500 mb-1">ENG 105</p>
+<div class="flex items-center text-gray-500 text-[13px] mb-4">
+<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+          Prof. Emily Davis
+        </div>
+<div class="flex items-center gap-3">
+<div class="flex-grow h-1.5 bg-gray-200 rounded-full overflow-hidden">
+<div class="h-full bg-red-600 rounded-full" style="width: 30%"></div>
+</div>
+<span class="text-[15px] font-bold text-red-600">30%</span>
+</div>
+</div>
+</article>
+</main>
+<!-- END: CourseList -->
+</div>
+<!-- END: Courses View -->
+
+<!-- BEGIN: GPA Calculator FAB -->
+<button id="gpa-fab" class="fixed w-14 h-14 rounded-full bg-red-50 flex items-center justify-center hover:bg-red-100 transition-colors z-9 hidden" style="bottom: 88px; right: 20px;" aria-label="GPA Calculator" onclick="showView('gpa-calculator')">
+	<svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+		<path d="M15.75 15.75V18m-7.5-6.75h.008v.008H8.25v-.008zm0 2.25h.008v.008H8.25V13.5zm0 2.25h.008v.008H8.25v-.008zm0 2.25h.008v.008H8.25V18zm2.498-6.75h.007v.008h-.007v-.008zm0 2.25h.007v.008h-.007V13.5zm0 2.25h.007v.008h-.007v-.008zm0 2.25h.007v.008h-.007V18zm2.504-6.75h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008V13.5zm0 2.25h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008V18zm2.498-6.75h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008V13.5zM8.25 6h7.5v2.25h-7.5V6zM12 2.25c-1.892 0-3.758.11-5.593.322C5.307 2.7 4.5 3.65 4.5 4.757V19.5a2.25 2.25 0 002.25 2.25h10.5a2.25 2.25 0 002.25-2.25V4.757c0-1.108-.806-2.057-1.907-2.185A48.507 48.507 0 0012 2.25z" stroke-linecap="round" stroke-linejoin="round"></path>
+	</svg>
+</button>
+<!-- END: GPA Calculator FAB -->
+
+<!-- BEGIN: GPA Calculator View -->
+<div id="gpa-calculator-view" class="view-section fixed inset-0 z-50 bg-white hidden">
+	<iframe id="gpa-calculator-frame" src="" class="w-full h-full border-0"></iframe>
+</div>
+<!-- END: GPA Calculator View -->
+
+
+
+<!-- BEGIN: Bottom Navigation -->
+<nav id="bottom-nav" class="bg-white border-t border-gray-200 flex justify-between items-center px-6 py-2 pb-5 fixed bottom-0 w-full z-10 hidden">
+<!-- Home -->
+<button id="nav-home" class="flex flex-col items-center justify-center space-y-1 w-12" onclick="showView('feed')">
+<svg class="w-6 h-6" fill="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M11.47 3.84a.75.75 0 011.06 0l8.69 8.69a.75.75 0 101.06-1.06l-8.689-8.69a2.25 2.25 0 00-3.182 0l-8.69 8.69a.75.75 0 001.061 1.06l8.69-8.689z"></path>
+<path d="M12 5.432l8.159 8.159c.03.03.06.058.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 01-.75-.75v-4.5a.75.75 0 00-.75-.75h-3a.75.75 0 00-.75.75V21a.75.75 0 01-.75.75H5.625a1.875 1.875 0 01-1.875-1.875v-6.198a2.29 2.29 0 00.091-.086L12 5.43z"></path>
+</svg>
+<span class="text-[10px] font-medium">Home</span>
+</button>
+<!-- Courses -->
+<button id="nav-courses" class="flex flex-col items-center justify-center space-y-1 text-gray-400 hover:text-gray-600 w-12" onclick="showView('courses')">
+<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+<span class="text-[10px] font-medium">Courses</span>
+</button>
+<!-- Library -->
+<button class="flex flex-col items-center justify-center space-y-1 text-gray-400 hover:text-gray-600 w-12">
+<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+<span class="text-[10px] font-medium">Library</span>
+</button>
+<!-- Circle -->
+<button class="flex flex-col items-center justify-center space-y-1 text-gray-400 hover:text-gray-600 w-12">
+<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+<span class="text-[10px] font-medium">Circle</span>
+</button>
+<!-- Profile -->
+<button id="nav-profile" class="flex flex-col items-center justify-center space-y-1 w-12" onclick="showView('profile')">
+<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+<span class="text-[10px] font-medium">Profile</span>
+</button>
+</nav>
+<!-- END: Bottom Navigation -->
+
+<!-- BEGIN: Comment Overlay -->
+<!-- BEGIN: Global Toast -->
+<div id="app-toast" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 z-[60] bg-gray-900 text-white text-[14px] font-medium px-4 py-3 rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.2)] max-w-[90%] text-center" role="status" aria-live="polite"></div>
+<!-- END: Global Toast -->
+
+<!-- BEGIN: Delete Post Confirm Dialog -->
+<!-- Global (outside all .view-section containers) so it can be triggered
+     from the feed and the comment overlay, not just while composing. -->
+<div id="delete-post-backdrop" class="hidden fixed inset-0 z-[70] bg-black/30"></div>
+<div id="delete-post-dialog" class="hidden fixed inset-0 z-[70] flex items-center justify-center px-8" role="alertdialog" aria-modal="true" aria-labelledby="delete-post-dialog-title">
+	<div class="bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.16)] w-full max-w-[320px] p-5 text-center">
+		<h3 id="delete-post-dialog-title" class="text-[16px] font-semibold text-gray-900 mb-1">Delete post?</h3>
+		<p class="text-sm text-gray-500 mb-5">This can't be undone. Your post will be permanently removed.</p>
+		<div class="flex flex-col gap-2">
+			<button type="button" id="delete-post-confirm-btn" class="w-full py-3 rounded-xl bg-brand-red text-white font-semibold text-[15px] hover:bg-red-700 transition-colors">Delete</button>
+			<button type="button" class="w-full py-3 text-gray-500 font-medium text-[15px]" onclick="closeDeletePostDialog()">Cancel</button>
+		</div>
+	</div>
+</div>
+<!-- END: Delete Post Confirm Dialog -->
+
+<div id="comment-overlay" class="hidden fixed inset-0 z-50 bg-black/50" style="backdrop-filter: blur(4px);">
+	<div class="overlay-content w-full max-w-[430px] mx-auto bg-white flex flex-col">
+		<!-- Header -->
+		<header class="relative flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
+			<button id="close-overlay-btn" class="p-2 -ml-2 text-gray-900 focus:outline-none" aria-label="Close">
+				<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+			</button>
+			<button id="overlay-menu-btn" aria-label="More options" aria-haspopup="true" aria-expanded="false" class="p-2 -mr-2 text-gray-900 focus:outline-none active:scale-95 transition-transform duration-100" onclick="toggleOverlayPostMenu()">
+				<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+			</button>
+
+			<!-- Post options popover (mirrors the feed card's post-menu-sheet actions, plus Delete) -->
+			<div id="overlay-menu-backdrop" class="hidden fixed inset-0 z-40" onclick="closeOverlayPostMenu()"></div>
+			<div id="overlay-menu-popover" class="hidden absolute z-50 top-[52px] right-4 bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.16)] border border-gray-100 py-2 w-52 origin-top-right">
+				<div class="absolute -top-[5px] right-5 w-3 h-3 bg-white border-t border-l border-gray-100 rotate-45"></div>
+				<button type="button" class="overlay-menu-action group w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors duration-100 active:bg-gray-50" data-action="save">
+					<i class="fa-regular fa-bookmark text-gray-500 w-5 text-center text-[15px] transition-transform duration-150 group-active:scale-90"></i>
+					<span class="text-[14px] text-gray-800">Save post</span>
+				</button>
+				<button type="button" class="overlay-menu-action group w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors duration-100 active:bg-gray-50" data-action="share">
+					<i class="fa-solid fa-arrow-up-from-bracket text-gray-500 w-5 text-center text-[15px] transition-transform duration-150 group-active:scale-90"></i>
+					<span class="text-[14px] text-gray-800">Share post</span>
+				</button>
+				<button type="button" class="overlay-menu-action group w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors duration-100 active:bg-gray-50" data-action="copy-link">
+					<i class="fa-solid fa-link text-gray-500 w-5 text-center text-[15px] transition-transform duration-150 group-active:scale-90"></i>
+					<span class="text-[14px] text-gray-800">Copy link</span>
+				</button>
+				<div class="border-t border-gray-100 my-1"></div>
+				<button type="button" class="overlay-menu-action group w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors duration-100 active:bg-gray-50" data-action="hide">
+					<i class="fa-regular fa-eye-slash text-gray-500 w-5 text-center text-[15px] transition-transform duration-150 group-active:scale-90"></i>
+					<span class="text-[14px] text-gray-800">Hide post</span>
+				</button>
+				<button type="button" class="overlay-menu-action group w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors duration-100 active:bg-gray-50" data-action="not-interested">
+					<i class="fa-solid fa-ban text-gray-500 w-5 text-center text-[15px] transition-transform duration-150 group-active:scale-90"></i>
+					<span class="text-[14px] text-gray-800">Not interested</span>
+				</button>
+				<div class="border-t border-gray-100 my-1"></div>
+				<button type="button" class="overlay-menu-action group w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors duration-100 active:bg-gray-50" data-action="report">
+					<i class="fa-regular fa-flag text-gray-500 w-5 text-center text-[15px] transition-transform duration-150 group-active:scale-90"></i>
+					<span class="text-[14px] text-gray-800">Report post</span>
+				</button>
+				<div id="overlay-menu-delete-divider" class="hidden border-t border-gray-100 my-1"></div>
+				<button type="button" id="overlay-menu-delete-btn" class="hidden overlay-menu-action group w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors duration-100 active:bg-gray-50" data-action="delete">
+					<i class="fa-regular fa-trash-can text-brand-red w-5 text-center text-[15px] transition-transform duration-150 group-active:scale-90"></i>
+					<span class="text-[14px] text-brand-red font-medium">Delete post</span>
+				</button>
+			</div>
+		</header>
+
+		<!-- Original Post -->
+		<article id="overlay-post" class="px-5 pt-2 pb-6 border-b border-gray-100 shrink-0">
+			<!-- Author Info -->
+			<div class="flex items-center gap-3 mb-4">
+				<img id="overlay-post-avatar" alt="" class="w-12 h-12 rounded-full bg-gray-200 object-cover shrink-0" src=""/>
+				<div>
+					<h2 id="overlay-post-author" class="text-[17px] font-bold leading-tight"></h2>
+					<p id="overlay-post-handle" class="text-[15px] text-gray-500 mt-0.5"></p>
+				</div>
+			</div>
+			<!-- Post Images -->
+			<div id="overlay-post-images" class="hidden"></div>
+			<!-- Post Content -->
+			<p id="overlay-post-content" class="text-[17px] leading-[1.6] text-gray-800 mb-4"></p>
+			<div class="flex items-center gap-1.5 text-gray-500 mb-4">
+				<svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+				<span id="overlay-post-time" class="text-[15px]"></span>
+			</div>
+			<!-- Stats Row -->
+			<div class="flex items-center gap-6 text-gray-700">
+				<div class="flex items-center gap-2">
+					<span class="like-icon-wrapper">
+						<svg class="w-5 h-5 heart-outline" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+							<path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" stroke-linecap="round" stroke-linejoin="round"></path>
+						</svg>
+						<svg class="w-5 h-5 text-brand-red heart-filled absolute inset-0" fill="currentColor" stroke="none" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+							<path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"></path>
+						</svg>
+					</span>
+					<span id="overlay-post-likes" class="text-[15px] font-medium"></span>
+				</div>
+				<div class="flex items-center gap-2">
+					<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+						<path d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z" stroke-linecap="round" stroke-linejoin="round"></path>
+					</svg>
+					<span id="overlay-post-comments" class="text-[15px] font-medium"></span>
+				</div>
+			</div>
+		</article>
+
+		<!-- Replies Section (scrollable) -->
+		<section class="flex-1 overlay-replies-section">
+			<h3 id="overlay-replies-heading" class="px-5 pt-6 pb-5 text-[17px] font-bold sticky top-0 bg-white">Replies (0)</h3>
+			<div id="overlay-replies-list" class="px-5 pb-4">
+				<!-- Loading state -->
+				<div id="overlay-loading" class="text-center py-8 text-gray-400">
+					<svg class="animate-spin h-8 w-8 mx-auto mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+						<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+					</svg>
+					<p class="text-sm">Loading comments...</p>
+				</div>
+				<!-- Empty state -->
+				<div id="overlay-empty" class="hidden text-center py-8 text-gray-400 text-sm">
+					No comments yet. Be the first to reply!
+				</div>
+				<!-- Error state -->
+				<div id="overlay-error" class="hidden text-center py-8 text-red-500 text-sm"></div>
+				<!-- Comments container -->
+				<div id="overlay-comments-container"></div>
+			</div>
+		</section>
+
+		<!-- Fixed Reply Input Bar -->
+		<div class="shrink-0 p-4 bg-white/95 backdrop-blur-md border-t border-gray-100">
+			<!-- Replying-to context chip: shown only after tapping a specific
+			     comment's Reply action. Flat comment model (no parent_id on
+			     the backend) so this is a mention-style convenience, not real
+			     threading — see startReplyTo(). -->
+			<div id="overlay-reply-context" class="hidden items-center justify-between mb-2 pl-1">
+				<span class="text-[13px] text-gray-500">Replying to <span id="overlay-reply-context-handle" class="text-gray-700 font-medium"></span></span>
+				<button type="button" id="overlay-reply-context-cancel" class="p-1 -mr-1 text-gray-400 hover:text-gray-600 focus:outline-none" aria-label="Cancel reply">
+					<i class="fa-solid fa-xmark text-[13px]"></i>
+				</button>
+			</div>
+			<div class="relative flex items-center">
+				<input id="overlay-reply-input" class="w-full h-[52px] pl-5 pr-14 rounded-full border border-gray-200 bg-gray-50/50 text-[16px] focus:outline-none focus:border-brand-red focus:ring-1 focus:ring-brand-red transition-shadow" placeholder="Post a reply..." type="text" maxlength="1000"/>
+				<button id="overlay-reply-send-btn" class="absolute right-1.5 w-[42px] h-[42px] bg-brand-red rounded-full flex items-center justify-center text-white focus:outline-none hover:bg-red-700 transition-colors disabled:opacity-40 disabled:pointer-events-none" disabled aria-disabled="true">
+					<svg id="overlay-reply-send-spinner" class="hidden w-5 h-5 animate-spin" fill="none" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+						<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+					</svg>
+					<svg id="overlay-reply-send-icon" class="w-5 h-5 ml-1" fill="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+						<path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z"></path>
+					</svg>
+				</button>
+			</div>
+			<div class="flex items-center justify-between mt-1.5 px-1 min-h-[16px]">
+				<div id="overlay-reply-error" class="hidden text-sm text-red-600"></div>
+				<span id="overlay-reply-counter" class="hidden ml-auto text-[12px] text-gray-400 tabular-nums">0/1000</span>
+			</div>
+		</div>
+	</div>
+</div>
+<!-- END: Comment Overlay -->
+
+<!-- BEGIN: Post Action Menu Bottom Sheet -->
+<div id="post-menu-backdrop" class="hidden fixed inset-0 z-40 bg-black/20 transition-opacity" onclick="closePostMenu()"></div>
+<div id="post-menu-sheet" class="hidden fixed left-0 right-0 bottom-0 z-50 bg-white rounded-t-[24px] shadow-[0_-8px_24px_rgba(0,0,0,0.12)] pt-2 pb-6 max-w-[430px] mx-auto transition-transform origin-bottom" role="dialog" aria-modal="true" aria-label="Post options">
+	<div class="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-2"></div>
+	<div class="py-2">
+		<button type="button" class="post-menu-action group w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors duration-100 active:bg-gray-50" data-action="save">
+			<span class="post-menu-icon w-6 flex items-center justify-center text-gray-700 transition-transform duration-150 group-active:scale-90"><i class="fa-regular fa-bookmark text-[18px]"></i></span>
+			<span class="text-[15px] font-medium text-gray-900">Save post</span>
+		</button>
+		<button type="button" class="post-menu-action group w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors duration-100 active:bg-gray-50" data-action="share">
+			<span class="post-menu-icon w-6 flex items-center justify-center text-gray-700 transition-transform duration-150 group-active:scale-90"><i class="fa-solid fa-arrow-up-from-bracket text-[18px]"></i></span>
+			<span class="text-[15px] font-medium text-gray-900">Share post</span>
+		</button>
+		<button type="button" class="post-menu-action group w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors duration-100 active:bg-gray-50" data-action="copy-link">
+			<span class="post-menu-icon w-6 flex items-center justify-center text-gray-700 transition-transform duration-150 group-active:scale-90"><i class="fa-solid fa-link text-[18px]"></i></span>
+			<span class="text-[15px] font-medium text-gray-900">Copy link</span>
+		</button>
+	</div>
+	<div class="border-t border-gray-100 py-2">
+		<button type="button" class="post-menu-action group w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors duration-100 active:bg-gray-50" data-action="hide">
+			<span class="post-menu-icon w-6 flex items-center justify-center text-gray-700 transition-transform duration-150 group-active:scale-90"><i class="fa-regular fa-eye-slash text-[18px]"></i></span>
+			<span>
+				<span class="block text-[15px] font-medium text-gray-900">Hide post</span>
+				<span class="block text-[13px] text-gray-400">See fewer posts like this</span>
+			</span>
+		</button>
+		<button type="button" class="post-menu-action group w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors duration-100 active:bg-gray-50" data-action="not-interested">
+			<span class="post-menu-icon w-6 flex items-center justify-center text-gray-700 transition-transform duration-150 group-active:scale-90"><i class="fa-solid fa-ban text-[18px]"></i></span>
+			<span>
+				<span class="block text-[15px] font-medium text-gray-900">Not interested</span>
+				<span class="block text-[13px] text-gray-400">Don't show posts like this</span>
+			</span>
+		</button>
+	</div>
+	<div class="border-t border-gray-100 py-2">
+		<button type="button" class="post-menu-action group w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors duration-100 active:bg-gray-50" data-action="report">
+			<span class="post-menu-icon w-6 flex items-center justify-center text-gray-700 transition-transform duration-150 group-active:scale-90"><i class="fa-regular fa-flag text-[18px]"></i></span>
+			<span>
+				<span class="block text-[15px] font-medium text-gray-900">Report post</span>
+				<span class="block text-[13px] text-gray-400">Report this to the admins</span>
+			</span>
+		</button>
+	</div>
+	<div class="border-t border-gray-100 pt-2 px-3">
+		<button type="button" id="post-menu-cancel-btn" class="w-full py-3.5 text-center text-[15px] font-semibold text-gray-500 rounded-xl transition-colors duration-100 active:bg-gray-100">Cancel</button>
+	</div>
+</div>
+<!-- END: Post Action Menu Bottom Sheet -->
+
+<!-- BEGIN: Comment Action Menu Bottom Sheet -->
+<div id="comment-menu-backdrop" class="hidden fixed inset-0 z-40 bg-black/20 transition-opacity" onclick="closeCommentMenu()"></div>
+<div id="comment-menu-sheet" class="hidden fixed left-0 right-0 bottom-0 z-50 bg-white rounded-t-[24px] shadow-[0_-8px_24px_rgba(0,0,0,0.12)] pt-2 pb-6 max-w-[430px] mx-auto transition-transform origin-bottom" role="dialog" aria-modal="true" aria-label="Comment options">
+	<div class="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-2"></div>
+	<div class="py-2">
+		<button type="button" id="comment-menu-reply-btn" class="comment-menu-action group w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors duration-100 active:bg-gray-50">
+			<span class="w-6 flex items-center justify-center text-gray-700 transition-transform duration-150 group-active:scale-90"><i class="fa-solid fa-reply text-[18px]"></i></span>
+			<span class="text-[15px] font-medium text-gray-900">Reply</span>
+		</button>
+		<button type="button" id="comment-menu-copy-btn" class="comment-menu-action group w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors duration-100 active:bg-gray-50">
+			<span class="w-6 flex items-center justify-center text-gray-700 transition-transform duration-150 group-active:scale-90"><i class="fa-solid fa-copy text-[18px]"></i></span>
+			<span class="text-[15px] font-medium text-gray-900">Copy text</span>
+		</button>
+	</div>
+	<!-- Report shows for other people's comments; Delete shows for your own.
+	     Mutually exclusive, toggled in openCommentMenu(). -->
+	<div id="comment-menu-report-group" class="border-t border-gray-100 py-2">
+		<button type="button" id="comment-menu-report-btn" class="comment-menu-action group w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors duration-100 active:bg-gray-50">
+			<span class="w-6 flex items-center justify-center text-gray-700 transition-transform duration-150 group-active:scale-90"><i class="fa-regular fa-flag text-[18px]"></i></span>
+			<span class="text-[15px] font-medium text-gray-900">Report comment</span>
+		</button>
+	</div>
+	<div id="comment-menu-delete-group" class="hidden border-t border-gray-100 py-2">
+		<button type="button" id="comment-menu-delete-btn" class="comment-menu-action group w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors duration-100 active:bg-gray-50">
+			<span class="w-6 flex items-center justify-center text-brand-red transition-transform duration-150 group-active:scale-90"><i class="fa-regular fa-trash-can text-[18px]"></i></span>
+			<span class="text-[15px] font-medium text-brand-red">Delete comment</span>
+		</button>
+	</div>
+	<div class="border-t border-gray-100 pt-2 px-3">
+		<button type="button" id="comment-menu-cancel-btn" class="w-full py-3.5 text-center text-[15px] font-semibold text-gray-500 rounded-xl transition-colors duration-100 active:bg-gray-100">Cancel</button>
+	</div>
+</div>
+<!-- END: Comment Action Menu Bottom Sheet -->
+
+<!-- BEGIN: Delete Comment Confirm Dialog -->
+<div id="delete-comment-backdrop" class="hidden fixed inset-0 z-[70] bg-black/30"></div>
+<div id="delete-comment-dialog" class="hidden fixed inset-0 z-[70] flex items-center justify-center px-8" role="alertdialog" aria-modal="true" aria-labelledby="delete-comment-dialog-title">
+	<div class="bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.16)] w-full max-w-[320px] p-5 text-center">
+		<h3 id="delete-comment-dialog-title" class="text-[16px] font-semibold text-gray-900 mb-1">Delete comment?</h3>
+		<p class="text-sm text-gray-500 mb-5">This can't be undone. Your comment will be permanently removed.</p>
+		<div class="flex flex-col gap-2">
+			<button type="button" id="delete-comment-confirm-btn" class="w-full py-3 rounded-xl bg-brand-red text-white font-semibold text-[15px] hover:bg-red-700 transition-colors">Delete</button>
+			<button type="button" class="w-full py-3 text-gray-500 font-medium text-[15px]" onclick="closeDeleteCommentDialog()">Cancel</button>
+		</div>
+	</div>
+</div>
+<!-- END: Delete Comment Confirm Dialog -->
+
+<script src="/static/js/core.js"></script>
+<script src="/static/js/account-switcher.js"></script>
+<script src="/static/js/feed.js"></script>
+<script src="/static/js/profile.js"></script>
+<script src="/static/js/highlights.js"></script>
+<script src="/static/js/compose.js"></script>
+<script src="/static/js/comments.js"></script>
+<script src="/static/js/comment-actions.js"></script>
+<script src="/static/js/app.js"></script>
+
+</body></html>

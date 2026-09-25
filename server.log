@@ -1,0 +1,27 @@
+ * Serving Flask app 'app'
+ * Debug mode: on
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5050
+ * Running on http://172.26.6.140:5050
+Press CTRL+C to quit
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 133-798-527
+127.0.0.1 - - [24/Aug/2026 15:40:36] "POST /api/signup HTTP/1.1" 201 -
+127.0.0.1 - - [24/Aug/2026 15:40:49] "POST /api/signup HTTP/1.1" 201 -
+127.0.0.1 - - [24/Aug/2026 15:40:59] "POST /api/signup HTTP/1.1" 201 -
+127.0.0.1 - - [24/Aug/2026 15:41:18] "POST /api/signup HTTP/1.1" 201 -
+127.0.0.1 - - [24/Aug/2026 15:41:18] "PATCH /api/profile HTTP/1.1" 200 -
+127.0.0.1 - - [24/Aug/2026 15:41:18] "GET /api/session HTTP/1.1" 200 -
+127.0.0.1 - - [24/Aug/2026 15:41:18] "GET /api/session HTTP/1.1" 200 -
+127.0.0.1 - - [24/Aug/2026 15:41:18] "GET /api/users/20 HTTP/1.1" 200 -
+127.0.0.1 - - [24/Aug/2026 15:41:18] "POST /api/posts HTTP/1.1" 201 -
+127.0.0.1 - - [24/Aug/2026 15:41:18] "GET /api/posts HTTP/1.1" 200 -
+127.0.0.1 - - [24/Aug/2026 15:41:18] "POST /api/posts/15/comments HTTP/1.1" 201 -
+127.0.0.1 - - [24/Aug/2026 15:41:18] "PATCH /api/profile HTTP/1.1" 409 -
+127.0.0.1 - - [24/Aug/2026 15:41:18] "PATCH /api/profile HTTP/1.1" 400 -
+127.0.0.1 - - [24/Aug/2026 15:41:18] "PATCH /api/profile HTTP/1.1" 400 -
+127.0.0.1 - - [24/Aug/2026 15:41:18] "PATCH /api/profile HTTP/1.1" 400 -
+127.0.0.1 - - [24/Aug/2026 15:41:26] "GET /api/session HTTP/1.1" 200 -
+127.0.0.1 - - [24/Aug/2026 15:41:34] "POST /api/login HTTP/1.1" 200 -

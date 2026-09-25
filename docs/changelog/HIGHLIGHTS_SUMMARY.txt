@@ -1,0 +1,138 @@
+================================================================================
+HIGHLIGHTS FEATURE - IMPLEMENTATION COMPLETE
+================================================================================
+
+OVERVIEW:
+Backend support for user profile Highlights feature has been successfully 
+implemented and tested. Users can now create, view, and delete photo/video 
+highlights with titles.
+
+================================================================================
+CHANGES MADE TO app.py:
+================================================================================
+
+1. CONSTANTS (Lines 26-33):
+   - Added ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'mov', 'avi', 'webm', 'mkv'}
+   - Added MAX_HIGHLIGHT_SIZE = 25 * 1024 * 1024  # 25MB
+
+2. DATABASE MIGRATION (Lines 126-138):
+   - Added highlights table creation in init_db()
+   - Added idx_highlights_user index for performance
+
+3. NEW ENDPOINTS (Lines ~527-~700):
+   
+   a) GET /api/users/:id/highlights
+      - Returns user's highlights as JSON array
+      - Response shape: {id, title, kind, cover, created_at}
+      - Ordered by created_at ASC (oldest first)
+   
+   b) POST /api/highlights
+      - Multipart form upload (media + title)
+      - Validates file type, size (25MB max), title (20 chars max)
+      - Infers kind from mimetype (image/* → photo, video/* → video)
+      - Stores file with UUID filename in static/uploads/
+      - Returns created highlight object
+   
+   c) DELETE /api/highlights/:id
+      - Auth required, ownership validated
+      - Deletes database row and media file
+      - Returns {success: true}
+
+================================================================================
+DATABASE SCHEMA:
+================================================================================
+
+Table: highlights
+  - id (INTEGER PRIMARY KEY AUTOINCREMENT)
+  - user_id (INTEGER NOT NULL, FK to users)
+  - title (TEXT NOT NULL)
+  - kind (TEXT NOT NULL, CHECK: 'photo' or 'video')
+  - media_url (TEXT NOT NULL)
+  - created_at (TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
+
+Index: idx_highlights_user ON highlights(user_id)
+
+================================================================================
+VALIDATION RULES:
+================================================================================
+
+✓ Authentication required for all operations
+✓ Title: Required, max 20 characters
+✓ File type: image/* → photo, video/* → video
+✓ File size: Max 25MB
+✓ Allowed image extensions: png, jpg, jpeg, gif, webp
+✓ Allowed video extensions: mp4, mov, avi, webm, mkv
+✓ Ownership: Users can only delete their own highlights
+✓ File cleanup: Media files deleted when highlight is deleted
+
+================================================================================
+ERROR RESPONSES (Following existing patterns):
+================================================================================
+
+400 Bad Request:
+  - {"error": "No media file provided."}
+  - {"error": "Title is required."}
+  - {"error": "Title must be 20 characters or less."}
+  - {"error": "Only image and video files are supported."}
+  - {"error": "File must be under 25MB."}
+
+401 Unauthorized:
+  - {"error": "Authentication required"}
+
+403 Forbidden:
+  - {"error": "You can only delete your own highlights"}
+
+404 Not Found:
+  - {"error": "User not found"}
+  - {"error": "Highlight not found"}
+
+================================================================================
+TESTING RESULTS:
+================================================================================
+
+✅ Photo upload and retrieval
+✅ Video upload and retrieval (kind='video' correctly set)
+✅ Multiple highlights per user
+✅ Highlights ordered by creation time
+✅ Title validation (required, 20 char max)
+✅ File size validation (25MB limit enforced)
+✅ File type validation (rejects text files)
+✅ Authentication required
+✅ Cross-user deletion protection
+✅ File cleanup on deletion (verified on disk)
+✅ Response shape matches frontend requirements (uses "cover" key)
+
+================================================================================
+FRONTEND INTEGRATION:
+================================================================================
+
+The implementation follows the exact conventions specified:
+- Multipart upload like /api/profile/picture
+- Same file storage mechanism
+- Response uses "cover" key (not "media_url")
+- Standard error JSON format: {error: "..."}
+- All validation matches the requirements
+
+================================================================================
+FILES:
+================================================================================
+
+Modified:
+  - app.py (added ~170 lines)
+  - beebo.db (migrated with new table)
+
+Created:
+  - HIGHLIGHTS_IMPLEMENTATION.md (full documentation)
+  - test_highlights.sh (comprehensive test suite)
+  - test_highlights_video.sh (video-specific tests)
+  - test_file_cleanup.sh (deletion verification)
+
+================================================================================
+DEPLOYMENT NOTES:
+================================================================================
+
+The highlights table is created automatically via init_db(). No manual
+migration steps required. The feature is fully backward compatible and
+does not affect existing functionality.
+
+================================================================================

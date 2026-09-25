@@ -1,0 +1,94 @@
+<!-- BEGIN: Edit Profile View -->
+<div id="edit-profile-view" class="view-section bg-gray-50 min-h-screen flex justify-center">
+<main class="w-full max-w-[430px] bg-gray-50 min-h-screen flex flex-col relative">
+
+	<!-- BEGIN: TopAppBar -->
+	<header class="flex items-center px-2 h-14 bg-white sticky top-0 z-10 border-b border-gray-100">
+		<button type="button" aria-label="Back" class="p-2 text-gray-800 hover:opacity-80 transition-opacity active:scale-95 duration-100" onclick="closeEditProfileView()">
+			<i class="fa-solid fa-chevron-left text-lg"></i>
+		</button>
+		<h1 class="flex-1 text-center text-[16px] font-semibold text-gray-900 -ml-9">Edit Profile</h1>
+	</header>
+	<!-- END: TopAppBar -->
+
+	<!-- BEGIN: Scrollable Content -->
+	<div class="flex-1 overflow-y-auto pb-10">
+		<!-- Cover + Avatar -->
+		<div class="relative">
+			<div class="h-32 bg-gradient-to-b from-sky-300 via-sky-100 to-white relative overflow-hidden">
+				<img id="edit-profile-cover-img" alt="" class="hidden absolute inset-0 w-full h-full object-cover"/>
+				<div id="edit-profile-cover-upload-overlay" class="absolute inset-0 bg-black/30 items-center justify-center" style="display:none;">
+					<svg class="w-6 h-6 animate-spin text-white" fill="none" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+						<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+					</svg>
+				</div>
+				<button type="button" id="edit-profile-cover-camera-btn" aria-label="Change cover photo" class="absolute bottom-2.5 right-2.5 w-8 h-8 rounded-full bg-white/90 border border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.16)] flex items-center justify-center text-gray-700 hover:bg-white transition-colors active:scale-95 duration-100">
+					<i class="fa-solid fa-camera text-[13px]"></i>
+				</button>
+			</div>
+			<div class="absolute left-1/2 top-32 -translate-x-1/2 -translate-y-1/2">
+				<div class="w-24 h-24 rounded-full border-[5px] border-white shadow-sm overflow-hidden bg-gray-100 relative">
+					<img id="edit-profile-avatar-img" alt="" class="w-full h-full object-cover" src=""/>
+					<div id="edit-profile-avatar-upload-overlay" class="absolute inset-0 bg-black/30 items-center justify-center" style="display:none;">
+						<svg class="w-5 h-5 animate-spin text-white" fill="none" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+						</svg>
+					</div>
+				</div>
+				<button type="button" id="edit-profile-avatar-camera-btn" aria-label="Change profile photo" class="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-white border border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.12)] flex items-center justify-center text-gray-600 hover:bg-gray-50 transition-colors active:scale-95 duration-100">
+					<i class="fa-solid fa-camera text-[12px]"></i>
+				</button>
+			</div>
+		</div>
+
+		<input type="file" id="edit-profile-avatar-input" accept="image/*" class="hidden"/>
+		<input type="file" id="edit-profile-cover-input" accept="image/*" class="hidden"/>
+
+		<p class="text-center text-[12px] text-gray-400 mt-16 px-10 leading-snug">Tap on your profile picture or cover photo to change them.</p>
+
+		<!-- Form fields -->
+		<div class="px-5 mt-6 flex flex-col gap-5">
+			<div>
+				<label for="edit-profile-name-input" class="block text-[12px] font-medium text-gray-400 mb-1.5">Display Name</label>
+				<input type="text" id="edit-profile-name-input" maxlength="50" class="w-full px-4 py-3 rounded-full border border-gray-200 text-[14px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent transition-shadow"/>
+			</div>
+
+			<div>
+				<label for="edit-profile-username-input" class="block text-[12px] font-medium text-gray-400 mb-1.5">Username</label>
+				<input type="text" id="edit-profile-username-input" maxlength="30" class="w-full px-4 py-3 rounded-full border border-gray-200 text-[14px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent transition-shadow"/>
+				<p id="edit-profile-username-error" class="hidden text-[12px] text-brand-red mt-1.5 px-1"></p>
+			</div>
+
+			<div>
+				<label for="edit-profile-bio-input" class="block text-[12px] font-medium text-gray-400 mb-1.5">Bio</label>
+				<textarea id="edit-profile-bio-input" maxlength="150" rows="3" class="w-full px-4 py-3 rounded-2xl border border-gray-200 text-[14px] text-gray-900 resize-none focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent transition-shadow" placeholder="Tell people a bit about yourself"></textarea>
+				<p id="edit-profile-bio-counter" class="text-right text-[11px] text-gray-400 mt-1 tabular-nums">0/150</p>
+			</div>
+
+			<div>
+				<label class="block text-[12px] font-medium text-gray-400 mb-1.5">Links (coming soon)</label>
+				<div class="w-full px-4 py-3 rounded-2xl border border-gray-200 flex items-center justify-between text-[14px] text-gray-300 cursor-not-allowed select-none" aria-disabled="true">
+					Add your social links
+					<i class="fa-solid fa-chevron-right text-[12px] text-gray-300"></i>
+				</div>
+			</div>
+		</div>
+
+		<div id="edit-profile-error" role="alert" class="hidden mx-5 mt-5 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-[13px]"></div>
+
+		<div class="px-5 mt-7">
+			<button type="button" id="edit-profile-save-btn" class="w-full py-3.5 rounded-2xl bg-gray-900 text-white font-semibold text-[15px] tracking-wide hover:bg-gray-800 transition-colors active:scale-[0.98] duration-100 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2" onclick="handleSaveProfileChanges()">
+				<svg id="edit-profile-save-spinner" class="hidden w-4 h-4 animate-spin" fill="none" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+					<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+				</svg>
+				<span id="edit-profile-save-label">Save Changes</span>
+			</button>
+		</div>
+	</div>
+	<!-- END: Scrollable Content -->
+</main>
+</div>
+<!-- END: Edit Profile View -->

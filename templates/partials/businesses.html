@@ -1,0 +1,218 @@
+	<!-- BEGIN: Businesses View -->
+		<div id="businesses-view" class="view-section bg-white min-h-screen relative">
+			<!-- BEGIN: Main Header -->
+			<header class="bg-white sticky top-0 z-10 w-full shadow-sm">
+				<div class="flex items-center gap-3 px-4 py-3.5">
+					<button type="button" aria-label="Back" onclick="closeBusinessesView()" class="p-1 -ml-1 text-gray-900 hover:opacity-80 transition-opacity active:scale-95 duration-100">
+						<svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+							<path d="m15 18-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"></path>
+						</svg>
+					</button>
+					<h1 class="text-lg font-bold text-gray-900">Businesses</h1>
+				</div>
+			</header>
+			<!-- END: Main Header -->
+
+			<!-- BEGIN: Search Overlay -->
+			<div class="fixed inset-0 z-40 bg-black/10 hidden transition-opacity" id="search-backdrop" onclick="toggleSearch()"></div>
+			<div class="absolute top-[68px] left-0 right-0 z-50 bg-white rounded-[24px] shadow-[0_8px_24px_rgba(0,0,0,0.12)] p-4 pb-6 mx-4 hidden transition-all origin-top" id="search-overlay">
+				<div class="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-5"></div>
+				<div class="flex items-center gap-3 mb-6">
+					<div class="flex-grow flex items-center bg-gray-50 rounded-[12px] px-3 py-2.5">
+						<i class="fas fa-magnifying-glass text-gray-400 text-[18px] mr-2"></i>
+						<input autofocus class="bg-transparent border-none outline-none text-sm w-full p-0 text-gray-800 placeholder:text-gray-400 focus:ring-0" placeholder="Search businesses..." type="text"/>
+					</div>
+					<button class="text-gray-500 text-sm font-medium px-2" onclick="toggleSearch()">Cancel</button>
+				</div>
+				<div class="mb-6">
+					<div class="flex items-center justify-between mb-3">
+						<h3 class="text-sm font-bold text-gray-500">Recent searches</h3>
+						<button class="text-sm font-medium text-brand-red">Clear all</button>
+					</div>
+					<div class="flex flex-wrap gap-2">
+						<button class="flex items-center bg-gray-50 text-gray-800 px-3 py-1.5 rounded-full text-sm">
+							<i class="far fa-clock text-[14px] text-gray-400 mr-1.5"></i> steak
+						</button>
+						<button class="flex items-center bg-gray-50 text-gray-800 px-3 py-1.5 rounded-full text-sm">
+							<i class="far fa-clock text-[14px] text-gray-400 mr-1.5"></i> mart
+						</button>
+						<button class="flex items-center bg-gray-50 text-gray-800 px-3 py-1.5 rounded-full text-sm">
+							<i class="far fa-clock text-[14px] text-gray-400 mr-1.5"></i> charging station
+						</button>
+						<button class="flex items-center bg-gray-50 text-gray-800 px-3 py-1.5 rounded-full text-sm">
+							<i class="far fa-clock text-[14px] text-gray-400 mr-1.5"></i> tech services
+						</button>
+					</div>
+				</div>
+				<div>
+					<h3 class="text-sm font-bold text-gray-500 mb-3">Popular searches</h3>
+					<div class="flex flex-wrap gap-2">
+						<button class="flex items-center bg-gray-50 text-gray-800 px-3 py-1.5 rounded-full text-sm">
+							<i class="fas fa-utensils text-[14px] text-brand-red mr-1.5"></i> Restaurants
+						</button>
+						<button class="flex items-center bg-gray-50 text-gray-800 px-3 py-1.5 rounded-full text-sm">
+							<i class="fas fa-bag-shopping text-[14px] text-brand-red mr-1.5"></i> Shops
+						</button>
+						<button class="flex items-center bg-gray-50 text-gray-800 px-3 py-1.5 rounded-full text-sm">
+							<i class="fas fa-screwdriver-wrench text-[14px] text-brand-red mr-1.5"></i> Services
+						</button>
+						<button class="flex items-center bg-gray-50 text-gray-800 px-3 py-1.5 rounded-full text-sm">
+							<i class="fas fa-bolt text-[14px] text-brand-red mr-1.5"></i> Charging Stations
+						</button>
+					</div>
+				</div>
+			</div>
+			<!-- END: Search Overlay -->
+
+			<!-- BEGIN: Filter Bar -->
+			<nav class="px-5 py-4 mb-2 flex items-center justify-between">
+				<div class="flex overflow-x-auto no-scrollbar space-x-2 pb-2 flex-1">
+					<button class="bg-red-50 text-brand-red px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap">All</button>
+					<button class="bg-gray-50 text-gray-600 px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap hover:bg-gray-100 transition-colors">Restaurants</button>
+					<button class="bg-gray-50 text-gray-600 px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap hover:bg-gray-100 transition-colors">Shops</button>
+					<button class="bg-gray-50 text-gray-600 px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap hover:bg-gray-100 transition-colors">Services</button>
+					<button class="bg-gray-50 text-gray-600 px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap hover:bg-gray-100 transition-colors">Charging</button>
+				</div>
+				<div class="flex items-center space-x-4 text-gray-800 ml-4 pb-2">
+					<button aria-label="Search" onclick="toggleSearch()">
+						<svg class="w-6 h-6" fill="none" stroke="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+							<path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+						</svg>
+					</button>
+					<button aria-label="Filter">
+						<svg class="w-6 h-6" fill="none" stroke="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+							<path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+						</svg>
+					</button>
+				</div>
+			</nav>
+			<!-- END: Filter Bar -->
+
+			<!-- BEGIN: Business List -->
+			<main class="px-4 space-y-4 pb-24">
+				<!-- Card 1: Restaurant -->
+				<article class="flex flex-row bg-white rounded-[16px] border border-gray-100 p-3 gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)]">
+					<img alt="Kang Il-Yong's Dad's Steak" class="w-[120px] h-[120px] rounded-[12px] object-cover bg-gray-100" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBc5pkSe3UU4mBwQyyZS-rbk9TqKE9qJJQZpox9udzwXvQpAuv19UuckL_2z-8zsiuG7SlRZpfwY2WRIl08c7oE0z3Q8gntpnba78ID4I86JDtxw5ImddIoNNM5R9OXjuw0j_QPChvWDMaO61GTiY0Tj6kHYZZdqhm9QhRgU9JWvc5axl6uBeOaXU9IpJQJRbG0sdnmojuNnH61cFMyOdVDGX1JPT07K-soUwdjXrBcsrUoXYm0u06N"/>
+					<div class="flex flex-col justify-between py-1 w-full">
+						<div>
+							<h2 class="text-base font-bold text-gray-900 mb-0.5">Kang Il-Yong's Dad's Steak</h2>
+							<p class="text-sm text-gray-500 mb-1">Restaurant</p>
+							<div class="flex items-center text-sm mb-2">
+								<span class="font-bold mr-1">4.2</span>
+								<div class="flex text-[#FFB400] text-sm">
+									<i class="fas fa-star text-[16px]"></i>
+									<i class="fas fa-star text-[16px]"></i>
+									<i class="fas fa-star text-[16px]"></i>
+									<i class="fas fa-star text-[16px]"></i>
+									<i class="far fa-star text-[16px] text-gray-200"></i>
+								</div>
+								<span class="text-gray-500 ml-1 text-xs">(128)</span>
+							</div>
+							<div class="flex items-center text-sm text-gray-500 mb-2">
+								<i class="fas fa-map-marker-alt text-[16px] mr-1"></i>
+								<span class="truncate text-xs">22 Korea Street, City 001</span>
+							</div>
+						</div>
+						<div class="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+							<span class="flex items-center text-gray-500"><i class="fas fa-check text-[14px] text-green-500 mr-0.5"></i> Dine in</span>
+							<span class="flex items-center text-gray-500"><i class="fas fa-times text-[14px] text-red-500 mr-0.5"></i> Take away</span>
+							<span class="flex items-center text-gray-500"><i class="fas fa-times text-[14px] text-red-500 mr-0.5"></i> Delivery</span>
+						</div>
+					</div>
+				</article>
+
+				<!-- Card 2: Shop -->
+				<article class="flex flex-row bg-white rounded-[16px] border border-gray-100 p-3 gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)]">
+					<img alt="Samgyupsal Mart" class="w-[120px] h-[120px] rounded-[12px] object-cover bg-gray-100" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBwWSGqc-irg5nfC2lPl4Umf0F6CevMIaiurTkLVrSTcu-AhFGgO3zcDaYxh5tI21zXsdhvNIDDPRRfnd1zKfN5oH_QHpfSGHuqPvpR_rnxPGtfLXpzwlO1VwrHARxmXGuV8hNXQLIikyk1hBvinxr3CSYKlLtJxdmUsrXQAPdZtwcuAan0fV7Zvss51BwBZYuN-LafDQUqkTVfPt_lYXkdITDFi-Vna09MdXBh-C_zkgiCSeYIdMx9"/>
+					<div class="flex flex-col justify-start py-1 w-full">
+						<h2 class="text-base font-bold text-gray-900 mb-0.5">Samgyupsal Mart</h2>
+						<p class="text-sm text-gray-500 mb-1">Shop</p>
+						<div class="flex items-center text-sm mb-2">
+							<span class="font-bold mr-1">4.1</span>
+							<div class="flex text-[#FFB400] text-sm">
+								<i class="fas fa-star text-[16px]"></i>
+								<i class="fas fa-star text-[16px]"></i>
+								<i class="fas fa-star text-[16px]"></i>
+								<i class="fas fa-star text-[16px]"></i>
+								<i class="far fa-star text-[16px] text-gray-200"></i>
+							</div>
+							<span class="text-gray-500 ml-1 text-xs">(86)</span>
+						</div>
+						<div class="flex items-center text-sm text-gray-500">
+							<i class="fas fa-map-marker-alt text-[16px] mr-1"></i>
+							<span class="truncate text-xs">12 Market Road, City 001</span>
+						</div>
+					</div>
+				</article>
+
+				<!-- Card 3: Charging -->
+				<article class="flex flex-row bg-white rounded-[16px] border border-gray-100 p-3 gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)]">
+					<img alt="ChargeUp Station" class="w-[120px] h-[120px] rounded-[12px] object-cover bg-gray-100" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAWiVcsa4SrzBi1vtGi0gfLubOuFb4heNKvD4_KirKWemiOB8fVEjxAAMU4MnXgOKe0XCS6aXO6h4j4tv9ojb_qgA7Ow5XTqFLzlerY4TkBIKm4eda7txiXQRJvLmP6Arpf-ea_iHznQuQyrbRr1SSb2mJzYwNxvEOom445aSyZsbevC5JJmRRKQTZFRmCGoN8b8vhaebAbN4EX5tv1p2q5X8yoDI3w4XRrfsVAYATQQnMow6U-FDUZ"/>
+					<div class="flex flex-col justify-between py-1 w-full">
+						<div>
+							<h2 class="text-base font-bold text-gray-900 mb-0.5">ChargeUp Station</h2>
+							<p class="text-sm text-gray-500 mb-1">Charging Station</p>
+							<div class="flex items-center text-sm mb-2">
+								<span class="font-bold mr-1">4.5</span>
+								<div class="flex text-[#FFB400] text-sm">
+									<i class="fas fa-star text-[16px]"></i>
+									<i class="fas fa-star text-[16px]"></i>
+									<i class="fas fa-star text-[16px]"></i>
+									<i class="fas fa-star text-[16px]"></i>
+									<i class="fas fa-star-half-alt text-[16px]"></i>
+								</div>
+								<span class="text-gray-500 ml-1 text-xs">(64)</span>
+							</div>
+							<div class="flex items-center text-sm text-gray-500 mb-2">
+								<i class="fas fa-map-marker-alt text-[16px] mr-1"></i>
+								<span class="truncate text-xs">88 Tech Avenue, City 001</span>
+							</div>
+						</div>
+						<div class="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+							<span class="flex items-center text-gray-500"><i class="fas fa-check text-[14px] text-green-500 mr-0.5"></i> Fast Charging</span>
+							<span class="flex items-center text-gray-500"><i class="fas fa-check text-[14px] text-green-500 mr-0.5"></i> 24/7 Service</span>
+						</div>
+					</div>
+				</article>
+
+				<!-- Card 4: Services -->
+				<article class="flex flex-row bg-white rounded-[16px] border border-gray-100 p-3 gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)]">
+					<img alt="FixIt Tech Services" class="w-[120px] h-[120px] rounded-[12px] object-cover bg-gray-100" src="https://lh3.googleusercontent.com/aida-public/AB6AXuChV6x5zl2s67MAKLDSnzbwsSVuhGyPHtRzahrQeiW7-02CTKbV-4XHStNLS-3saMB5udQcgIZ409pN4tr8aDl0_F9_jxR5lKNemo1ylnry5LfQbF-tn_1kycniWtoVFSyER3j7ueEwny0NiPqzqVhKWQMpiNu8SvWRN3VDGE5LRh6X3J8gcG0jlFaDlsoZsw2W_t8kNCckBbsHsf3s7mnfyXeFvXZGE6JbR62EDGAI1i60R49btB7d"/>
+					<div class="flex flex-col justify-between py-1 w-full">
+						<div>
+							<h2 class="text-base font-bold text-gray-900 mb-0.5">FixIt Tech Services</h2>
+							<p class="text-sm text-gray-500 mb-1">Electronics Service</p>
+							<div class="flex items-center text-sm mb-2">
+								<span class="font-bold mr-1">4.3</span>
+								<div class="flex text-[#FFB400] text-sm">
+									<i class="fas fa-star text-[16px]"></i>
+									<i class="fas fa-star text-[16px]"></i>
+									<i class="fas fa-star text-[16px]"></i>
+									<i class="fas fa-star text-[16px]"></i>
+									<i class="fas fa-star-half-alt text-[16px]"></i>
+								</div>
+								<span class="text-gray-500 ml-1 text-xs">(52)</span>
+							</div>
+							<div class="flex items-center text-sm text-gray-500 mb-2">
+								<i class="fas fa-map-marker-alt text-[16px] mr-1"></i>
+								<span class="truncate text-xs">7 Gadget Lane, City 001</span>
+							</div>
+						</div>
+						<div class="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+							<span class="flex items-center text-gray-500"><i class="fas fa-check text-[14px] text-green-500 mr-0.5"></i> Repairs</span>
+							<span class="flex items-center text-gray-500"><i class="fas fa-check text-[14px] text-green-500 mr-0.5"></i> Accessories</span>
+						</div>
+					</div>
+				</article>
+			</main>
+			<!-- END: Business List -->
+
+			<!-- BEGIN: Footer Divider -->
+			<footer class="mt-8 flex items-center justify-center mb-4">
+				<div class="h-px bg-gray-100 w-12"></div>
+				<span class="text-sm text-gray-400 px-4">No more businesses</span>
+				<div class="h-px bg-gray-100 w-12"></div>
+			</footer>
+			<!-- END: Footer Divider -->
+		</div>
+		<!-- END: Businesses View -->

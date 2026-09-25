@@ -1,0 +1,1162 @@
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f8f9fa;
+            /* Defense-in-depth alongside the touchmove preventDefault() in
+               side-nav.js: stops Chrome/Edge's own overscroll-triggered
+               back/forward navigation from competing with the drawer's
+               left-edge swipe. Doesn't affect any in-page horizontal
+               scrolling (e.g. the category tabs, businesses list) - this
+               only governs the document's own scroll-boundary behavior. */
+            overscroll-behavior-x: none;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .post-content-clamped {
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .post-content-clamped.expanded {
+            display: block;
+            -webkit-line-clamp: unset;
+            overflow: visible;
+        }
+
+        /* ---- Threads-inspired feed/thread visual system ----
+           Adapted from adrianhajdin/threads' component-layer pattern
+           (semantic classes for card layout + a dedicated avatar-rail
+           "connector bar" for reply threads) to Beebo's existing
+           light/red palette - not a dark-mode reskin, just the same
+           structural discipline: a left avatar rail, a growing
+           connector line, and a named, reusable spacing/type scale
+           instead of ad hoc utility soup repeated in every template. */
+
+        /* Feed row: same visual result as before (flat, bordered,
+           no per-card shadow) but named so spacing changes happen in
+           one place instead of a JS template literal. */
+        .feed-card {
+            background-color: #fff;
+            padding: 14px 16px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .feed-card:last-child {
+            border-bottom: none;
+        }
+        /* Subtle press feedback on tap, same idea as Threads' card
+           hover/active state, toned down for a touch interface where
+           hover doesn't apply. */
+        .feed-card:active {
+            background-color: #fafafa;
+        }
+
+        /* Avatar rail: fixed-width left column so name/content/actions
+           align in a single right-hand column regardless of how many
+           lines the author name wraps to - this is the main structural
+           difference from the previous "avatar + stacked name/time"
+           header row. */
+        .feed-card-avatar-rail {
+            width: 44px;
+        }
+
+        /* ---- Nested comment tree: straight spine connectors ----
+           True depth-based nesting (each reply-to-a-reply indents further
+           right under its actual parent) instead of a flattened single
+           indent level. One straight vertical line per nesting level, no
+           curve/elbow - same model as the nested-comments-yt reference
+           (a border-left running the full height of each level's box). */
+
+        /* One top-level comment (with its full nested reply chain). Only
+           root threads (direct children of #overlay-comments-container)
+           get the divider below - nested replies are separated by
+           indentation/connector instead, not a divider line. */
+        .comment-thread {
+            position: relative;
+        }
+        #overlay-comments-container > .comment-thread {
+            padding-bottom: 18px;
+            margin-bottom: 18px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        #overlay-comments-container > .comment-thread:last-child {
+            padding-bottom: 0;
+            margin-bottom: 0;
+            border-bottom: none;
+        }
+        /* Spacing between sibling replies nested under the same parent. */
+        .comment-children > .comment-thread + .comment-thread {
+            margin-top: 16px;
+        }
+
+        .comment-row {
+            display: flex;
+            gap: 12px;
+        }
+        .thread-avatar-col {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 34px;
+            flex-shrink: 0;
+        }
+        .comment-avatar {
+            width: 34px;
+            height: 34px;
+        }
+        /* The spine: fills the rest of the avatar column's height (the
+           column is stretched to match the row's full height via flex
+           default align-items:stretch), so it always reaches exactly to
+           this row's bottom regardless of how tall the comment text runs -
+           picked up again by .comment-children's own border-left below. */
+        .thread-connector {
+            width: 2px;
+            border-radius: 9999px;
+            background-color: #e5e7eb;
+            flex: 1 1 auto;
+            min-height: 8px;
+            margin-top: 6px;
+        }
+
+        /* Nested replies, indented one level right of the parent avatar's
+           center. Straight border-left only - no elbow, no curve. Matches
+           the reference repo's model: one continuous vertical rule per
+           nesting level, running the full height of that level's box.
+           margin-left is set to 16px (not 20px) so the border lands at
+           x:16-18, the same band .thread-connector already occupies above
+           it (avatar column is 34px wide, so its centered 2px connector
+           sits at (34-2)/2 = 16-18) - the two pieces line up into one
+           unbroken straight line instead of two parallel rules a few
+           pixels apart. */
+        .comment-children {
+            position: relative;
+            margin-left: 16px;
+            padding-left: 24px;
+            /* padding-top, not margin-top: the border-left spine below
+               needs to run through this gap too, or the line would break
+               between the parent's .thread-connector (which only spans
+               the parent's own comment-row) and where this box's border
+               starts. Padding keeps the border continuous while still
+               pushing the first reply's content down for clearer
+               separation from its parent. */
+            padding-top: 14px;
+            border-left: 2px solid #e5e7eb;
+        }
+
+        /* Action row (like/reply) beneath a comment's text. Uses the same
+           justify-between distribution and icon/label gap (6px, matching
+           space-x-1.5) as the feed's post-actions-row so per-comment
+           actions read consistently with the post-level action bar. */
+        .comment-actions {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            color: #6b7280;
+        }
+        .comment-action-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        /* Groups the like/dislike buttons together on the right side of
+           .comment-actions, opposite the plain-text Reply button on the
+           left (see renderCommentNode in comments.js). */
+        .comment-actions-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        /* Reply-thread collapse/expand toggle. Only rendered on a comment
+           that has children (see buildRepliesToggleHtml in comments.js).
+           Sits below .comment-actions as its own row with a short leading
+           dash, matching the "— View N replies" reference layout, rather
+           than living inline with reply/like/dislike. Collapsing hides
+           that comment's entire .comment-children subtree in one step,
+           since nested replies live as real DOM descendants of it - no
+           need to separately toggle grandchildren. */
+        .comment-children.collapsed {
+            display: none;
+        }
+        .replies-toggle-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .replies-toggle-line {
+            width: 16px;
+            height: 0;
+            border-top: 1px solid #d1d5db;
+        }
+        .replies-toggle-chevron {
+            transition: transform 150ms ease;
+        }
+        .comment-replies-toggle.is-collapsed .replies-toggle-chevron {
+            transform: rotate(-90deg);
+        }
+
+        /* Comments section header: a plain sub-header row (count + sort
+           chevron) rather than a heavy filled pill, so it reads as a
+           section divider between the original post and the reply list -
+           closer to the reference's minimal "Comments ⌄" row. */
+        .comments-header-trigger {
+            background-color: transparent;
+            border-bottom: 1px solid #f3f4f6;
+            border-radius: 0;
+            padding-left: 0;
+            padding-right: 0;
+        }
+        .comments-header-trigger:active {
+            background-color: #fafafa;
+        }
+
+        /* Feed header (avatar/logo/notifications bar + category tabs).
+           Two different mechanisms apply to this element, both driven from
+           initFeedHeaderAutoHide in feed.js:
+
+           1) Normal scrolling: feed.js sets max-height/opacity as INLINE
+              styles every frame, in exact proportion to scroll distance,
+              with transition:none - so the header tracks the scroll 1:1
+              (a "push", not an eased animation) as the feed content
+              progressively covers it. Those inline styles win over the
+              rules below for the duration of that drag.
+           2) Landing back at the very top of the feed: feed.js clears the
+              inline overrides instead, and THIS class's transition is what
+              animates the reveal - the one place this still eases rather
+              than tracking the scroll directly (see FEED_HEADER_TOP_REVEAL_PX
+              in feed.js).
+
+           Avatar, logo, notifications icon and the tabs are all just child
+           content of this one element, so animating .feed-header-bar as a
+           unit is what keeps them moving together - no per-child
+           transitions needed. #feed-view is a flex column with
+           #feed-posts-container as its flex-1 scrolling child (see
+           #feed-view.active above), so it's max-height (not a transform)
+           that actually reflows the column and lets the posts container
+           grow to fill the space as the header is covered - a transform
+           on the header would just move its pixels without freeing that
+           space. --feed-header-full-height is set from feed.js (measured
+           off the real header, since its height depends on the
+           avatar/logo/icon sizing above and isn't a fixed constant).
+
+           max-height and opacity are kept on the SAME duration/curve here
+           (both were previously mismatched at 240ms/180ms) - opacity
+           finishing before max-height made the header visibly "pop" out
+           of existence mid-collapse instead of settling smoothly. The
+           easing is a gentle ease-out (quick start, long soft tail)
+           rather than the old standard Material curve, which reads as
+           slightly snappier/more mechanical at this duration. This
+           transition only ever plays for the top-of-feed reveal above -
+           during normal scrolling it's overridden by feed.js's inline
+           transition:none so the motion stays tied to the scroll itself. */
+        .feed-header-bar {
+            max-height: var(--feed-header-full-height, 220px);
+            overflow: hidden;
+            opacity: 1;
+            transition: max-height 600ms cubic-bezier(0.16, 1, 0.3, 1),
+                        opacity 600ms cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        /* Fully-covered resting state. feed.js also sets this via inline
+           styles during the drag itself; this class exists so pointer-
+           events:none reliably applies once fully covered (inline styles
+           above only ever set max-height/opacity/transition, not
+           pointer-events) and so the top-of-feed reveal above has a
+           well-defined "from" state to transition out of. */
+        .feed-header-bar.header-hidden {
+            max-height: 0;
+            opacity: 0;
+            pointer-events: none;
+            transition: max-height 600ms cubic-bezier(0.16, 1, 0.3, 1),
+                        opacity 600ms cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .feed-header-bar {
+                transition: none !important;
+            }
+        }
+
+        /* Feed skeleton loader (initial load only - pagination's
+           "Loading more..." row is unchanged). Shimmer instead of a
+           bare spinner so the feed's shape is visible immediately. */
+        .skeleton-shimmer {
+            background: linear-gradient(90deg, #f0f0f0 25%, #f7f7f7 37%, #f0f0f0 63%);
+            background-size: 400% 100%;
+            animation: skeletonShimmer 1.4s ease infinite;
+        }
+        @keyframes skeletonShimmer {
+            0% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        .card-shadow {
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.024);
+        }
+        /* Distinct from .card-shadow above (different blur/spread) - used by Courses view cards */
+        .course-card-shadow {
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+        }
+        .view-section {
+            display: none !important;
+        }
+        .view-section.active {
+            display: block !important;
+        }
+        /* feed-view is the one view whose <main> (#feed-posts-container) is
+           meant to be its own internal scroll container (flex-1
+           overflow-y-auto), with the header/tabs bar staying fixed above
+           it - unlike every other view here, which is min-h-screen and
+           relies on the document itself scrolling. That only works if
+           feed-view is an actual bounded-height flex column; as plain
+           `display:block` (from .view-section.active above) it has no
+           height constraint, so #feed-posts-container never overflows,
+           the document scrolls instead, and #feed-posts-container's
+           scroll listener (tab auto-hide, infinite scroll) never fires.
+           ID selector here outranks the class-only rule above so this
+           wins while active. */
+        #feed-view.active {
+            display: flex !important;
+            flex-direction: column;
+            height: 100%;
+        }
+        /* Flex items default to min-height:auto, which keeps them from
+           shrinking below their content's natural height - #feed-posts-
+           container would then just grow to fit every post instead of
+           respecting flex-1 and scrolling internally. min-height:0
+           overrides that so it actually clips to the space #feed-view
+           gives it above and overflow-y-auto takes over. */
+        #feed-posts-container {
+            min-height: 0;
+        }
+        /* Create-post view: same root cause as #feed-view above. The
+           .view-section.active rule forces display:block !important, which
+           silently disables the `flex flex-col` utility classes on
+           #create-post-view - so #compose-scroll-area's flex-1 never
+           stretched and #compose-footer sat directly under the textarea
+           instead of at the bottom of the screen. Restore a bounded flex
+           column. dvh (with vh fallback) so the bottom bar sits above the
+           browser's own bottom toolbar rather than behind it; min-height:0
+           overrides the min-h-screen utility so the height is actually
+           bounded and the scroll area, not the document, does the scrolling. */
+        #create-post-view.active {
+            display: flex !important;
+            flex-direction: column;
+            height: 100vh;
+            height: 100dvh;
+            min-height: 0;
+        }
+        .input-icon-container {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #9CA3AF;
+        }
+        .auth-bg {
+            background: linear-gradient(180deg, #F9FAFB 0%, #FFFFFF 100%);
+        }
+        .eye-icon {
+            transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+        }
+        .eye-icon.hidden {
+            opacity: 0;
+            transform: scale(0.9);
+        }
+        /* Compose FAB styles.
+           Visibility is now driven directly by feed.js's header-hidden
+           logic (see initFeedHeaderAutoHide) rather than an independent
+           scroll listener, so it can never drift out of sync with the
+           header. The timing/curve below is intentionally identical to
+           .feed-header-bar's (220ms reveal / 280ms hide, same ease-out),
+           so the two read as one synchronized motion instead of two
+           separately-animated elements that happen to move at similar
+           times. */
+        .z-9 {
+            z-index: 9;
+        }
+        #compose-fab {
+            transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+                        opacity 220ms cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        #compose-fab.fab-hidden {
+            transform: translateY(100px);
+            opacity: 0;
+            pointer-events: none;
+            transition: transform 280ms cubic-bezier(0.16, 1, 0.3, 1),
+                        opacity 280ms cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* ---- Bottom navigation (Home / Search / Notifications / Chat) ----
+           64px total: 1px top border + a 59px tap row + 4px bottom pad (sits the
+           32px icons slightly above true center, as in the design), plus the device
+           safe-area inset. Shown/hidden and marked active by
+           updateBottomNav() in core.js. --bottom-nav-h is what the compose
+           FAB (feed.html) and chat padding key off, so change it here only. */
+        :root {
+            --bottom-nav-h: 64px;
+        }
+        .bottom-nav {
+            padding-bottom: calc(4px + env(safe-area-inset-bottom, 0px));
+        }
+        .bottom-nav-item {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: calc(var(--bottom-nav-h) - 5px); /* minus 1px top border + 4px bottom pad */
+            -webkit-tap-highlight-color: transparent;
+        }
+        .bottom-nav-item:focus { outline: none; }
+        .bottom-nav-item:focus-visible {
+            outline: 2px solid #DA292E;
+            outline-offset: -6px;
+            border-radius: 16px;
+        }
+        .bottom-nav-icon {
+            width: 32px;
+            height: 32px;
+            transition: transform 100ms ease-out, color 160ms ease;
+        }
+        .bottom-nav-item:active .bottom-nav-icon {
+            transform: scale(0.92);
+        }
+        /* Active state: Home fills in behind its outline; Search/Chat get a
+           slightly heavier stroke (their glyphs have inner detail a fill
+           would swallow). Color itself is the text-gray-500 -> 900 swap. */
+        .bn-active-fill {
+            opacity: 0;
+            transition: opacity 160ms ease;
+        }
+        .bottom-nav-item.is-active .bn-active-fill { opacity: 1; }
+        .bottom-nav-item.is-active .bn-active-stroke {
+            stroke: currentColor;
+            stroke-width: 8px;
+            stroke-linejoin: round;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .bottom-nav-icon, .bn-active-fill { transition: none; }
+            .bottom-nav-item:active .bottom-nav-icon { transform: none; }
+        }
+        /* Profile tab: user's own avatar photo instead of a currentColor
+           glyph. Ring proportions match the supplied reference asset - a
+           white gap between the photo and a dark outer ring, at the same
+           32px footprint as the other bottom-nav icons. Inactive ring is
+           lighter (mirrors the glyphs' gray-500 -> gray-900 active swap);
+           .is-active thickens and darkens it rather than recoloring a
+           fill, since the ring, not the photo, carries the state. */
+        .bottom-nav-avatar-ring {
+            width: 30px;
+            height: 30px;
+            border-radius: 9999px;
+            box-sizing: border-box;
+            background: #fff;
+            border: 1.5px solid #9CA3AF;
+            padding: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: border-color 160ms ease, border-width 160ms ease, transform 100ms ease-out;
+        }
+        .bottom-nav-avatar-img {
+            width: 100%;
+            height: 100%;
+            border-radius: 9999px;
+            object-fit: cover;
+            display: block;
+            background: #E5E7EB;
+        }
+        .bottom-nav-item:active .bottom-nav-avatar-ring {
+            transform: scale(0.92);
+        }
+        .bottom-nav-item.is-active .bottom-nav-avatar-ring {
+            border-color: #111827;
+            border-width: 2px;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .bottom-nav-avatar-ring { transition: none; }
+            .bottom-nav-item:active .bottom-nav-avatar-ring { transform: none; }
+        }
+        /* Chat scrolls the document (not an inner container), so reserve
+           room for the fixed nav below its last row. */
+        #chat-view.active {
+            padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px));
+        }
+        /* Search scrolls its own inner container (#search-body), not the
+           document, so - now that the bottom nav stays visible on Search
+           too - that inner container needs the clearance instead of the
+           view element. ID selector so it wins over the pb-10 utility
+           already on the element in search.html. */
+        #search-body {
+            padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px));
+        }
+        /* Comment overlay styles */
+        #comment-overlay {
+            transition: opacity 250ms ease-in-out, visibility 250ms ease-in-out;
+        }
+        #comment-overlay.hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+        #comment-overlay .overlay-content {
+            transition: transform 250ms ease-in-out;
+            /* Explicit dynamic-viewport-height sizing instead of relying on
+               h-full (100% of #comment-overlay, itself `fixed inset-0`).
+               Paired with interactive-widget=resizes-content in the meta
+               tag (see <head>): that meta hint makes Chromium-based mobile
+               browsers actually resize the layout viewport around the
+               on-screen keyboard, so 100dvh below shrinks correctly and the
+               shrink-0 reply bar at the bottom of this flex column stays
+               above the keyboard instead of underneath it. The plain vh
+               fallback keeps behavior unchanged in browsers without dvh
+               support. */
+            height: 100vh;
+            height: 100dvh;
+        }
+        #comment-overlay.hidden .overlay-content {
+            transform: translateY(100%);
+        }
+        body.overlay-open {
+            overflow: hidden;
+        }
+        /* Single scroll region for the comment overlay: post + comments
+           header + reply list all live inside this one element now, so the
+           whole view scrolls together (post included) instead of the post
+           being pinned outside a separately-scrolling replies box. */
+        .overlay-replies-section {
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* ---- Reply composer (comment overlay) ----
+           Compact rounded pill. Idle = one row (avatar / input / media
+           icons). Active (focus or draft) = tools wrap onto a second row
+           with counter / expand / send on the right. Beebo tokens only:
+           brand red for focus + send, neutral grays elsewhere. */
+        .reply-composer-bar {
+            padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+        }
+        .reply-composer {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            column-gap: 8px;
+            padding: 5px 6px 5px 6px;
+            background: #F9FAFB;
+            border: 1px solid #E5E7EB;
+            border-radius: 24px;
+            transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease, border-radius 160ms ease;
+        }
+        .reply-composer[data-active="true"] {
+            background: #FFFFFF;
+            border-color: rgba(218, 41, 46, 0.55);
+            box-shadow: 0 0 0 3px rgba(218, 41, 46, 0.09);
+            border-radius: 22px;
+        }
+        .reply-composer-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 9999px;
+            object-fit: cover;
+            background: #E5E7EB;
+            flex-shrink: 0;
+            align-self: center;
+        }
+        .reply-composer-input {
+            flex: 1 1 0;
+            min-width: 0;
+            display: block;
+            resize: none;
+            border: 0;
+            outline: none;
+            background: transparent;
+            font: inherit;
+            font-size: 16px; /* 16px stops iOS zoom-on-focus */
+            line-height: 22px;
+            height: 34px;
+            max-height: 132px; /* ~6 lines, then scrolls */
+            padding: 6px 0;
+            color: #111827;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+        }
+        .reply-composer-input::placeholder { color: #9CA3AF; }
+        .reply-composer[data-expanded="true"] .reply-composer-input {
+            height: 40vh;
+            height: 40dvh;
+            max-height: 40dvh;
+        }
+
+        .reply-composer-tools {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex: 0 0 auto;
+        }
+        .reply-composer-group {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+        }
+        /* Idle: only the media icons show, inline with the input. */
+        .reply-composer[data-active="false"] .reply-composer-group-end { display: none; }
+        /* Active: tools drop to their own full-width row under the input. */
+        .reply-composer[data-active="true"] .reply-composer-tools {
+            flex: 1 0 100%;
+            padding-top: 2px;
+            animation: reply-tools-in 160ms ease-out;
+        }
+        .reply-composer[data-active="true"] .reply-composer-avatar { align-self: flex-start; margin-top: 1px; }
+        @keyframes reply-tools-in {
+            from { opacity: 0; transform: translateY(-3px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .reply-tool-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 9999px;
+            color: #6B7280;
+            background: transparent;
+            border: 0;
+            outline: none;
+            -webkit-tap-highlight-color: transparent;
+            transition: background-color 120ms ease, color 120ms ease, transform 100ms ease;
+        }
+        .reply-tool-btn:hover { color: #DA292E; }
+        .reply-tool-btn:active { background: #F3F4F6; transform: scale(0.92); }
+        .reply-tool-btn:focus-visible { box-shadow: 0 0 0 2px rgba(218, 41, 46, 0.35); }
+        .reply-tool-btn.hidden { display: none; }
+        .reply-gif-badge {
+            font-size: 9.5px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            line-height: 1;
+            padding: 3px 4px;
+            border: 1.5px solid currentColor;
+            border-radius: 5px;
+        }
+
+        .reply-send-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            margin-left: 2px;
+            border-radius: 9999px;
+            border: 0;
+            outline: none;
+            color: #FFFFFF;
+            background: #DA292E;
+            -webkit-tap-highlight-color: transparent;
+            transition: background-color 140ms ease, opacity 140ms ease, transform 120ms ease;
+        }
+        .reply-send-btn svg { margin-left: 2px; }
+        .reply-send-btn:hover:not(:disabled) { background: #B91C1C; }
+        .reply-send-btn:active:not(:disabled) { transform: scale(0.92); }
+        .reply-send-btn:focus-visible { box-shadow: 0 0 0 2px rgba(218, 41, 46, 0.35); }
+        .reply-send-btn:disabled { opacity: 0.35; pointer-events: none; }
+
+        @media (prefers-reduced-motion: reduce) {
+            .reply-composer, .reply-tool-btn, .reply-send-btn { transition: none; }
+            .reply-composer[data-active="true"] .reply-composer-tools { animation: none; }
+        }
+
+        /* Like button animation styles */
+        .like-btn, .like-btn-comment, #overlay-post-like-btn {
+            position: relative;
+        }
+
+        /* Heart icon wrapper needs overflow visible for burst */
+        .like-icon-wrapper {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            overflow: visible;
+            width: 1.25rem;
+            height: 1.25rem;
+        }
+
+        /* Outline heart (default/unliked state) */
+        .heart-outline {
+            display: block;
+        }
+
+        .heart-filled {
+            display: none;
+        }
+
+        /* When liked, show filled heart */
+        .like-btn[data-liked="true"] .heart-outline,
+        .like-btn-comment[data-liked="true"] .heart-outline,
+        #overlay-post-like-btn[data-liked="true"] .heart-outline {
+            display: none;
+        }
+
+        .like-btn[data-liked="true"] .heart-filled,
+        .like-btn-comment[data-liked="true"] .heart-filled,
+        #overlay-post-like-btn[data-liked="true"] .heart-filled {
+            display: block;
+        }
+
+        /* Particle burst via ::after pseudo-element */
+        .like-icon-wrapper::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 1px;
+            height: 1px;
+            border-radius: 50%;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Animation state when liking (not on page load) */
+        .is-liking .like-icon-wrapper {
+            animation: heartPop 400ms cubic-bezier(.17,.89,.32,1.49) forwards;
+        }
+
+        .is-liking .like-icon-wrapper::after {
+            animation: particleBurst 550ms cubic-bezier(.17,.89,.32,1.49) forwards;
+        }
+
+        /* Unliking animation (simple fade/scale down) */
+        .is-unliking .like-icon-wrapper {
+            animation: heartShrink 180ms cubic-bezier(.4,0,.2,1) forwards;
+        }
+
+        /* Dislike (thumb-down) icon wrapper - mirrors .like-icon-wrapper */
+        .dislike-icon-wrapper {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            overflow: visible;
+            width: 1.25rem;
+            height: 1.25rem;
+        }
+
+        .thumb-down-outline {
+            display: block;
+        }
+
+        .thumb-down-filled {
+            display: none;
+        }
+
+        .dislike-btn-comment[data-disliked="true"] .thumb-down-outline {
+            display: none;
+        }
+
+        .dislike-btn-comment[data-disliked="true"] .thumb-down-filled {
+            display: block;
+        }
+
+        .is-disliking .dislike-icon-wrapper {
+            animation: heartPop 400ms cubic-bezier(.17,.89,.32,1.49) forwards;
+        }
+
+        .is-undisliking .dislike-icon-wrapper {
+            animation: heartShrink 180ms cubic-bezier(.4,0,.2,1) forwards;
+        }
+
+        /* Count number transition */
+        .like-count {
+            display: inline-block;
+            transition: opacity 140ms ease, transform 140ms ease;
+        }
+
+        /* Post/comment count badges (post-actions-row, comment overlay
+           header) are hidden via visibility, not display, when the count
+           is 0. visibility:hidden keeps the element's box in the layout,
+           so the number's width stays reserved whether it's shown or
+           not - the share/comment/like buttons around it stay pinned in
+           place instead of sliding sideways when a count appears or
+           disappears (e.g. a post's first like taking it from 0 to 1). */
+        .post-count-empty {
+            visibility: hidden;
+        }
+
+        .like-count.count-changing {
+            animation: countChange 140ms ease forwards;
+        }
+
+        /* Keyframes */
+        @keyframes heartPop {
+            0% {
+                transform: scale(0.8);
+            }
+            50% {
+                transform: scale(1.15);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        @keyframes heartShrink {
+            0% {
+                transform: scale(1);
+            }
+            100% {
+                transform: scale(0.9);
+                opacity: 0.8;
+            }
+        }
+
+        @keyframes particleBurst {
+            0% {
+                box-shadow:
+                    0 0 0 0 #DA292E,
+                    0 0 0 0 #DA292E,
+                    0 0 0 0 #DA292E,
+                    0 0 0 0 #DA292E,
+                    0 0 0 0 #DA292E,
+                    0 0 0 0 #DA292E,
+                    0 0 0 0 #DA292E,
+                    0 0 0 0 #DA292E;
+                opacity: 1;
+            }
+            100% {
+                box-shadow:
+                    0 -30px 0 1px #DA292E,
+                    21px -21px 0 1px #DA292E,
+                    30px 0 0 1px #DA292E,
+                    21px 21px 0 1px #DA292E,
+                    0 30px 0 1px #DA292E,
+                    -21px 21px 0 1px #DA292E,
+                    -30px 0 0 1px #DA292E,
+                    -21px -21px 0 1px #DA292E;
+                opacity: 0;
+            }
+        }
+
+        @keyframes countChange {
+            0% {
+                opacity: 0.5;
+                transform: translateY(-2px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Reduced motion: disable animations */
+        @media (prefers-reduced-motion: reduce) {
+            .is-liking .like-icon-wrapper,
+            .is-unliking .like-icon-wrapper {
+                animation: none !important;
+            }
+
+            .is-liking .like-icon-wrapper::after {
+                animation: none !important;
+                display: none !important;
+            }
+
+            .like-count.count-changing {
+                animation: none !important;
+            }
+        }
+
+        /* Star colors for business ratings */
+        .star-filled { color: #FFB400; }
+        .star-empty { color: #E5E7EB; }
+
+        /* Post action menu (three-dot) bottom sheet */
+        .post-menu-icon {
+            will-change: transform;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .post-menu-action,
+            .post-menu-icon {
+                transition: none !important;
+            }
+        }
+
+        /* Side navigation drawer: width/opacity are driven directly by
+           side-nav.js during a drag (real-time finger tracking), and
+           these transitions only take effect for the settle animation
+           after touchend, when JS re-enables them. Animating the shell's
+           WIDTH (rather than a transform) is what makes the mini rail
+           and full drawer read as one panel progressively expanding
+           through its two stops, instead of two layouts swapping. */
+        #side-nav {
+            transition: width 320ms cubic-bezier(0.32, 0.72, 0, 1);
+        }
+        #side-nav-mini,
+        #side-nav-full {
+            transition: opacity 220ms ease;
+        }
+        #side-nav-backdrop {
+            transition: opacity 320ms cubic-bezier(0.32, 0.72, 0, 1);
+        }
+        #side-nav.side-nav-dragging,
+        #side-nav-backdrop.side-nav-dragging {
+            transition: none;
+        }
+        #side-nav.side-nav-dragging #side-nav-mini,
+        #side-nav.side-nav-dragging #side-nav-full {
+            transition: none;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #side-nav,
+            #side-nav-mini,
+            #side-nav-full,
+            #side-nav-backdrop {
+                transition: none !important;
+            }
+        }
+
+/* ==========================================================================
+   Light / Dark theme system
+   ==========================================================================
+   Beebo's Tailwind is loaded from the CDN (no build step to extend/purge),
+   so rather than retrofitting every template with `dark:` variants, theme
+   colors are defined once as CSS variables and the utility classes already
+   used throughout the app (bg-white, text-gray-500, border-gray-200, etc.)
+   are remapped to those variables whenever `<html>` has the `dark` class.
+   This covers the whole app from one file and keeps every template's
+   markup, layout, and component structure untouched.
+
+   The variables intentionally distinguish "app background" from "surface"
+   (cards/sheets/menus) and give text three weights (primary/secondary/
+   tertiary) so dark mode reads as a proper dark theme rather than a naive
+   color inversion - see the class-mapping table below for how each
+   existing Tailwind color maps onto them.
+   ========================================================================== */
+
+:root {
+    --bb-bg-app: #f8f9fa;
+    --bb-bg-surface: #ffffff;
+    --bb-bg-subtle: #f9fafb;   /* gray-50 role: page sections, hover/active fills */
+    --bb-bg-muted: #f3f4f6;    /* gray-100 role: avatar placeholders, chips */
+    --bb-bg-muted-2: #e5e7eb;  /* gray-200 role: stronger fills, dividers-as-bg */
+    --bb-text-primary: #111827;   /* gray-900 */
+    --bb-text-secondary: #1f2937; /* gray-800 */
+    --bb-text-tertiary: #4b5563;  /* gray-700/600 */
+    --bb-text-quaternary: #6b7280;/* gray-500 */
+    --bb-text-muted: #9ca3af;     /* gray-400 */
+    --bb-text-faint: #d1d5db;     /* gray-300 */
+    --bb-border-subtle: #f3f4f6;  /* gray-100 */
+    --bb-border-default: #e5e7eb; /* gray-200 / brand-border */
+    --bb-border-strong: #d1d5db;  /* gray-300 */
+    --bb-red-tint: #fef2f2;   /* red-50 */
+    --bb-red-tint-2: #fee2e2; /* red-100 */
+    --bb-cover-gradient-from: #7dd3fc; /* sky-300 */
+    --bb-cover-gradient-via: #e0f2fe;  /* sky-100 */
+}
+
+/* Logo theme swap: pair a .logo-light/.logo-dark <img> in markup;
+   CSS picks the right one off the same html.dark class the rest of the
+   theme system uses, no JS involved. */
+.logo-dark { display: none; }
+html.dark .logo-light { display: none; }
+html.dark .logo-dark { display: inline-block; }
+
+html.dark {
+    /* Primary dark-mode background, as specified. This design is flat (no
+       elevation system - the light theme uses the same bg-white for the
+       header, the full-height scroll container, and cards alike, with
+       borders/dividers doing the separation instead of tone), so
+       --bb-bg-surface (what .bg-white maps to below) needs to be the same
+       #000000 as --bb-bg-app: bg-white covers virtually the entire screen
+       in every view, so if it were any lighter than pure black, the true
+       black on <body> would never actually be visible behind it. The
+       muted/subtle steps below stay lighter so inputs, hovers, and
+       dividers remain visible against that black. */
+    --bb-bg-app: #000000;
+    --bb-bg-surface: #000000;
+    --bb-bg-subtle: #171E26;
+    --bb-bg-muted: #1E2731;
+    --bb-bg-muted-2: #2A3441;
+    --bb-text-primary: #f9fafb;
+    --bb-text-secondary: #e5e7eb;
+    --bb-text-tertiary: #d1d5db;
+    --bb-text-quaternary: #9ca3af;
+    --bb-text-muted: #71717a;
+    --bb-text-faint: #52525b;
+    --bb-border-subtle: #202932;
+    --bb-border-default: #333f4c;
+    --bb-border-strong: #48576a;
+    --bb-red-tint: rgba(218, 41, 46, 0.16);
+    --bb-red-tint-2: rgba(218, 41, 46, 0.24);
+    --bb-cover-gradient-from: #123049;
+    --bb-cover-gradient-via: #131A21;
+}
+
+html.dark body {
+    background-color: var(--bb-bg-app);
+    color-scheme: dark;
+}
+
+/* Backgrounds */
+html.dark .bg-white,
+html.dark .bg-\[\#fafafa\],
+html.dark .bg-\[\#F9F9FB\] { background-color: var(--bb-bg-surface) !important; }
+html.dark .bg-gray-50 { background-color: var(--bb-bg-subtle) !important; }
+html.dark .bg-gray-100 { background-color: var(--bb-bg-muted) !important; }
+html.dark .bg-gray-200 { background-color: var(--bb-bg-muted-2) !important; }
+html.dark .bg-red-50 { background-color: var(--bb-red-tint) !important; }
+html.dark .bg-red-100,
+html.dark .bg-red-200 { background-color: var(--bb-red-tint-2) !important; }
+html.dark .border-red-200 { border-color: rgba(218, 41, 46, 0.35) !important; }
+html.dark .text-red-700 { color: #f87171 !important; }
+html.dark .bg-teal-50 { background-color: rgba(20, 184, 166, 0.16) !important; }
+html.dark .bg-orange-50 { background-color: rgba(249, 115, 22, 0.16) !important; }
+html.dark .bg-blue-50 { background-color: rgba(59, 130, 246, 0.16) !important; }
+
+/* Text */
+html.dark .text-gray-900 { color: var(--bb-text-primary) !important; }
+html.dark .text-gray-800 { color: var(--bb-text-secondary) !important; }
+html.dark .text-gray-700,
+html.dark .text-gray-600 { color: var(--bb-text-tertiary) !important; }
+html.dark .text-gray-500 { color: var(--bb-text-quaternary) !important; }
+html.dark .text-gray-400 { color: var(--bb-text-muted) !important; }
+html.dark .text-gray-300,
+html.dark .text-gray-200 { color: var(--bb-text-faint) !important; }
+html.dark .placeholder-gray-400::placeholder { color: var(--bb-text-muted) !important; }
+html.dark body.text-gray-800 { color: var(--bb-text-secondary); }
+
+/* Borders */
+html.dark .border-gray-100 { border-color: var(--bb-border-subtle) !important; }
+html.dark .border-gray-200,
+html.dark .border-brand-border { border-color: var(--bb-border-default) !important; }
+html.dark .border-gray-300 { border-color: var(--bb-border-strong) !important; }
+html.dark .border-black-200 { border-color: var(--bb-border-default) !important; }
+html.dark .ring-gray-200 { --tw-ring-color: var(--bb-border-default) !important; }
+
+/* Cover-photo placeholder gradient (profile header): a bright sky-blue
+   banner reads wrong on a dark page, so it's swapped for a muted
+   dark-to-surface gradient instead of literally inverting the hue. */
+html.dark .from-sky-300 { --tw-gradient-from: var(--bb-cover-gradient-from) var(--tw-gradient-from-position) !important; }
+html.dark .via-sky-100 { --tw-gradient-via: var(--bb-cover-gradient-via) var(--tw-gradient-via-position) !important; }
+html.dark .to-white { --tw-gradient-to: var(--bb-bg-surface) var(--tw-gradient-to-position) !important; }
+
+/* Shadows read as pure black-on-black in dark mode and disappear -
+   swap for a subtle light-edge highlight instead so cards/sheets still
+   separate from the page. */
+html.dark .card-shadow,
+html.dark [class*="shadow-"] {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+/* Scoped, short-lived transition for the moment of switching themes only -
+   see theme.js. Not a permanent global rule, so it never interferes with
+   unrelated hover/press transitions elsewhere in the app. */
+html.theme-transitioning,
+html.theme-transitioning body,
+html.theme-transitioning * {
+    transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease, box-shadow 200ms ease !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html.theme-transitioning,
+    html.theme-transitioning body,
+    html.theme-transitioning * {
+        transition: none !important;
+    }
+}
+
+/* Custom classes below set their own literal hex colors instead of a
+   Tailwind utility, so none of the `html.dark .bg-*` / `.text-*` overrides
+   above ever reach them - each needs its own override here, mapped to the
+   same --bb- tokens everything else already uses, or it stays stuck in its
+   light-mode color while its surrounding text/borders flip around it. */
+html.dark .feed-card {
+    background-color: var(--bb-bg-surface);
+    border-bottom-color: var(--bb-border-subtle);
+}
+html.dark .feed-card:active {
+    background-color: var(--bb-bg-subtle);
+}
+html.dark .thread-connector {
+    background-color: var(--bb-border-default);
+}
+html.dark .comment-children {
+    border-left-color: var(--bb-border-default);
+}
+html.dark .comment-actions {
+    color: var(--bb-text-quaternary);
+}
+html.dark .comment-replies-toggle:hover {
+    color: var(--bb-text-secondary);
+}
+html.dark .comments-header-trigger {
+    border-bottom-color: var(--bb-border-subtle);
+}
+html.dark .comments-header-trigger:active {
+    background-color: var(--bb-bg-subtle);
+}
+html.dark .skeleton-shimmer {
+    background: linear-gradient(90deg, var(--bb-bg-muted) 25%, var(--bb-bg-muted-2) 37%, var(--bb-bg-muted) 63%);
+    background-size: 400% 100%;
+}
+html.dark .star-empty {
+    color: var(--bb-border-strong);
+}
+html.dark .auth-bg {
+    background: linear-gradient(180deg, var(--bb-bg-app) 0%, var(--bb-bg-surface) 100%);
+}
+
+/* ---- Wallet screen (see templates/partials/wallet.html, static/js/wallet.js) ----
+   Primary action buttons there are near-black in light mode, per the design.
+   In dark mode a near-black button would vanish into the dark surface, so
+   it flips to a light button with dark text. */
+.wallet-primary-btn {
+    background-color: #111827;
+    color: #ffffff;
+}
+.wallet-primary-btn:disabled {
+    cursor: not-allowed;
+}
+html.dark .wallet-primary-btn {
+    background-color: var(--bb-text-primary);
+    color: var(--bb-bg-app);
+}
+
+/* ---- Share bottom sheet (templates/partials/share_sheet.html, static/js/share-sheet.js) ----
+   Kept in the DOM and toggled with .is-open (not the `hidden` class the older
+   sheets use) so it can animate. Closed: off-screen and visibility:hidden -
+   the visibility change is delayed until the slide-out finishes, so the
+   closing animation stays visible, and it's removed from tab order/hit-testing
+   afterwards. touch-action:none lets JS own the swipe-down gesture. */
+.share-sheet-backdrop {
+    opacity: 0;
+    visibility: hidden;
+    touch-action: none;
+    transition: opacity 260ms ease, visibility 0s linear 260ms;
+}
+.share-sheet-backdrop.is-open {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 260ms ease, visibility 0s;
+}
+.share-sheet {
+    transform: translateY(100%);
+    visibility: hidden;
+    touch-action: none;
+    will-change: transform;
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    transition: transform 300ms cubic-bezier(0.32, 0.72, 0, 1), visibility 0s linear 300ms;
+}
+.share-sheet.is-open {
+    transform: translateY(0);
+    visibility: visible;
+    transition: transform 300ms cubic-bezier(0.32, 0.72, 0, 1), visibility 0s;
+}
+@media (prefers-reduced-motion: reduce) {
+    .share-sheet,
+    .share-sheet.is-open,
+    .share-sheet-backdrop,
+    .share-sheet-backdrop.is-open {
+        transition-duration: 1ms;
+    }
+}

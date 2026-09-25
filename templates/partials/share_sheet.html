@@ -1,0 +1,35 @@
+<!-- BEGIN: Share Bottom Sheet -->
+<!-- Opened by the Share button on feed post cards (see static/js/share-sheet.js).
+     Unlike the older post-menu / account-switcher sheets (toggled with `hidden`,
+     so no transition possible), this one stays in the DOM and is shown via the
+     `.is-open` class so it can slide up/down (see .share-sheet in style.css). -->
+<div id="share-sheet-backdrop" class="share-sheet-backdrop fixed inset-0 z-40 bg-black/30" aria-hidden="true"></div>
+<div id="share-sheet" class="share-sheet fixed left-0 right-0 bottom-0 z-50 bg-white rounded-t-[24px] shadow-[0_-8px_24px_rgba(0,0,0,0.12)] max-w-[430px] mx-auto outline-none" role="dialog" aria-modal="true" aria-label="Share post" aria-hidden="true" tabindex="-1">
+	<div class="pt-2.5 pb-1.5">
+		<div class="w-12 h-1 bg-gray-200 rounded-full mx-auto"></div>
+	</div>
+	<div class="pb-2">
+		<button type="button" class="share-sheet-action group w-full flex items-center gap-4 px-5 py-4 text-left transition-colors duration-100 active:bg-gray-50" data-action="repost">
+			<span class="w-6 h-6 flex items-center justify-center text-gray-500 transition-transform duration-150 group-active:scale-90">
+				<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+					<path d="m17 2 4 4-4 4"></path>
+					<path d="M3 11v-1a4 4 0 0 1 4-4h14"></path>
+					<path d="m7 22-4-4 4-4"></path>
+					<path d="M21 13v1a4 4 0 0 1-4 4H3"></path>
+				</svg>
+			</span>
+			<span class="text-[16px] font-medium text-gray-900">Repost</span>
+		</button>
+		<button type="button" class="share-sheet-action group w-full flex items-center gap-4 px-5 py-4 text-left transition-colors duration-100 active:bg-gray-50" data-action="quote">
+			<span class="w-6 h-6 flex items-center justify-center text-gray-500 transition-transform duration-150 group-active:scale-90">
+				<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+					<path d="M12 20h9"></path>
+					<path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z"></path>
+					<path d="m15 5 3 3"></path>
+				</svg>
+			</span>
+			<span class="text-[16px] font-medium text-gray-900">Quote</span>
+		</button>
+	</div>
+</div>
+<!-- END: Share Bottom Sheet -->
