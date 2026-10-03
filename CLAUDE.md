@@ -32,7 +32,8 @@ re-verified against the current tree.
   `search_history`, `library_files`, `credit_transactions`. Schema created idempotently in
   `init_db()` (`app/db.py`); older columns/tables are migrated in place
   with `PRAGMA table_info` checks + `ALTER TABLE`, not a migration
-  framework.
+  framework. New schema changes go in `migrations/*.sql` (see
+  `migrations/004_comment_images.sql` for adding `comments.image_path`).
 - Frontend: still no build step, no framework — but no longer one file.
   `templates/index.html` assembles the SPA from `templates/partials/*.html`
   via Jinja `{% include %}` (one file per view/overlay/sheet), rendered
@@ -72,7 +73,7 @@ re-verified against the current tree.
 | Auth: signup/login/logout/session/account-switch | `app/routes/auth.py` |
 | Post create (JSON + multipart w/ images) | `app/routes/posts.py:18` |
 | Post feed fetch — **keyset-paginated**, `?cursor=`/`?limit=` | `app/routes/posts.py:137` |
-| Comments fetch / create | `app/routes/posts.py:270`, `:314` |
+| Comments fetch / create (JSON + multipart w/ image) | `app/routes/posts.py:110`, `:124` |
 | Post/comment like, comment delete | `app/routes/posts.py:391,466,541` |
 | User public profile, follow, highlights, profile picture/cover, post delete | `app/routes/users.py` |
 | Library file upload/list/download, departments | `app/routes/library.py` |
@@ -110,6 +111,33 @@ per-post GET endpoint. Don't assume the overlay can "just re-fetch."
 Image list per post lives in `post_images` (separate table, not a JSON
 column) — order preserved via `position`, `ON DELETE CASCADE` cleans up
 orphans when a post is deleted.
+
+## Comment images
+
+Comments support a single attached image (inline `comments.image_path`,
+not a separate table like `post_images`). `POST /api/posts/<id>/comments`
+accepts both JSON (text-only) and `multipart/form-data` (with optional
+`image` field). Content may be empty **only if** an image is attached.
+Image validation reuses post rules: `image/*` content type, extension in
+`ALLOWED_IMAGE_EXTENSIONS` (png/jpg/jpeg/gif/webp), under `MAX_IMAGE_SIZE`
+(5MB). Validation happens before writing anything (no partial comment on
+bad image). On DB failure after file write, the file is deleted
+(`create_comment` in `app/post_service.py`).
+
+File cleanup convention: deleting a comment (or a post with comments)
+removes all attached image files from `static/uploads/` after the DB
+transaction succeeds. `delete_comment` walks the cascading subtree to
+collect `image_path` values before deleting; `delete_post` fetches comment
+image paths before `DELETE FROM comments`. Both use the existing
+pattern: `if image_path.startswith('/static/uploads/'): os.remove(...)`.
+
+`GET /api/posts/<id>/comments` returns `"image": "/static/uploads/..."` or
+`"image": null` for each comment. `serialize_comment` (`app/serializers.py`)
+handles variable row lengths (12/13/14/15 elements) to accommodate legacy
+queries without `image_path` and new queries with it, keeping the
+omit-if-None behavior for `liked_by_user` / `disliked_by_user`. Schema
+added via `migrations/004_comment_images.sql` (simple `ALTER TABLE ADD
+COLUMN`, no rebuild required).
 
 ## Key data flow — post feed pagination (new since the old doc)
 

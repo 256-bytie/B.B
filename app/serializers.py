@@ -59,10 +59,11 @@ def serialize_comment(row, liked_by_user=None, disliked_by_user=None):
     """Convert a comments+users joined row into a JSON-serializable dict.
 
     Args:
-        row: tuple from comments JOIN users query. When called from get_comments,
-            row includes liked_by_user and disliked_by_user as the 13th and 14th
-            elements. When called from create_comment, row has 12 elements (no
-            liked_by_user/disliked_by_user).
+        row: tuple from comments JOIN users query. Varies by context:
+            - 15 elements: get_comments with liked_by_user, disliked_by_user, image_path
+            - 14 elements: get_comments with liked_by_user and image_path (no dislike join)
+            - 13 elements: create_comment with image_path (no liked/disliked)
+            - 12 elements: legacy format without image_path (backward compat)
         liked_by_user: Optional int (0/1) from the row's liked_by_user field.
             If None, the 'liked_by_user' key is omitted from the output (used
             by create_comment which doesn't return that field). If provided,
@@ -70,17 +71,22 @@ def serialize_comment(row, liked_by_user=None, disliked_by_user=None):
         disliked_by_user: Optional int (0/1) from the row's disliked_by_user
             field. Same omit-if-None convention as liked_by_user.
     """
-    if len(row) == 14:
-        # Row from get_comments with liked_by_user and disliked_by_user
-        comment_id, post_id, user_id, content, created_at, like_count, parent_comment_id, full_name, email, profile_picture, username, bio, liked_db, disliked_db = row
+    image_path = None
+
+    if len(row) == 15:
+        # Row from get_comments with liked_by_user, disliked_by_user, and image_path
+        comment_id, post_id, user_id, content, created_at, like_count, parent_comment_id, full_name, email, profile_picture, username, bio, liked_db, disliked_db, image_path = row
         liked_by_user = liked_db
         disliked_by_user = disliked_db
-    elif len(row) == 13:
-        # Row with liked_by_user only (no dislike join)
-        comment_id, post_id, user_id, content, created_at, like_count, parent_comment_id, full_name, email, profile_picture, username, bio, liked_db = row
+    elif len(row) == 14:
+        # Row with liked_by_user and image_path (no dislike join)
+        comment_id, post_id, user_id, content, created_at, like_count, parent_comment_id, full_name, email, profile_picture, username, bio, liked_db, image_path = row
         liked_by_user = liked_db
+    elif len(row) == 13:
+        # Row from create_comment with image_path (no liked/disliked)
+        comment_id, post_id, user_id, content, created_at, like_count, parent_comment_id, full_name, email, profile_picture, username, bio, image_path = row
     else:
-        # Row from create_comment without liked_by_user/disliked_by_user (12 elements)
+        # Legacy row without image_path (12 elements)
         comment_id, post_id, user_id, content, created_at, like_count, parent_comment_id, full_name, email, profile_picture, username, bio = row
 
     handle = username or email.split('@')[0]
@@ -96,7 +102,8 @@ def serialize_comment(row, liked_by_user=None, disliked_by_user=None):
         'content': content,
         'created_at': created_at,
         'like_count': like_count,
-        'parent_comment_id': parent_comment_id
+        'parent_comment_id': parent_comment_id,
+        'image': image_path
     }
 
     # Only include liked_by_user/disliked_by_user if provided (either in row or as param)

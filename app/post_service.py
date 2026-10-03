@@ -240,7 +240,8 @@ def get_comments(conn, post_id, current_user_id):
                comments.created_at, comments.like_count, comments.parent_comment_id,
                users.full_name, users.email, users.profile_picture,
                users.username, users.bio,
-               CASE WHEN likes.id IS NOT NULL THEN 1 ELSE 0 END as liked_by_user
+               CASE WHEN likes.id IS NOT NULL THEN 1 ELSE 0 END as liked_by_user,
+               comments.image_path
         FROM comments
         JOIN users ON comments.user_id = users.id
         LEFT JOIN likes ON likes.target_type = 'comment'
@@ -252,21 +253,27 @@ def get_comments(conn, post_id, current_user_id):
     return [serialize_comment(row) for row in cursor.fetchall()]
 
 
-def create_comment(conn, post_id, user_id, content, parent_comment_id):
+def create_comment(conn, post_id, user_id, content, parent_comment_id, image_file=None):
     """Add a comment (optionally a reply, via parent_comment_id) to
-    post_id and bump its comment_count.
+    post_id and bump its comment_count. Optionally attach a single image.
 
     Returns the serialized comment. Raises PostValidationError for
-    empty/oversized content or a parent_comment_id belonging to a
-    different post, PostNotFoundError if post_id doesn't exist,
-    CommentNotFoundError if parent_comment_id is given but doesn't
-    exist.
+    empty/oversized content (or empty content without an image), a
+    parent_comment_id belonging to a different post, or invalid image;
+    PostNotFoundError if post_id doesn't exist; CommentNotFoundError if
+    parent_comment_id is given but doesn't exist.
     """
     content = (content or '').strip()
-    if not content:
+
+    # Content check: empty content is an error only when image_file is absent
+    if not content and not image_file:
         raise PostValidationError('Content cannot be empty')
-    if len(content) > MAX_COMMENT_LEN:
+    if content and len(content) > MAX_COMMENT_LEN:
         raise PostValidationError(f'Content too long (max {MAX_COMMENT_LEN} characters)')
+
+    # Validate image before writing anything (no partial comment on bad image)
+    if image_file and image_file.filename:
+        _validate_images([image_file])
 
     cursor = conn.cursor()
 
@@ -282,23 +289,42 @@ def create_comment(conn, post_id, user_id, content, parent_comment_id):
         if parent_row[0] != post_id:
             raise PostValidationError('Parent comment belongs to a different post')
 
-    cursor.execute(
-        'INSERT INTO comments (post_id, user_id, content, parent_comment_id) VALUES (?, ?, ?, ?)',
-        (post_id, user_id, content, parent_comment_id)
-    )
-    comment_id = cursor.lastrowid
+    # Save the image file if provided
+    image_url = None
+    saved_file_path = None
+    if image_file and image_file.filename:
+        file_ext = os.path.splitext(secure_filename(image_file.filename))[1]
+        unique_filename = f"{uuid.uuid4()}{file_ext}"
+        saved_file_path = os.path.join(UPLOAD_FOLDER, unique_filename)
+        image_file.save(saved_file_path)
+        image_url = f"/static/uploads/{unique_filename}"
 
-    cursor.execute(
-        'UPDATE posts SET comment_count = comment_count + 1 WHERE id = ?',
-        (post_id,)
-    )
-    conn.commit()
+    # Insert empty string for image-only comments (column is NOT NULL)
+    comment_content = content if content else ''
+
+    try:
+        cursor.execute(
+            'INSERT INTO comments (post_id, user_id, content, parent_comment_id, image_path) VALUES (?, ?, ?, ?, ?)',
+            (post_id, user_id, comment_content, parent_comment_id, image_url)
+        )
+        comment_id = cursor.lastrowid
+
+        cursor.execute(
+            'UPDATE posts SET comment_count = comment_count + 1 WHERE id = ?',
+            (post_id,)
+        )
+        conn.commit()
+    except Exception:
+        # If DB insert fails after file was written, delete the file
+        if saved_file_path and os.path.exists(saved_file_path):
+            os.remove(saved_file_path)
+        raise
 
     cursor.execute('''
         SELECT comments.id, comments.post_id, comments.user_id, comments.content,
                comments.created_at, comments.like_count, comments.parent_comment_id,
                users.full_name, users.email, users.profile_picture,
-               users.username, users.bio
+               users.username, users.bio, comments.image_path
         FROM comments
         JOIN users ON comments.user_id = users.id
         WHERE comments.id = ?
@@ -385,9 +411,10 @@ def delete_comment(conn, user_id, comment_id):
     also deletes every reply beneath it, recursively - so this first
     walks the full descendant subtree to (a) clean up their `likes`
     rows, which the cascade can't reach (likes has no FK to comments -
-    target_id is a polymorphic reference, not an enforced relationship)
-    and (b) decrement the post's comment_count by the true number of
-    rows removed, not just 1.
+    target_id is a polymorphic reference, not an enforced relationship),
+    (b) decrement the post's comment_count by the true number of
+    rows removed, not just 1, and (c) delete any image files attached
+    to comments in the subtree.
 
     Raises CommentNotFoundError if comment_id doesn't exist,
     CommentOwnershipError if it isn't user_id's comment.
@@ -413,7 +440,14 @@ def delete_comment(conn, user_id, comment_id):
     ''', (comment_id,))
     subtree_ids = [r[0] for r in cursor.fetchall()]
 
+    # Fetch image paths before deleting
     placeholders = ','.join('?' * len(subtree_ids))
+    cursor.execute(
+        f"SELECT image_path FROM comments WHERE id IN ({placeholders})",
+        subtree_ids
+    )
+    image_paths = [r[0] for r in cursor.fetchall() if r[0]]
+
     cursor.execute(
         f"DELETE FROM likes WHERE target_type = 'comment' AND target_id IN ({placeholders})",
         subtree_ids
@@ -429,12 +463,21 @@ def delete_comment(conn, user_id, comment_id):
     )
     conn.commit()
 
+    # Delete image files after successful commit
+    for image_path in image_paths:
+        if image_path.startswith('/static/uploads/'):
+            filename = image_path.replace('/static/uploads/', '')
+            file_path = os.path.join(UPLOAD_FOLDER, filename)
+            if os.path.exists(file_path):
+                os.remove(file_path)
+
 
 def delete_post(conn, user_id, post_id):
     """Delete a post and everything that depends on it: its images
-    (row + on-disk files), its comments, and all likes on both the post
-    and its comments. Raises PostNotFoundError if post_id doesn't
-    exist, PostOwnershipError if it isn't user_id's post.
+    (row + on-disk files), its comments (including their image files),
+    and all likes on both the post and its comments. Raises
+    PostNotFoundError if post_id doesn't exist, PostOwnershipError if it
+    isn't user_id's post.
     """
     cursor = conn.cursor()
 
@@ -446,14 +489,13 @@ def delete_post(conn, user_id, post_id):
     if row[0] != user_id:
         raise PostOwnershipError('You can only delete your own posts')
 
+    # Collect post images
     cursor.execute('SELECT image_path FROM post_images WHERE post_id = ?', (post_id,))
-    image_rows = cursor.fetchall()
-    for (image_path,) in image_rows:
-        if image_path.startswith('/static/uploads/'):
-            filename = image_path.replace('/static/uploads/', '')
-            file_path = os.path.join(UPLOAD_FOLDER, filename)
-            if os.path.exists(file_path):
-                os.remove(file_path)
+    post_image_paths = [r[0] for r in cursor.fetchall()]
+
+    # Collect comment images before deleting comments
+    cursor.execute('SELECT image_path FROM comments WHERE post_id = ? AND image_path IS NOT NULL', (post_id,))
+    comment_image_paths = [r[0] for r in cursor.fetchall()]
 
     cursor.execute('DELETE FROM post_images WHERE post_id = ?', (post_id,))
 
@@ -473,3 +515,19 @@ def delete_post(conn, user_id, post_id):
     cursor.execute('DELETE FROM posts WHERE id = ?', (post_id,))
 
     conn.commit()
+
+    # Delete post image files after successful commit
+    for image_path in post_image_paths:
+        if image_path.startswith('/static/uploads/'):
+            filename = image_path.replace('/static/uploads/', '')
+            file_path = os.path.join(UPLOAD_FOLDER, filename)
+            if os.path.exists(file_path):
+                os.remove(file_path)
+
+    # Delete comment image files after successful commit
+    for image_path in comment_image_paths:
+        if image_path.startswith('/static/uploads/'):
+            filename = image_path.replace('/static/uploads/', '')
+            file_path = os.path.join(UPLOAD_FOLDER, filename)
+            if os.path.exists(file_path):
+                os.remove(file_path)

@@ -29,6 +29,7 @@ echo ""
 TESTS=(
     "test_comments.sh"
     "test_comments2.sh"
+    "test_comment_images.sh"
     "test_follows.sh"
     "test_highlights.sh"
     "test_highlights_video.sh"

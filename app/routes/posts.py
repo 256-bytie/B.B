@@ -123,18 +123,35 @@ def get_comments(post_id):
 
 @bp.route('/api/posts/<int:post_id>/comments', methods=['POST'])
 def create_comment(post_id):
-    """Create a comment on a specific post"""
+    """Create a comment on a specific post (text-only JSON or multipart with image)"""
     auth_error = _require_login()
     if auth_error:
         return auth_error
 
-    data = request.get_json() or {}
+    is_multipart = request.content_type and 'multipart/form-data' in request.content_type
+    if is_multipart:
+        content = request.form.get('content')
+        parent_comment_id_str = request.form.get('parent_comment_id')
+        image_file = request.files.get('image')
+
+        # Coerce parent_comment_id from string to int, 400 on non-integer
+        parent_comment_id = None
+        if parent_comment_id_str:
+            try:
+                parent_comment_id = int(parent_comment_id_str)
+            except ValueError:
+                return jsonify({'error': 'Invalid parent_comment_id'}), 400
+    else:
+        data = request.get_json() or {}
+        content = data.get('content')
+        parent_comment_id = data.get('parent_comment_id')
+        image_file = None
 
     try:
         conn = get_db()
         comment = posts.create_comment(
             conn, post_id, session['user_id'],
-            data.get('content'), data.get('parent_comment_id')
+            content, parent_comment_id, image_file
         )
         conn.close()
         return jsonify(comment), 201
