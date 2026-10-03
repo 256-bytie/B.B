@@ -50,6 +50,18 @@ def _call(fn, *args, success_status=200):
         conn.close()
 
 
+@bp.route('/api/communities', methods=['GET'])
+def list_communities():
+    q = request.args.get('q')
+    limit = _clamp_limit(request.args.get('limit'))
+    cursor_id = _parse_cursor(request.args.get('cursor'))
+
+    def page(conn):
+        comms, next_cursor = communities.list_communities(conn, session.get('user_id'), q, limit, cursor_id)
+        return {'communities': comms, 'next_cursor': next_cursor}
+    return _call(page)
+
+
 @bp.route('/api/communities', methods=['POST'])
 def create_community():
     auth_error = _require_login()

@@ -145,6 +145,114 @@ req "$JAR_A" "$CSRF_A" POST "/api/communities/$SLUG/leave"
 req "$JAR_A" "" GET "/api/communities/$SLUG"
 [[ "$(json_get "$BODY" "d['membership']['role']")" == "creator" ]] && pass "Creator still a member after rejected leave" || fail "Creator state: $BODY"
 
+# --- Browse/search directory (GET /api/communities) ---
+req "$JAR_ANON" "" GET /api/communities
+[[ "$CODE" == "200" && "$(json_get "$BODY" "'communities' in d and 'next_cursor' in d")" == "True" ]] \
+    && pass "List communities logged out -> 200 with shape" || fail "List anon: $CODE $BODY"
+
+# Check that public community appears with correct membership state
+req "$JAR_A" "" GET /api/communities
+FOUND_PUBLIC=$(json_get "$BODY" "any(c['slug'] == '$SLUG' and c['membership']['is_member'] and c['membership']['role'] == 'creator' for c in d['communities'])")
+[[ "$FOUND_PUBLIC" == "True" ]] && pass "Public community appears with creator membership" || fail "Public community in list: $BODY"
+
+req "$JAR_B" "" GET /api/communities
+FOUND_AS_B=$(json_get "$BODY" "any(c['slug'] == '$SLUG' and not c['membership']['is_member'] and c['membership']['role'] is None for c in d['communities'])")
+[[ "$FOUND_AS_B" == "True" ]] && pass "Public community shows non-member state for user B" || fail "Public as B: $BODY"
+
+req "$JAR_ANON" "" GET /api/communities
+FOUND_ANON=$(json_get "$BODY" "any(c['slug'] == '$SLUG' and not c['membership']['is_member'] and c['membership']['role'] is None for c in d['communities'])")
+[[ "$FOUND_ANON" == "True" ]] && pass "Public community shows non-member state when logged out" || fail "Public anon: $BODY"
+
+# Search by name (case-insensitive)
+req "$JAR_ANON" "" GET "/api/communities?q=test"
+MATCHES_NAME=$(json_get "$BODY" "any('test' in c['name'].lower() for c in d['communities'])")
+[[ "$CODE" == "200" && "$MATCHES_NAME" == "True" ]] && pass "Search by name (case-insensitive) works" || fail "Search name: $BODY"
+
+# Search by description
+req "$JAR_ANON" "" GET "/api/communities?q=community"
+MATCHES_DESC=$(json_get "$BODY" "any('community' in c['description'].lower() for c in d['communities'])")
+[[ "$CODE" == "200" && "$MATCHES_DESC" == "True" ]] && pass "Search by description works" || fail "Search desc: $BODY"
+
+# Search by slug
+req "$JAR_ANON" "" GET "/api/communities?q=$SLUG"
+MATCHES_SLUG=$(json_get "$BODY" "any(c['slug'] == '$SLUG' for c in d['communities'])")
+[[ "$CODE" == "200" && "$MATCHES_SLUG" == "True" ]] && pass "Search by slug works" || fail "Search slug: $BODY"
+
+# Non-matching search returns empty
+UNIQUE_SEARCH="nosuchcommunity${RUN_ID}xyzabc"
+req "$JAR_ANON" "" GET "/api/communities?q=$UNIQUE_SEARCH"
+[[ "$(json_get "$BODY" "len(d['communities'])")" == "0" ]] && pass "Non-matching search returns empty array" || fail "Empty search: $BODY"
+
+# LIKE escaping: % and _ should not be wildcards
+req "$JAR_ANON" "" GET "/api/communities?q=%"
+NOT_ALL=$(json_get "$BODY" "len(d['communities'])")
+req "$JAR_ANON" "" GET /api/communities
+ALL_COUNT=$(json_get "$BODY" "len(d['communities'])")
+[[ "$NOT_ALL" != "$ALL_COUNT" ]] && pass "Search for % does not match everything (escaped)" || fail "% escape: found $NOT_ALL vs all $ALL_COUNT"
+
+req "$JAR_ANON" "" GET "/api/communities?q=_"
+NOT_ALL_UNDER=$(json_get "$BODY" "len(d['communities'])")
+[[ "$NOT_ALL_UNDER" != "$ALL_COUNT" ]] && pass "Search for _ does not match everything (escaped)" || fail "_ escape: found $NOT_ALL_UNDER vs all $ALL_COUNT"
+
+# Private community never appears
+req "$JAR_ANON" "" GET /api/communities
+PRIVATE_ABSENT=$(json_get "$BODY" "not any(c['slug'] == '$SLUG2' for c in d['communities'])")
+[[ "$PRIVATE_ABSENT" == "True" ]] && pass "Private community excluded from list" || fail "Private in list: $BODY"
+
+req "$JAR_B" "" GET "/api/communities?q=$SLUG2"
+PRIVATE_SEARCH=$(json_get "$BODY" "not any(c['slug'] == '$SLUG2' for c in d['communities'])")
+[[ "$PRIVATE_SEARCH" == "True" ]] && pass "Private community excluded from search by name" || fail "Private in search: $BODY"
+
+# Pagination
+SLUG_P1="testpag1${RUN_ID}"
+SLUG_P2="testpag2${RUN_ID}"
+SLUG_P3="testpag3${RUN_ID}"
+req "$JAR_A" "$CSRF_A" POST /api/communities "{\"name\":\"Pagination 1\",\"description\":\"p1\",\"topic\":\"gaming\",\"type\":\"public\"}"
+req "$JAR_A" "$CSRF_A" POST /api/communities "{\"name\":\"Pagination 2\",\"description\":\"p2\",\"topic\":\"gaming\",\"type\":\"public\"}"
+req "$JAR_A" "$CSRF_A" POST /api/communities "{\"name\":\"Pagination 3\",\"description\":\"p3\",\"topic\":\"gaming\",\"type\":\"public\"}"
+
+req "$JAR_ANON" "" GET "/api/communities?limit=2"
+PAGE1_LEN=$(json_get "$BODY" "len(d['communities'])")
+PAGE1_CURSOR=$(json_get "$BODY" "d['next_cursor']")
+[[ "$PAGE1_LEN" == "2" && "$PAGE1_CURSOR" != "None" ]] && pass "Pagination: limit=2 returns 2 items with cursor" || fail "Page 1: $BODY"
+
+req "$JAR_ANON" "" GET "/api/communities?limit=2&cursor=$PAGE1_CURSOR"
+PAGE2_LEN=$(json_get "$BODY" "len(d['communities'])")
+PAGE2_CURSOR=$(json_get "$BODY" "d['next_cursor']")
+[[ "$PAGE2_LEN" -ge "1" ]] && pass "Pagination: cursor returns more items" || fail "Page 2: $BODY"
+
+# Collect all ids from both pages to check for duplicates
+req "$JAR_ANON" "" GET "/api/communities?limit=2"
+PAGE1_IDS=$(json_get "$BODY" "[c['id'] for c in d['communities']]")
+CURSOR=$(json_get "$BODY" "d['next_cursor']")
+req "$JAR_ANON" "" GET "/api/communities?limit=2&cursor=$CURSOR"
+PAGE2_IDS=$(json_get "$BODY" "[c['id'] for c in d['communities']]")
+NO_DUPES=$(python3 -c "p1=$PAGE1_IDS; p2=$PAGE2_IDS; print(len(set(p1) & set(p2)) == 0)")
+[[ "$NO_DUPES" == "True" ]] && pass "Pagination: no duplicates across pages" || fail "Duplicates: page1=$PAGE1_IDS page2=$PAGE2_IDS"
+
+# Final page has null cursor
+req "$JAR_ANON" "" GET "/api/communities?limit=9999"
+FINAL_CURSOR=$(json_get "$BODY" "d['next_cursor']")
+[[ "$FINAL_CURSOR" == "None" ]] && pass "Pagination: last page has null cursor" || fail "Final cursor: $FINAL_CURSOR"
+
+# Bad limit and cursor values return 200
+req "$JAR_ANON" "" GET "/api/communities?limit=0"
+[[ "$CODE" == "200" ]] && pass "limit=0 returns 200 (clamped)" || fail "limit=0: $CODE"
+
+req "$JAR_ANON" "" GET "/api/communities?limit=9999"
+[[ "$CODE" == "200" ]] && pass "limit=9999 returns 200 (clamped)" || fail "limit=9999: $CODE"
+
+req "$JAR_ANON" "" GET "/api/communities?limit=abc"
+[[ "$CODE" == "200" ]] && pass "limit=abc returns 200 (ignored)" || fail "limit=abc: $CODE"
+
+req "$JAR_ANON" "" GET "/api/communities?cursor=abc"
+[[ "$CODE" == "200" ]] && pass "cursor=abc returns 200 (ignored)" || fail "cursor=abc: $CODE"
+
+# No pk/integer-id leak beyond 'id' field (which is the slug)
+req "$JAR_ANON" "" GET /api/communities
+NO_PK_LEAK=$(json_get "$BODY" "all(c['id'] == c['slug'] and isinstance(c['id'], str) for c in d['communities'])")
+[[ "$NO_PK_LEAK" == "True" ]] && pass "No integer pk leaked (id == slug)" || fail "PK leak check: $BODY"
+
 echo ""
 echo "Passed: $PASSED  Failed: $FAILED"
 [[ $FAILED -eq 0 ]]

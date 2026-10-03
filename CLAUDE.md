@@ -93,7 +93,7 @@ re-verified against the current tree.
 | Share sheet (feed card Share button → Repost/Quote sheet; slide-up, swipe-down, tap-outside, Esc) | `templates/partials/share_sheet.html`, `static/js/share-sheet.js`, `.share-sheet*` in `static/css/style.css`. Uses `.is-open` (not `hidden`) so it can animate; Repost/Quote show the standard "Coming soon" toast |
 | Wallet: balance / monthly free credits / history API | `app/routes/wallet.py` (HTTP) → `app/wallet.py` (logic, Flask-free) |
 | Wallet screen (side-nav → `openWalletView()`) | `templates/partials/wallet.html`, `static/js/wallet.js`, `showView('wallet')` hook in `static/js/core.js` |
-| Communities API (create/get/join/leave/mine, per-community posts) | `app/routes/communities.py` (HTTP) → `app/community_service.py` (logic, Flask-free); schema in `migrations/003_communities.sql`; frontend `static/js/community.js` |
+| Communities API (create/get/join/leave/mine/browse, per-community posts) | `app/routes/communities.py` (HTTP) → `app/community_service.py` (logic, Flask-free); schema in `migrations/003_communities.sql`; frontend `static/js/community.js` |
 
 ## Key data flow — post images (still true, same shape, new file locations)
 
@@ -198,7 +198,16 @@ one batched `IN (...)` query against `post_images`, not N+1.
   both come from `TOPIC_STYLES` in `community_service.py`. Custom topics get
   `👥` / `bg-gray-100`.
 - `GET /api/communities/<slug>` and `GET .../posts` work while logged out.
-  `type` is stored but **not enforced**: every community acts as public.
+  `type` is stored but **not enforced** for existing communities: `public`
+  and `restricted` behave the same, `private` is **excluded from browse/search**
+  (Decision D2 for Phase 2) but readable if you know the slug. Full gating
+  (join restrictions, read restrictions) is deferred.
+- **Browse/search directory:** `GET /api/communities` (keyset-paginated by id
+  DESC, `?q=`/`?limit=`/`?cursor=`) lists public and restricted communities
+  only (private excluded). `?q=` searches name/slug/description (case-insensitive,
+  LIKE-escaped so `%` and `_` are literal, not wildcards). Works logged out.
+  Each item includes `member_count` and `membership: {is_member, role}` relative
+  to the viewer (null for logged-out). Response: `{communities: [...], next_cursor}`.
 - A creator can't leave their own community (400). Handing ownership to
   someone else is not built yet.
 - Not built yet: members list, events, banners, edit/settings, and

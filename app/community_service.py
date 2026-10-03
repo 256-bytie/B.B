@@ -258,3 +258,49 @@ def create_community_post(conn, slug, user_id, content):
 
     cursor.execute(_POST_SELECT + ' WHERE posts.id = ?', (post_id,))
     return serialize_community_post(cursor.fetchone())
+
+
+def list_communities(conn, viewer_id, q, limit, cursor_id):
+    """Browse/search public and restricted communities, keyset-paginated by id DESC.
+    Returns (communities, next_cursor)."""
+    cursor = conn.cursor()
+
+    # Build query
+    query = '''
+        SELECT c.id, c.slug, c.name, c.description, c.topic, c.type, c.icon_emoji, c.created_at,
+               (SELECT COUNT(*) FROM community_members m WHERE m.community_id = c.id),
+               vm.role
+        FROM communities c
+        LEFT JOIN community_members vm ON vm.community_id = c.id AND vm.user_id = ?
+        WHERE c.type != 'private'
+    '''
+    params = [viewer_id]
+
+    # Apply search filter
+    if q:
+        q_trimmed = q.strip()[:50]
+        if q_trimmed:
+            # Escape LIKE special chars: %, _, and the escape char itself
+            escaped = q_trimmed.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+            pattern = f'%{escaped}%'
+            query += ' AND (c.name LIKE ? ESCAPE ? OR c.slug LIKE ? ESCAPE ? OR c.description LIKE ? ESCAPE ?)'
+            params.extend([pattern, '\\', pattern, '\\', pattern, '\\'])
+
+    # Apply keyset cursor
+    if cursor_id is not None:
+        query += ' AND c.id < ?'
+        params.append(cursor_id)
+
+    query += ' ORDER BY c.id DESC LIMIT ?'
+    params.append(limit + 1)
+
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    has_next = len(rows) > limit
+    page = rows[:limit]
+    next_cursor = page[-1][0] if has_next and page else None
+
+    return [
+        serialize_community(row[:9], topic_style(row[4])[1], row[9])
+        for row in page
+    ], next_cursor
