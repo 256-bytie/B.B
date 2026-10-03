@@ -168,6 +168,14 @@ postCardContainerIds.forEach(function(containerId) {
 	});
 })();
 
+// Tap a comment's image -> same full-screen viewer as post images.
+// Delegated on the container so it covers re-renders and newly-inserted rows.
+document.getElementById('overlay-comments-container').addEventListener('click', function(e) {
+	const img = e.target.closest('img.comment-image');
+	if (!img) return;
+	openImageViewer([img.src], 0);
+});
+
 // Delegated click listener for post like buttons
 postCardContainerIds.forEach(function(containerId) {
 	const container = document.getElementById(containerId);
@@ -371,6 +379,7 @@ function openCommentOverlay(postData) {
 	// Reset composer: clears any reply-to chip and disabled-send state left
 	// over from a previous post's overlay.
 	cancelReplyContext();
+	clearReplyImage();
 	updateReplyComposerState();
 
 	// Reset collapsed-thread state so a thread left collapsed on a
@@ -509,6 +518,7 @@ function closeCommentOverlay() {
 	document.getElementById('overlay-reply-error').classList.add('hidden');
 	document.getElementById('overlay-comments-container').innerHTML = '';
 	cancelReplyContext();
+	clearReplyImage();
 	setReplyComposerExpanded(false);
 	document.getElementById('overlay-reply-input').blur();
 	updateReplyComposerState();
@@ -824,7 +834,8 @@ function renderCommentNode(node, depth) {
 						<i class="fa-solid fa-ellipsis-vertical text-[14px]"></i>
 					</button>
 				</div>
-				<p class="text-[15px] leading-[1.4] text-gray-800 mb-2.5 whitespace-pre-wrap break-words">${escapeHtml(comment.content)}</p>
+				${comment.content ? `<p class="text-[15px] leading-[1.4] text-gray-800 mb-2.5 whitespace-pre-wrap break-words">${escapeHtml(comment.content)}</p>` : ''}
+				${comment.image ? `<img src="${escapeHtml(comment.image)}" alt="Comment attachment" class="comment-image" loading="lazy"/>` : ''}
 				<div class="comment-actions">
 					<button type="button" class="comment-reply-btn comment-action-btn text-gray-500 hover:text-gray-700 focus:outline-none" aria-label="Reply" data-total-count="${totalReplies}">
 						<span class="text-[13px] font-semibold">Reply</span>
@@ -1123,7 +1134,8 @@ function updateReplyComposerState() {
 		counter.classList.add('hidden');
 	}
 
-	sendBtn.disabled = input.value.trim().length === 0 || length > 1000 || isSubmittingComment;
+	const hasContent = input.value.trim().length > 0 || replyImage !== null;
+	sendBtn.disabled = !hasContent || length > 1000 || isSubmittingComment;
 	sendBtn.setAttribute('aria-disabled', String(sendBtn.disabled));
 
 	syncReplyComposer();
@@ -1140,7 +1152,7 @@ function isReplyComposerExpanded() {
 }
 
 function syncReplyComposer() {
-	const hasDraft = replyInputEl.value.length > 0;
+	const hasDraft = replyInputEl.value.length > 0 || replyImage !== null;
 	const hasFocus = replyComposerEl.contains(document.activeElement);
 	const active = hasFocus || hasDraft || isReplyComposerExpanded();
 	replyComposerEl.dataset.active = String(active);
@@ -1188,13 +1200,71 @@ replyComposerEl.addEventListener('mousedown', function(e) {
 	if (e.target.closest('button')) e.preventDefault();
 });
 
-// Media attachments: the comments API is text-only today, so these are
-// visible-but-inert entry points (same convention as the post menu's
-// placeholder actions) until the backend accepts attachments.
+// ---- Reply image attachment (one image per reply) ----
+// Same limits as the backend (post_service.py): png/jpg/jpeg/gif/webp, 5MB.
+// The File itself is kept (not a data URL) since handleSendReply uploads it
+// straight into FormData; the preview uses an object URL that's revoked
+// whenever the attachment is replaced or cleared.
+const REPLY_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+const REPLY_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+let replyImage = null; // { file, url } | null
+
+function setReplyImage(file) {
+	clearReplyImage();
+	replyImage = { file: file, url: URL.createObjectURL(file) };
+
+	const preview = document.getElementById('overlay-reply-image-preview');
+	preview.innerHTML = `<div class="reply-image-thumb">
+<img src="${replyImage.url}" alt="Attached image"/>
+<button type="button" class="reply-image-remove" aria-label="Remove image"><i class="fa-solid fa-xmark"></i></button>
+</div>`;
+	preview.classList.remove('hidden');
+	updateReplyComposerState();
+}
+
+function clearReplyImage() {
+	if (replyImage) URL.revokeObjectURL(replyImage.url);
+	replyImage = null;
+	const preview = document.getElementById('overlay-reply-image-preview');
+	preview.innerHTML = '';
+	preview.classList.add('hidden');
+	document.getElementById('overlay-reply-image-input').value = '';
+}
+
+document.getElementById('overlay-reply-image-input').addEventListener('change', function(e) {
+	const file = e.target.files && e.target.files[0];
+	e.target.value = ''; // allow re-selecting the same file later
+	if (!file) return;
+
+	const errorDiv = document.getElementById('overlay-reply-error');
+	if (REPLY_IMAGE_TYPES.indexOf(file.type) === -1) {
+		errorDiv.textContent = 'Only PNG, JPG, GIF or WebP images are supported.';
+		errorDiv.classList.remove('hidden');
+		return;
+	}
+	if (file.size > REPLY_IMAGE_MAX_BYTES) {
+		errorDiv.textContent = 'Image must be under 5MB.';
+		errorDiv.classList.remove('hidden');
+		return;
+	}
+	errorDiv.classList.add('hidden');
+	setReplyImage(file);
+});
+
 replyComposerEl.addEventListener('click', function(e) {
+	if (e.target.closest('.reply-image-remove')) {
+		clearReplyImage();
+		updateReplyComposerState();
+		return;
+	}
 	const tool = e.target.closest('[data-composer-tool]');
 	if (!tool) return;
-	showToast(tool.dataset.composerTool === 'gif' ? 'GIF replies are coming soon' : 'Image replies are coming soon');
+	if (tool.dataset.composerTool === 'image') {
+		document.getElementById('overlay-reply-image-input').click();
+	} else {
+		// GIF replies remain a visible-but-inert placeholder.
+		showToast('GIF replies are coming soon');
+	}
 });
 
 // Paint the current user's avatar (same source/fallback as compose.js).

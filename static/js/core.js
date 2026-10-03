@@ -186,6 +186,8 @@ function updateBottomNav(viewName) {
     if (bottomNav) {
         const activeItemId = BOTTOM_NAV_ACTIVE_ITEM[viewName];
         bottomNav.classList.toggle('hidden', !activeItemId);
+        // Feed scroll may have retracted the bar; any view switch restores it.
+        bottomNav.classList.remove('bottom-nav-retracted');
         bottomNav.querySelectorAll('.bottom-nav-item').forEach(function(item) {
             const isActive = item.id === activeItemId;
             item.classList.toggle('is-active', isActive);

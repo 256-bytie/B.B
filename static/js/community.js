@@ -478,7 +478,7 @@ async function loadCommunityPosts() {
 }
 
 function communityBuildPostRowHtml(post) {
-	const avatarUrl = `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(post.avatar_seed || post.author)}`;
+	const avatarUrl = post.avatar_url || `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(post.avatar_seed || post.author)}`;
 	return `<li class="flex gap-3 px-4 py-3.5">
 		<img src="${escapeHtml(avatarUrl)}" alt="" class="w-9 h-9 rounded-full object-cover bg-gray-100 shrink-0">
 		<div class="flex-1 min-w-0">

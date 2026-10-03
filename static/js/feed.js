@@ -636,6 +636,8 @@ function resetFeedHeaderBar() {
     }
     const fab = document.getElementById('compose-fab');
     if (fab) fab.classList.remove('fab-hidden');
+    const bottomNav = document.getElementById('bottom-nav');
+    if (bottomNav) bottomNav.classList.remove('bottom-nav-retracted');
     measureFeedHeaderHeight();
 }
 
@@ -650,6 +652,9 @@ function resetFeedHeaderBar() {
     // any reveal starts, same coupling this always had, just keyed off
     // feedHeaderHidden instead of a discrete threshold crossing.
     const fab = document.getElementById('compose-fab');
+    // The bottom nav retracts/reappears on the exact same trigger as the
+    // FAB (see .bottom-nav-retracted in style.css).
+    const bottomNav = document.getElementById('bottom-nav');
 
     let ticking = false;
 
@@ -682,6 +687,7 @@ function resetFeedHeaderBar() {
         if (nowHidden !== feedHeaderHidden) {
             feedHeaderHidden = nowHidden;
             if (fab) fab.classList.toggle('fab-hidden', nowHidden);
+            if (bottomNav) bottomNav.classList.toggle('bottom-nav-retracted', nowHidden);
         }
         if (progress === 0) measureFeedHeaderHeight();
     }

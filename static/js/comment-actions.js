@@ -255,7 +255,7 @@ async function handleSendReply() {
 
 	errorDiv.classList.add('hidden');
 
-	if (!content) {
+	if (!content && !replyImage) {
 		errorDiv.textContent = 'Comment cannot be empty.';
 		errorDiv.classList.remove('hidden');
 		return;
@@ -276,18 +276,34 @@ async function handleSendReply() {
 	const parentHandle = replyingToHandle;
 
 	try {
-		const body = { content };
-		if (parentCommentId) {
-			body.parent_comment_id = parentCommentId;
+		let response;
+		if (replyImage) {
+			// Image reply: multipart (same endpoint, same pattern as image
+			// posts in compose.js). No Content-Type header - the browser sets
+			// the multipart boundary itself.
+			const formData = new FormData();
+			formData.append('content', content);
+			if (parentCommentId) {
+				formData.append('parent_comment_id', parentCommentId);
+			}
+			formData.append('image', replyImage.file, replyImage.file.name);
+			response = await apiFetch(`/api/posts/${currentPostId}/comments`, {
+				method: 'POST',
+				body: formData
+			});
+		} else {
+			const body = { content };
+			if (parentCommentId) {
+				body.parent_comment_id = parentCommentId;
+			}
+			response = await apiFetch(`/api/posts/${currentPostId}/comments`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify(body)
+			});
 		}
-
-		const response = await apiFetch(`/api/posts/${currentPostId}/comments`, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify(body)
-		});
 
 		const data = await response.json();
 
@@ -297,6 +313,7 @@ async function handleSendReply() {
 
 		// Clear input and any active "Replying to" context
 		input.value = '';
+		clearReplyImage();
 		cancelReplyContext();
 
 		// Add new comment to list

@@ -217,6 +217,11 @@
 			<div id="overlay-reply-error" class="hidden px-3 mb-1.5 text-[13px] text-red-600" role="alert"></div>
 
 			<div id="overlay-composer" class="reply-composer" data-active="false" data-expanded="false">
+				<!-- Attached-image preview (one image per reply). Populated by
+				     setReplyImage() in comments.js; mirrors the compose screen's
+				     thumbnail + remove-button pattern. -->
+				<div id="overlay-reply-image-preview" class="reply-image-preview hidden"></div>
+				<input type="file" id="overlay-reply-image-input" accept="image/png,image/jpeg,image/gif,image/webp" class="hidden"/>
 				<img id="overlay-composer-avatar" class="reply-composer-avatar" alt="" src=""/>
 				<textarea id="overlay-reply-input" class="reply-composer-input" rows="1" maxlength="1000" placeholder="Post a comment..." aria-label="Write a comment"></textarea>
 
