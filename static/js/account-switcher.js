@@ -113,7 +113,10 @@ async function switchAccount(userId) {
         } else if (activeView === 'feed') {
             fetchAndRenderPosts();
             updateFeedHeaderAvatar();
+        } else if (activeView === 'community') {
+            loadCommunityView();
         }
+        if (typeof refreshSideNavCommunities === 'function') refreshSideNavCommunities();
     } catch (error) {
         console.error('Error switching accounts:', error);
         showToast('Network error. Please try again.');

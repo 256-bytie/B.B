@@ -1,23 +1,18 @@
 // ---- Communities ----
 //
-// Frontend contract this file is written against (not yet implemented on
-// the server - see COMMUNITY_BACKEND_PROMPT.md for the exact spec to hand
-// to Claude Code):
-//   GET    /api/communities/mine
-//   POST   /api/communities                body: {name, description, topic, type}
+// Server contract (app/routes/communities.py):
+//   GET    /api/communities?q=&cursor=&limit=  -> {communities: [...], next_cursor}
+//   GET    /api/communities/mine               -> {communities: [...]}
+//   POST   /api/communities                    body: {name, description, topic, type}
 //   GET    /api/communities/<slug>
-//   POST   /api/communities/<slug>/join
-//   POST   /api/communities/<slug>/leave
+//   POST   /api/communities/<slug>/join        -> full community object
+//   POST   /api/communities/<slug>/leave       -> full community object
 //   GET    /api/communities/<slug>/posts?cursor=&limit=
-//   POST   /api/communities/<slug>/posts   body: {content}
+//   POST   /api/communities/<slug>/posts       body: {content}
 //
-// None of those routes exist yet. `communityApi` below tries the real
-// endpoint first and falls back to an in-memory mock (COMMUNITY_MOCK_DB)
-// only on a network error or a 404, so this screen is usable today and
-// silently starts using live data the moment the backend ships - no
-// frontend change needed at that point. This mirrors the reference
-// screenshots: b/campus rendered once as a member (Joined) and once as
-// the creator (Manage) is the same mock community: `campus`.
+// `communityApi` talks to those routes only. Any non-2xx response or
+// network failure throws a CommunityApiError carrying the server's
+// {error} message and HTTP status; callers decide how to surface it.
 
 // ---- Reference data ----
 
@@ -32,146 +27,85 @@ const COMMUNITY_TOPICS = [
 	{ key: 'discussion', label: 'Discussion', icon: 'M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM21 12c0 4.556-4.03 8.25-9 8.25a9.76 9.76 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z' }
 ];
 
+// `creatable: false` types are stored by the server but not enforced yet, so
+// the create wizard does not offer them (see audit D1).
 const COMMUNITY_TYPES = [
-	{ value: 'public', label: 'Public', desc: 'Anyone can search for, view, and contribute to this community.', icon: 'M21 12a9 9 0 11-18 0 9 9 0 0118 0zM3.6 9h16.8M3.6 15h16.8M11.5 3a17 17 0 000 18M12.5 3a17 17 0 010 18' },
-	{ value: 'restricted', label: 'Restricted', desc: 'Anyone can view, but only approved members can contribute.', icon: 'M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178zM15 12a3 3 0 11-6 0 3 3 0 016 0z' },
-	{ value: 'private', label: 'Private', desc: 'Only approved members can view and contribute.', icon: 'M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z' }
+	{ value: 'public', creatable: true, label: 'Public', desc: 'Anyone can search for, view, and contribute to this community.', icon: 'M21 12a9 9 0 11-18 0 9 9 0 0118 0zM3.6 9h16.8M3.6 15h16.8M11.5 3a17 17 0 000 18M12.5 3a17 17 0 010 18' },
+	{ value: 'restricted', creatable: false, label: 'Restricted', desc: 'Anyone can view, but only approved members can contribute.', icon: 'M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178zM15 12a3 3 0 11-6 0 3 3 0 016 0z' },
+	{ value: 'private', creatable: false, label: 'Private', desc: 'Only approved members can view and contribute.', icon: 'M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z' }
 ];
 
-// ---- Mock data (used only until the real endpoints exist - see header) ----
+// ---- Data layer ----
 
-const COMMUNITY_MOCK_DB = {
-	campus: {
-		id: 'campus', slug: 'campus', name: 'campus', topic: 'student-life', type: 'public',
-		icon_emoji: '🏛️', icon_bg: 'bg-red-100',
-		description: 'University life, events, discussions and anything campus related.',
-		member_count: 12400, created_at: '2025-11-02T00:00:00Z',
-		membership: { is_member: true, role: 'creator' },
-		posts: [
-			{ id: 'p1', author: 'Jide_23', avatar_seed: 'Jide_23', content: "Anyone know where I can get past question papers for RAD 352? Preferably for the last 3 years.", created_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString() }
-		]
-	},
-	housing: {
-		id: 'housing', slug: 'housing', name: 'housing', topic: 'discussion', type: 'public',
-		icon_emoji: '🌱', icon_bg: 'bg-teal-50',
-		description: 'Off-campus housing leads, roommate matching, and landlord warnings.',
-		member_count: 3820, created_at: '2025-09-14T00:00:00Z',
-		membership: { is_member: true, role: 'member' },
-		posts: []
-	},
-	oldschoolcool: {
-		id: 'oldschoolcool', slug: 'oldschoolcool', name: 'oldschoolcool', topic: 'discussion', type: 'public',
-		icon_emoji: '🎓', icon_bg: 'bg-gray-100',
-		description: 'Throwback photos and stories from campus, decades back.',
-		member_count: 967, created_at: '2025-06-01T00:00:00Z',
-		membership: { is_member: true, role: 'member' },
-		posts: []
+const COMMUNITY_POST_MAX_LEN = 2000; // matches post_service.MAX_CONTENT_LEN
+
+class CommunityApiError extends Error {
+	constructor(message, status) {
+		super(message);
+		this.name = 'CommunityApiError';
+		this.status = status; // 0 = network failure
 	}
-};
-
-// ---- Data layer: real endpoint first, mock fallback on network error / 404 ----
+}
 
 const communityApi = {
-	async _tryReal(fn) {
+	async _request(url, options = {}, fallbackMessage = 'Something went wrong. Try again.') {
+		let res;
 		try {
-			return await fn();
+			res = await apiFetch(url, options);
 		} catch (e) {
-			return { __unavailable: true };
+			throw new CommunityApiError('Network error. Check your connection.', 0);
 		}
+		let data = null;
+		try { data = await res.json(); } catch (e) {}
+		if (!res.ok) {
+			throw new CommunityApiError((data && data.error) || fallbackMessage, res.status);
+		}
+		return data;
 	},
 
-	async get(slug) {
-		const real = await this._tryReal(async () => {
-			const res = await fetch(`/api/communities/${encodeURIComponent(slug)}`);
-			if (res.status === 404) return { __unavailable: true };
-			if (!res.ok) throw new Error('request failed');
-			return await res.json();
-		});
-		if (!real.__unavailable) return real;
-		const mock = COMMUNITY_MOCK_DB[slug];
-		return mock ? { ...mock } : null;
+	_json(method, body) {
+		return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+	},
+
+	get(slug) {
+		return this._request(`/api/communities/${encodeURIComponent(slug)}`, {}, 'Could not load community.');
+	},
+
+	// Directory/search. Resolves to {communities, next_cursor}.
+	async browse(q, cursor, limit) {
+		const params = new URLSearchParams();
+		if (q) params.set('q', q);
+		if (cursor) params.set('cursor', cursor);
+		if (limit) params.set('limit', limit);
+		const qs = params.toString();
+		const data = await this._request(`/api/communities${qs ? '?' + qs : ''}`, {}, 'Could not load communities.');
+		return { communities: (data && data.communities) || [], next_cursor: (data && data.next_cursor) || null };
 	},
 
 	async listMine() {
-		const real = await this._tryReal(async () => {
-			const res = await fetch('/api/communities/mine');
-			if (!res.ok) throw new Error('request failed');
-			return await res.json();
-		});
-		if (!real.__unavailable) return real.communities || [];
-		return Object.values(COMMUNITY_MOCK_DB).filter(c => c.membership && c.membership.is_member);
+		const data = await this._request('/api/communities/mine', {}, 'Could not load your communities.');
+		return (data && data.communities) || [];
 	},
 
-	async create(payload) {
-		const res = await apiFetch('/api/communities', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(payload)
-		});
-		if (res.ok) return await res.json();
-		if (res.status === 404) {
-			// Backend not built yet - create it locally so the rest of the
-			// app (side nav, the detail screen) has somewhere to land.
-			const slug = payload.name.toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 24) || `community${Date.now()}`;
-			const topic = COMMUNITY_TOPICS.find(t => t.key === payload.topic);
-			const community = {
-				id: slug, slug, name: payload.name, topic: payload.topic || 'discussion', type: payload.type,
-				icon_emoji: '🆕', icon_bg: 'bg-gray-100',
-				description: payload.description, member_count: 1, created_at: new Date().toISOString(),
-				membership: { is_member: true, role: 'creator' }, posts: []
-			};
-			COMMUNITY_MOCK_DB[slug] = community;
-			return { ...community };
-		}
-		let message = 'Could not create community.';
-		try { const data = await res.json(); if (data && data.error) message = data.error; } catch (e) {}
-		throw new Error(message);
+	create(payload) {
+		return this._request('/api/communities', this._json('POST', payload), 'Could not create community.');
 	},
 
-	async setMembership(slug, join) {
+	// Resolves to the full community object (fresh member_count + membership).
+	setMembership(slug, join) {
 		const path = join ? 'join' : 'leave';
-		const res = await this._tryReal(async () => {
-			const r = await apiFetch(`/api/communities/${encodeURIComponent(slug)}/${path}`, { method: 'POST' });
-			if (!r.ok) throw new Error('request failed');
-			return await r.json();
-		});
-		const mock = COMMUNITY_MOCK_DB[slug];
-		if (mock) {
-			const wasMember = mock.membership.is_member;
-			mock.membership.is_member = join;
-			if (mock.membership.role === null && join) mock.membership.role = 'member';
-			mock.member_count += (join && !wasMember) ? 1 : (!join && wasMember ? -1 : 0);
-		}
-		return real => real;
+		return this._request(`/api/communities/${encodeURIComponent(slug)}/${path}`, { method: 'POST' },
+			join ? 'Could not join community.' : 'Could not leave community.');
 	},
 
 	async listPosts(slug) {
-		const real = await this._tryReal(async () => {
-			const res = await fetch(`/api/communities/${encodeURIComponent(slug)}/posts`);
-			if (!res.ok) throw new Error('request failed');
-			return await res.json();
-		});
-		if (!real.__unavailable) return real.posts || [];
-		const mock = COMMUNITY_MOCK_DB[slug];
-		return mock ? mock.posts : [];
+		const data = await this._request(`/api/communities/${encodeURIComponent(slug)}/posts`, {}, 'Could not load posts.');
+		return (data && data.posts) || [];
 	},
 
-	async createPost(slug, content) {
-		const res = await this._tryReal(async () => {
-			const r = await apiFetch(`/api/communities/${encodeURIComponent(slug)}/posts`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ content })
-			});
-			if (!r.ok) throw new Error('request failed');
-			return await r.json();
-		});
-		if (!real.__unavailable) return real;
-		const mock = COMMUNITY_MOCK_DB[slug];
-		const handle = (typeof session !== 'undefined' && session && session.user) ? (session.user.username || session.user.email.split('@')[0]) : 'you';
-		const post = { id: `local-${Date.now()}`, author: handle, avatar_seed: handle, content, created_at: new Date().toISOString() };
-		if (mock) mock.posts.unshift(post);
-		return post;
+	createPost(slug, content) {
+		return this._request(`/api/communities/${encodeURIComponent(slug)}/posts`,
+			this._json('POST', { content }), 'Could not post. Try again.');
 	}
 };
 
@@ -255,7 +189,7 @@ function communityCreateCustomTopicInput(value) {
 
 function renderCommunityCreateTypeList() {
 	const list = document.getElementById('community-create-type-list');
-	list.innerHTML = COMMUNITY_TYPES.map(t => {
+	list.innerHTML = COMMUNITY_TYPES.filter(t => t.creatable).map(t => {
 		const selected = communityCreateState.type === t.value;
 		return `<button type="button" onclick="communityCreateSelectType('${t.value}')" class="w-full flex items-start gap-4 px-4 py-4 rounded-2xl border text-left transition-colors ${selected ? 'border-brand-red bg-red-50' : 'border-gray-200 hover:bg-gray-50'}">
 			<span class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${selected ? 'bg-brand-red text-white' : 'bg-gray-100 text-gray-600'}">
@@ -340,7 +274,7 @@ async function communityCreateSubmit() {
 
 // ---- Community detail view ----
 
-const COMMUNITY_RETURN_VIEWS = ['feed', 'courses', 'library', 'businesses', 'search', 'chat', 'profile', 'user-profile', 'wallet'];
+const COMMUNITY_RETURN_VIEWS = ['feed', 'courses', 'library', 'businesses', 'search', 'chat', 'profile', 'user-profile', 'wallet', 'community-browse'];
 let communityReturnView = 'feed';
 let communityCurrentSlug = null;
 let communityCurrentData = null;
@@ -356,25 +290,33 @@ function openCommunityView(slug) {
 }
 
 function closeCommunityView() {
+	// The browse list is not reloaded on return, so push any membership
+	// change made on this screen into its cached rows first.
+	if (communityCurrentData) communityBrowseSyncItem(communityCurrentData);
+	if (communityReturnView === 'search') searchRestoreOnce = true;
 	showView(communityReturnView || 'feed');
 }
 
 async function loadCommunityView() {
 	if (!communityCurrentSlug) return;
 	const token = ++communityLoadToken;
-	document.getElementById('community-error').classList.add('hidden');
+	const errorEl = document.getElementById('community-error');
+	errorEl.classList.add('hidden');
 	document.getElementById('community-content').classList.add('hidden');
 	try {
 		const community = await communityApi.get(communityCurrentSlug);
 		if (token !== communityLoadToken) return;
-		if (!community) throw new Error('not found');
 		communityCurrentData = community;
 		renderCommunityHeader(community);
 		document.getElementById('community-content').classList.remove('hidden');
 		switchCommunityTab('posts');
 	} catch (e) {
 		if (token !== communityLoadToken) return;
-		document.getElementById('community-error').classList.remove('hidden');
+		const notFound = e.status === 404;
+		document.getElementById('community-error-title').textContent = notFound ? 'Community not found' : "Couldn't load this community";
+		document.getElementById('community-error-detail').textContent = notFound ? 'It may have been removed or the link is wrong.' : (e.message || 'Check your connection and try again.');
+		document.getElementById('community-error-retry').classList.toggle('hidden', notFound);
+		errorEl.classList.remove('hidden');
 	}
 }
 
@@ -425,24 +367,45 @@ function renderCommunityHeader(community) {
 		const handle = session.user.username || (session.user.email ? session.user.email.split('@')[0] : '');
 		document.getElementById('community-composer-avatar').src = session.user.profile_picture || `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(handle)}`;
 	}
-	document.getElementById('community-composer-input').value = '';
-	document.getElementById('community-composer-post-btn').disabled = true;
+	// Only members can post (server returns 403 otherwise), so the composer
+	// is shown to members and replaced by a hint for everyone else.
+	document.getElementById('community-composer').classList.toggle('hidden', !isMember);
+	document.getElementById('community-composer-locked').classList.toggle('hidden', isMember);
+	const input = document.getElementById('community-composer-input');
+	input.value = '';
+	input.style.height = '40px';
+	communityComposerAutoGrow(input);
 }
 
+let communityMembershipBusy = false;
+
 async function communityHandleActionBtn() {
-	if (!communityCurrentData) return;
-	const mode = document.getElementById('community-action-btn').dataset.mode;
+	if (!communityCurrentData || communityMembershipBusy) return;
+	const btn = document.getElementById('community-action-btn');
+	const mode = btn.dataset.mode;
 	if (mode === 'manage') {
 		showToast('Coming soon');
 		return;
 	}
 	const join = mode === 'join';
-	await communityApi.setMembership(communityCurrentSlug, join);
-	communityCurrentData.membership.is_member = join;
-	if (join && !communityCurrentData.membership.role) communityCurrentData.membership.role = 'member';
-	communityCurrentData.member_count += join ? 1 : -1;
-	renderCommunityHeader(communityCurrentData);
-	showToast(join ? `Joined b/${communityCurrentData.name}` : `Left b/${communityCurrentData.name}`);
+	if (!join && !confirm(`Leave b/${communityCurrentData.name}?`)) return;
+	const slug = communityCurrentSlug;
+	communityMembershipBusy = true;
+	btn.disabled = true;
+	try {
+		const community = await communityApi.setMembership(slug, join);
+		if (slug !== communityCurrentSlug) return; // user navigated away mid-request
+		communityCurrentData = community;
+		renderCommunityHeader(community);
+		showToast(join ? `Joined b/${community.name}` : `Left b/${community.name}`);
+		communityBrowseSyncItem(community);
+		refreshSideNavCommunities();
+	} catch (e) {
+		showToast(e.message || 'Something went wrong. Try again.');
+	} finally {
+		communityMembershipBusy = false;
+		btn.disabled = false;
+	}
 }
 
 function switchCommunityTab(tab) {
@@ -461,20 +424,34 @@ function switchCommunityTab(tab) {
 }
 
 async function loadCommunityPosts() {
+	const slug = communityCurrentSlug;
 	const list = document.getElementById('community-posts-list');
 	const loading = document.getElementById('community-posts-loading');
 	const empty = document.getElementById('community-posts-empty');
+	const errorEl = document.getElementById('community-posts-error');
 	loading.classList.remove('hidden');
 	empty.classList.add('hidden');
+	empty.classList.remove('flex');
+	errorEl.classList.add('hidden');
+	errorEl.classList.remove('flex');
 	list.innerHTML = '';
-	const posts = await communityApi.listPosts(communityCurrentSlug);
-	loading.classList.add('hidden');
-	if (!posts.length) {
-		empty.classList.remove('hidden');
-		empty.classList.add('flex');
-		return;
+	try {
+		const posts = await communityApi.listPosts(slug);
+		if (slug !== communityCurrentSlug) return;
+		loading.classList.add('hidden');
+		if (!posts.length) {
+			empty.classList.remove('hidden');
+			empty.classList.add('flex');
+			return;
+		}
+		list.innerHTML = posts.map(communityBuildPostRowHtml).join('');
+	} catch (e) {
+		if (slug !== communityCurrentSlug) return;
+		loading.classList.add('hidden');
+		document.getElementById('community-posts-error-detail').textContent = e.message || 'Check your connection and try again.';
+		errorEl.classList.remove('hidden');
+		errorEl.classList.add('flex');
 	}
-	list.innerHTML = posts.map(communityBuildPostRowHtml).join('');
 }
 
 function communityBuildPostRowHtml(post) {
@@ -484,53 +461,261 @@ function communityBuildPostRowHtml(post) {
 		<div class="flex-1 min-w-0">
 			<div class="flex items-center gap-2">
 				<span class="text-[14px] font-semibold text-gray-900 truncate">${escapeHtml(post.author)}</span>
-				<span class="text-[13px] text-gray-400 shrink-0">${escapeHtml(communityRelativeTime(post.created_at))}</span>
+				<span class="text-[13px] text-gray-400 shrink-0">${escapeHtml(communityPostTime(post.created_at))}</span>
 			</div>
 			<p class="text-[14px] text-gray-800 leading-relaxed mt-0.5 whitespace-pre-line">${escapeHtml(post.content)}</p>
 		</div>
 	</li>`;
 }
 
-function communityRelativeTime(iso) {
-	const diffMs = Date.now() - new Date(iso).getTime();
-	const mins = Math.floor(diffMs / 60000);
-	if (mins < 1) return 'now';
-	if (mins < 60) return `${mins}m`;
-	const hours = Math.floor(mins / 60);
-	if (hours < 24) return `${hours}h`;
-	return `${Math.floor(hours / 24)}d`;
+// Community timestamps are ISO-8601 UTC ("...T...Z"); feed.js's
+// formatPostTime expects SQLite's "YYYY-MM-DD HH:MM:SS", so convert.
+function communityPostTime(iso) {
+	if (!iso) return '';
+	return formatPostTime(String(iso).replace('T', ' ').replace(/Z$/, ''));
 }
 
 function communityComposerAutoGrow(el) {
 	el.style.height = '40px';
 	el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
-	document.getElementById('community-composer-post-btn').disabled = el.value.trim().length === 0;
+	const len = el.value.length;
+	const counter = document.getElementById('community-composer-count');
+	// Counter only appears once the user is within 200 chars of the cap.
+	const nearLimit = len >= COMMUNITY_POST_MAX_LEN - 200;
+	counter.classList.toggle('hidden', !nearLimit);
+	counter.classList.toggle('text-red-500', len >= COMMUNITY_POST_MAX_LEN);
+	counter.classList.toggle('text-gray-400', len < COMMUNITY_POST_MAX_LEN);
+	counter.textContent = `${len}/${COMMUNITY_POST_MAX_LEN}`;
+	document.getElementById('community-composer-post-btn').disabled = el.value.trim().length === 0 || communityPostBusy;
 }
 
+let communityPostBusy = false;
+
 async function submitCommunityPost() {
+	if (communityPostBusy) return;
 	const input = document.getElementById('community-composer-input');
 	const content = input.value.trim();
 	if (!content || !communityCurrentSlug) return;
+	const slug = communityCurrentSlug;
 	const btn = document.getElementById('community-composer-post-btn');
+	communityPostBusy = true;
 	btn.disabled = true;
 	try {
-		await communityApi.createPost(communityCurrentSlug, content);
+		await communityApi.createPost(slug, content);
+		if (slug !== communityCurrentSlug) return;
 		input.value = '';
-		input.style.height = '40px';
+		communityComposerAutoGrow(input);
 		loadCommunityPosts();
 	} catch (e) {
-		showToast('Could not post. Try again.');
-		btn.disabled = false;
+		showToast(e.message || 'Could not post. Try again.');
+	} finally {
+		communityPostBusy = false;
+		communityComposerAutoGrow(input);
 	}
 }
 
+// ---- Community browse / discovery ----
+// Directory backed by GET /api/communities. Newest first, keyset paginated
+// via an opaque next_cursor; `communityBrowseQuery` is the committed query
+// (debounced from the input). Private communities are excluded server-side.
+
+const COMMUNITY_BROWSE_PAGE = 20;
+let communityBrowseQuery = '';
+let communityBrowseItems = [];
+let communityBrowseCursor = null;
+let communityBrowseToken = 0;
+let communityBrowseLoading = false;
+let communityBrowseTimer = null;
+let communityBrowseJoining = new Set();
+
+function openCommunityBrowseView() {
+	communityBrowseQuery = '';
+	communityBrowseItems = [];
+	communityBrowseCursor = null;
+	document.getElementById('community-browse-input').value = '';
+	showView('community-browse');
+	communityBrowseLoad(true);
+}
+
+function closeCommunityBrowseView() {
+	showView('feed');
+}
+
+function communityBrowseOnInput(value) {
+	clearTimeout(communityBrowseTimer);
+	communityBrowseTimer = setTimeout(() => {
+		const q = value.trim();
+		if (q === communityBrowseQuery) return;
+		communityBrowseQuery = q;
+		communityBrowseLoad(true);
+	}, 300);
+}
+
+function communityBrowseSetState(state, detail) {
+	const show = (id, on, flex) => {
+		const el = document.getElementById(id);
+		el.classList.toggle('hidden', !on);
+		if (flex) el.classList.toggle('flex', on);
+	};
+	show('community-browse-loading', state === 'loading');
+	show('community-browse-empty', state === 'empty', true);
+	show('community-browse-error', state === 'error', true);
+	if (state === 'error') document.getElementById('community-browse-error-detail').textContent = detail || 'Check your connection and try again.';
+}
+
+function communityRowActionHtml(c) {
+	const m = c.membership || {};
+	if (m.role === 'creator') return '<span class="shrink-0 text-[12px] font-semibold text-gray-400 px-2">Yours</span>';
+	if (m.is_member) return '<span class="shrink-0 text-[13px] font-semibold text-gray-500 px-2 flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"></path></svg>Joined</span>';
+	const busy = communityBrowseJoining.has(c.slug);
+	return `<button type="button" class="community-browse-join shrink-0 h-8 px-4 rounded-full bg-brand-red text-white text-[13px] font-semibold disabled:opacity-40 active:scale-[0.98] transition-transform duration-100" data-slug="${escapeHtml(c.slug)}" ${busy ? 'disabled' : ''}>Join</button>`;
+}
+
+function communityRowHtml(c) {
+	const count = `${communityFormatCount(c.member_count || 0)} member${c.member_count === 1 ? '' : 's'}`;
+	return `<li class="flex items-center gap-3 px-4 py-3">
+		<button type="button" class="community-row-open flex-1 min-w-0 flex items-center gap-3 text-left" data-slug="${escapeHtml(c.slug)}">
+			<span class="w-11 h-11 rounded-xl ${escapeHtml(c.icon_bg || 'bg-gray-100')} flex items-center justify-center text-xl shrink-0">${escapeHtml(c.icon_emoji || '👥')}</span>
+			<span class="flex-1 min-w-0">
+				<span class="block text-[15px] font-bold text-gray-900 truncate">b/${escapeHtml(c.name)}</span>
+				<span class="block text-[13px] text-gray-500 truncate">${count}${c.description ? ' · ' + escapeHtml(c.description) : ''}</span>
+			</span>
+		</button>
+		${communityRowActionHtml(c)}
+	</li>`;
+}
+
+function communityBrowseRender() {
+	document.getElementById('community-browse-list').innerHTML = communityBrowseItems.map(communityRowHtml).join('');
+	document.getElementById('community-browse-more').classList.toggle('hidden', !communityBrowseCursor);
+}
+
+// reset=true: fresh first page for the current query. false: next page.
+async function communityBrowseLoad(reset) {
+	if (communityBrowseLoading && !reset) return;
+	if (!reset && !communityBrowseCursor) return;
+	const token = ++communityBrowseToken;
+	communityBrowseLoading = true;
+	const more = document.getElementById('community-browse-more');
+	if (reset) {
+		communityBrowseItems = [];
+		communityBrowseCursor = null;
+		document.getElementById('community-browse-list').innerHTML = '';
+		more.classList.add('hidden');
+		communityBrowseSetState('loading');
+	} else {
+		more.disabled = true;
+		more.textContent = 'Loading…';
+	}
+	try {
+		const page = await communityApi.browse(communityBrowseQuery, reset ? null : communityBrowseCursor, COMMUNITY_BROWSE_PAGE);
+		if (token !== communityBrowseToken) return;
+		const seen = new Set(communityBrowseItems.map(c => c.slug));
+		communityBrowseItems = communityBrowseItems.concat(page.communities.filter(c => !seen.has(c.slug)));
+		communityBrowseCursor = page.next_cursor;
+		if (!communityBrowseItems.length) {
+			const q = communityBrowseQuery;
+			document.getElementById('community-browse-empty-title').textContent = q ? 'No matching communities' : 'No communities yet';
+			document.getElementById('community-browse-empty-detail').textContent = q ? `Nothing found for "${q}".` : 'Be the first to start one.';
+			communityBrowseSetState('empty');
+		} else {
+			communityBrowseSetState('list');
+		}
+		communityBrowseRender();
+	} catch (e) {
+		if (token !== communityBrowseToken) return;
+		if (reset || !communityBrowseItems.length) {
+			communityBrowseSetState('error', e.message);
+		} else {
+			showToast(e.message || "Couldn't load more communities.");
+			communityBrowseRender();
+		}
+	} finally {
+		if (token === communityBrowseToken) {
+			communityBrowseLoading = false;
+			more.disabled = false;
+			more.textContent = 'Show more';
+		}
+	}
+}
+
+// Replace a cached row with fresh server data (e.g. after join/leave elsewhere).
+function communityBrowseSyncItem(community) {
+	const i = communityBrowseItems.findIndex(c => c.slug === community.slug);
+	if (i === -1) return;
+	communityBrowseItems[i] = community;
+	communityBrowseRender();
+}
+
+async function communityBrowseJoin(slug) {
+	if (communityBrowseJoining.has(slug)) return;
+	communityBrowseJoining.add(slug);
+	communityBrowseRender();
+	try {
+		const community = await communityApi.setMembership(slug, true);
+		communityBrowseJoining.delete(slug);
+		communityBrowseSyncItem(community);
+		showToast(`Joined b/${community.name}`);
+		refreshSideNavCommunities();
+	} catch (e) {
+		communityBrowseJoining.delete(slug);
+		communityBrowseRender();
+		showToast(e.message || 'Could not join community.');
+	}
+}
+
+document.getElementById('community-browse-list').addEventListener('click', function(e) {
+	const joinBtn = e.target.closest('.community-browse-join');
+	if (joinBtn) { communityBrowseJoin(joinBtn.dataset.slug); return; }
+	const row = e.target.closest('.community-row-open');
+	if (row) openCommunityView(row.dataset.slug);
+});
+
 // ---- Side nav wiring ----
-// Replaces the "Coming soon" stubs on the side nav's Communities section
-// (templates/partials/side_nav.html) with real navigation. The row markup
-// itself stays static for now (three seeded mock communities); only the
-// click targets change here so this stays a minimal, isolated diff.
+// The side nav's "Your Communities" rows come from GET /api/communities/mine
+// (templates/partials/side_nav.html holds only the container). Rows are
+// re-fetched whenever the drawer opens and after create/join/leave.
+
+const sideNavFavoriteSlugs = new Set(); // in-memory only, survives re-renders
+let sideNavCommunitiesToken = 0;
 
 function communitySideNavOpen(slug) {
 	closeSideNav();
 	openCommunityView(slug);
+}
+
+function sideNavCommunityRowHtml(c) {
+	const slug = escapeHtml(c.slug);
+	const label = `b/${escapeHtml(c.name)}`;
+	const fav = sideNavFavoriteSlugs.has(c.slug);
+	return `<div class="w-full flex items-center gap-1 pl-3 pr-2 py-1 rounded-xl">
+		<button type="button" class="flex-1 min-w-0 flex items-center gap-3 py-2 text-left" data-community-slug="${slug}" onclick="communitySideNavOpen(this.dataset.communitySlug)">
+			<span class="w-7 h-7 rounded-full ${escapeHtml(c.icon_bg || 'bg-gray-100')} flex items-center justify-center text-sm shrink-0">${escapeHtml(c.icon_emoji || '👥')}</span>
+			<span class="flex-1 min-w-0 text-[15px] font-medium text-gray-700 truncate">${label}</span>
+		</button>
+		<button type="button" class="side-nav-star-btn shrink-0 p-2 ${fav ? 'text-yellow-400' : 'text-gray-300'}" data-community-slug="${slug}" onclick="toggleSideNavStar(this)" aria-pressed="${fav}" aria-label="Favorite ${label}">
+			<svg class="w-4 h-4" fill="${fav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+				<path d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.98 21.539a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.562.562 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" stroke-linecap="round" stroke-linejoin="round"></path>
+			</svg>
+		</button>
+	</div>`;
+}
+
+async function refreshSideNavCommunities() {
+	const container = document.getElementById('side-nav-communities-rows');
+	if (!container) return;
+	const token = ++sideNavCommunitiesToken;
+	const note = (text) => `<p class="px-3 py-2 text-[13px] text-gray-400">${escapeHtml(text)}</p>`;
+	try {
+		const communities = await communityApi.listMine();
+		if (token !== sideNavCommunitiesToken) return;
+		container.innerHTML = communities.length
+			? communities.map(sideNavCommunityRowHtml).join('')
+			: note("You haven't joined any communities");
+	} catch (e) {
+		if (token !== sideNavCommunitiesToken) return;
+		container.innerHTML = e.status === 401
+			? note('Log in to see your communities')
+			: note("Couldn't load your communities");
+	}
 }

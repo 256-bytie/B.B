@@ -23,7 +23,15 @@ let searchTrendingCache = [];
 // being a purely decorative placeholder.
 const SEARCH_POPULAR_TERMS = ['Past questions', 'Study group', 'Assignments', 'GPA calculator', 'Announcements'];
 
+// Set by closeCommunityView() so returning to Search from a community the
+// user opened out of the results keeps the query and results on screen.
+let searchRestoreOnce = false;
+
 function initSearchView() {
+	if (searchRestoreOnce) {
+		searchRestoreOnce = false;
+		return;
+	}
 	const activeEl = document.querySelector('.view-section.active');
 	const activeViewName = activeEl ? activeEl.id.replace('-view', '') : 'feed';
 	if (activeViewName !== 'search') {
@@ -217,16 +225,50 @@ async function submitSearch(rawQuery, options) {
 
 async function runSearch() {
 	searchPostsNextCursor = null;
-	const params = new URLSearchParams({ q: searchLastQuery, type: searchCurrentTab });
+	const query = searchLastQuery;
+	const tab = searchCurrentTab;
 	try {
-		const res = await fetch(`/api/search?${params.toString()}`);
-		if (!res.ok) throw new Error('Search failed');
-		const data = await res.json();
+		let data;
+		if (tab === 'communities') {
+			// Communities are served by /api/communities, not /api/search
+			// (which rejects unknown types), so this facet bypasses it.
+			const page = await communityApi.browse(query, null, 20);
+			data = { query: query, communities: page.communities };
+		} else {
+			const params = new URLSearchParams({ q: query, type: tab });
+			const [res, communities] = await Promise.all([
+				fetch(`/api/search?${params.toString()}`),
+				// Best-effort extra section on "All": a failure here must not
+				// break the rest of the results.
+				tab === 'all'
+					? communityApi.browse(query, null, 3).then(function(p) { return p.communities; }).catch(function() { return []; })
+					: Promise.resolve(undefined)
+			]);
+			if (!res.ok) throw new Error('Search failed');
+			data = await res.json();
+			if (communities !== undefined) data.communities = communities;
+		}
+		// Ignore a response for a tab/query the user has already left.
+		if (query !== searchLastQuery || tab !== searchCurrentTab) return;
 		renderSearchResults(data);
 	} catch (e) {
+		if (query !== searchLastQuery || tab !== searchCurrentTab) return;
 		document.getElementById('search-no-results-text').textContent = 'Something went wrong. Please try again.';
 		showSearchSection('noResults');
 	}
+}
+
+function buildSearchCommunityRowHtml(c) {
+	const count = `${communityFormatCount(c.member_count || 0)} member${c.member_count === 1 ? '' : 's'}`;
+	return `
+<li><button type="button" class="search-community-row flex items-center gap-3 w-full py-2.5 text-left" data-slug="${escapeHtml(c.slug)}">
+<span class="w-11 h-11 rounded-xl ${escapeHtml(c.icon_bg || 'bg-gray-100')} flex items-center justify-center text-xl shrink-0">${escapeHtml(c.icon_emoji || '👥')}</span>
+<div class="flex-1 min-w-0">
+<p class="text-[14.5px] font-bold text-gray-900 truncate">b/${escapeHtml(c.name)}</p>
+<p class="text-[13px] text-gray-500 truncate">${count}${c.description ? ' · ' + escapeHtml(c.description) : ''}</p>
+</div>
+<i class="fa-solid fa-chevron-right text-gray-300 text-[12px] shrink-0"></i>
+</button></li>`;
 }
 
 function buildSearchPersonRowHtml(user) {
@@ -262,8 +304,9 @@ function renderSearchResults(data) {
 	const hasPeople = Array.isArray(data.people) && data.people.length > 0;
 	const hasTopics = Array.isArray(data.topics) && data.topics.length > 0;
 	const hasPosts = Array.isArray(data.posts) && data.posts.length > 0;
+	const hasCommunities = Array.isArray(data.communities) && data.communities.length > 0;
 
-	if (!hasPeople && !hasTopics && !hasPosts) {
+	if (!hasPeople && !hasTopics && !hasPosts && !hasCommunities) {
 		document.getElementById('search-no-results-text').textContent =
 			`We couldn't find anything for "${data.query}". Try a different keyword or check your spelling.`;
 		showSearchSection('noResults');
@@ -288,6 +331,15 @@ function renderSearchResults(data) {
 		topicsSection.querySelector('.search-see-all-btn').classList.toggle('hidden', !(searchCurrentTab === 'all' && data.topics.length >= 4));
 	} else {
 		topicsSection.classList.add('hidden');
+	}
+
+	const communitiesSection = document.getElementById('search-results-communities');
+	if (data.communities !== undefined) {
+		communitiesSection.classList.toggle('hidden', !hasCommunities);
+		document.getElementById('search-communities-list').innerHTML = hasCommunities ? data.communities.map(buildSearchCommunityRowHtml).join('') : '';
+		communitiesSection.querySelector('.search-see-all-btn').classList.toggle('hidden', !(searchCurrentTab === 'all' && data.communities.length >= 3));
+	} else {
+		communitiesSection.classList.add('hidden');
 	}
 
 	const postsHeading = document.getElementById('search-posts-heading');
@@ -465,6 +517,12 @@ async function loadMoreSearchPosts() {
 					handle: personRow.dataset.userHandle,
 					avatar: personRow.dataset.userAvatar || null
 				});
+				return;
+			}
+
+			const communityRow = e.target.closest('.search-community-row');
+			if (communityRow) {
+				openCommunityView(communityRow.dataset.slug);
 				return;
 			}
 

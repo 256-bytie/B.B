@@ -164,6 +164,7 @@ function goToSideNavState(state) {
 
 function openSideNav() {
 	goToSideNavState('full');
+	if (typeof refreshSideNavCommunities === 'function') refreshSideNavCommunities();
 }
 
 function closeSideNav() {
@@ -269,9 +270,8 @@ document.addEventListener('touchcancel', endSideNavDrag, { passive: true });
 document.getElementById('side-nav-backdrop').addEventListener('click', closeSideNav);
 
 // ---- Communities section: collapse chevron + favorite star ----
-// Both are local, in-memory UI state only - there's no community backend
-// yet (see the stub rows in side_nav.html), so nothing here persists
-// across a reload or reopen of the drawer.
+// Both are local, in-memory UI state only: nothing here persists across a
+// page reload. The rows themselves are rendered by community.js.
 function toggleSideNavCommunities() {
 	const list = document.getElementById('side-nav-communities-list');
 	const toggleBtn = document.getElementById('side-nav-communities-toggle');
@@ -291,4 +291,8 @@ function toggleSideNavStar(btn) {
 	if (svg) svg.setAttribute('fill', nowActive ? 'currentColor' : 'none');
 	btn.classList.toggle('text-yellow-400', nowActive);
 	btn.classList.toggle('text-gray-300', !nowActive);
+	const slug = btn.dataset.communitySlug;
+	if (slug && typeof sideNavFavoriteSlugs !== 'undefined') {
+		if (nowActive) sideNavFavoriteSlugs.add(slug); else sideNavFavoriteSlugs.delete(slug);
+	}
 }

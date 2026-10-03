@@ -23,7 +23,8 @@
 			<button type="button" data-tab="all" class="search-tab-btn text-red-500 font-semibold px-3 py-2.5 border-b-2 border-red-500 mr-2 text-sm shrink-0">All</button>
 			<button type="button" data-tab="people" class="search-tab-btn text-gray-500 font-medium px-3 py-2.5 border-b-2 border-transparent hover:text-gray-700 mr-2 text-sm shrink-0">People</button>
 			<button type="button" data-tab="posts" class="search-tab-btn text-gray-500 font-medium px-3 py-2.5 border-b-2 border-transparent hover:text-gray-700 mr-2 text-sm shrink-0">Posts</button>
-			<button type="button" data-tab="topics" class="search-tab-btn text-gray-500 font-medium px-3 py-2.5 border-b-2 border-transparent hover:text-gray-700 text-sm shrink-0">Topics</button>
+			<button type="button" data-tab="topics" class="search-tab-btn text-gray-500 font-medium px-3 py-2.5 border-b-2 border-transparent hover:text-gray-700 mr-2 text-sm shrink-0">Topics</button>
+			<button type="button" data-tab="communities" class="search-tab-btn text-gray-500 font-medium px-3 py-2.5 border-b-2 border-transparent hover:text-gray-700 text-sm shrink-0">Communities</button>
 		</nav>
 		<!-- END: ResultTabs -->
 	</header>
@@ -81,6 +82,13 @@
 					<button type="button" class="search-see-all-btn hidden text-[13px] font-medium text-red-600" data-tab-target="topics">See all</button>
 				</div>
 				<div id="search-topics-list" class="space-y-1"></div>
+			</section>
+			<section id="search-results-communities" class="hidden px-4 pt-4 pb-2 border-b border-gray-100">
+				<div class="flex items-center justify-between mb-2">
+					<h3 class="text-[13px] font-bold text-gray-500 uppercase tracking-wide">Communities</h3>
+					<button type="button" class="search-see-all-btn hidden text-[13px] font-medium text-red-600" data-tab-target="communities">See all</button>
+				</div>
+				<ul id="search-communities-list" class="divide-y divide-gray-50"></ul>
 			</section>
 			<section id="search-results-posts" class="pt-1">
 				<h3 id="search-posts-heading" class="hidden text-[13px] font-bold text-gray-500 uppercase tracking-wide px-4 pt-3 pb-2">Posts</h3>

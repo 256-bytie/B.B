@@ -1,0 +1,52 @@
+<!-- BEGIN: Community Browse -->
+<!-- Directory + search for communities, backed by GET /api/communities
+     (?q=&cursor=&limit=). Logic lives in community.js (communityBrowse*). -->
+<div id="community-browse-view" class="view-section bg-white min-h-screen flex justify-center">
+<main class="w-full max-w-[640px] bg-white min-h-screen flex flex-col relative pb-10">
+
+	<header class="bg-white sticky top-0 z-10 border-b border-gray-100 shrink-0">
+		<div class="flex items-center gap-2 px-2 py-2.5">
+			<button type="button" aria-label="Back" onclick="closeCommunityBrowseView()" class="p-2 text-gray-800 hover:opacity-80 transition-opacity active:scale-95 duration-100 shrink-0">
+				<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="m15 18-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+			</button>
+			<div class="relative flex-1">
+				<span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+					<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+						<circle cx="11" cy="11" r="7"></circle>
+						<path d="m21 21-4.3-4.3" stroke-linecap="round"></path>
+					</svg>
+				</span>
+				<input id="community-browse-input" type="text" inputmode="search" maxlength="50" autocomplete="off" placeholder="Search communities" oninput="communityBrowseOnInput(this.value)" class="w-full pl-10 pr-4 py-2.5 rounded-full border border-gray-200 bg-gray-50 text-[15px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-red/20">
+			</div>
+		</div>
+	</header>
+
+	<div id="community-browse-loading" class="hidden py-14 flex items-center justify-center text-gray-400">
+		<svg class="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+			<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+			<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+		</svg>
+	</div>
+
+	<div id="community-browse-empty" class="hidden flex-col items-center text-center px-8 py-16">
+		<p id="community-browse-empty-title" class="text-[15px] font-semibold text-gray-900">No communities yet</p>
+		<p id="community-browse-empty-detail" class="text-[13px] text-gray-500 mt-1">Be the first to start one.</p>
+		<button type="button" id="community-browse-empty-create" onclick="openCommunityCreateView()" class="h-10 px-5 rounded-full bg-brand-red text-white text-[14px] font-semibold mt-4 active:scale-[0.98] transition-transform duration-100">Create a community</button>
+	</div>
+
+	<div id="community-browse-error" class="hidden flex-col items-center text-center px-8 py-16">
+		<p class="text-[15px] font-semibold text-gray-900">Couldn't load communities</p>
+		<p id="community-browse-error-detail" class="text-[13px] text-gray-500 mt-1">Check your connection and try again.</p>
+		<button type="button" onclick="communityBrowseLoad(true)" class="h-10 px-5 rounded-full bg-brand-red text-white text-[14px] font-semibold mt-4 active:scale-[0.98] transition-transform duration-100">Try again</button>
+	</div>
+
+	<ul id="community-browse-list" class="divide-y divide-gray-100"></ul>
+
+	<div id="community-browse-footer" class="py-6 flex justify-center">
+		<button type="button" id="community-browse-more" onclick="communityBrowseLoad(false)" class="hidden h-10 px-5 rounded-full border border-gray-200 text-[14px] font-semibold text-gray-800 active:scale-[0.98] transition-transform duration-100">Show more</button>
+	</div>
+</main>
+</div>
+<!-- END: Community Browse -->
