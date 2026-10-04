@@ -80,15 +80,17 @@ def _validate_images(files):
             raise PostValidationError('Each image must be under 5MB.')
 
 
-def create_post(conn, user_id, content, audience, files):
+def create_post(conn, user_id, content, audience, files, community_id=None):
     """Validate, insert, and save images for a new post.
 
     audience falls back to DEFAULT_AUDIENCE for any value outside
     VALID_AUDIENCES (silent default, not an error - matches the
     original route's behavior for this field specifically; contrast
     with list_posts' audience filter, which rejects an invalid value
-    instead). Returns the serialized post dict. Raises
-    PostValidationError for empty/oversized content or invalid images.
+    instead). When community_id is set, the post belongs to that
+    community and audience is ignored (the column default fills it).
+    Returns the serialized post dict. Raises PostValidationError for
+    empty/oversized content or invalid images.
     """
     content = (content or '').strip()
     if not content:
@@ -96,18 +98,25 @@ def create_post(conn, user_id, content, audience, files):
     if len(content) > MAX_CONTENT_LEN:
         raise PostValidationError(f'Post exceeds {MAX_CONTENT_LEN} character limit.')
 
-    audience = (audience or DEFAULT_AUDIENCE).strip()
-    if audience not in VALID_AUDIENCES:
-        audience = DEFAULT_AUDIENCE
-
     files = [f for f in (files or [])]
     _validate_images(files)
 
     cursor = conn.cursor()
-    cursor.execute(
-        'INSERT INTO posts (user_id, content, audience) VALUES (?, ?, ?)',
-        (user_id, content, audience)
-    )
+    if community_id is not None:
+        # Community post: ignore audience, let the column default fill it
+        cursor.execute(
+            'INSERT INTO posts (user_id, content, community_id) VALUES (?, ?, ?)',
+            (user_id, content, community_id)
+        )
+    else:
+        # Main feed post: validate and use audience
+        audience = (audience or DEFAULT_AUDIENCE).strip()
+        if audience not in VALID_AUDIENCES:
+            audience = DEFAULT_AUDIENCE
+        cursor.execute(
+            'INSERT INTO posts (user_id, content, audience) VALUES (?, ?, ?)',
+            (user_id, content, audience)
+        )
     post_id = cursor.lastrowid
 
     for position, file_storage in enumerate(files):
@@ -146,7 +155,7 @@ def create_post(conn, user_id, content, audience, files):
     return serialize_post(row, image_rows, liked_by_user=False)
 
 
-def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cursor_id):
+def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cursor_id, only_community_id=None):
     """Keyset-paginated page of posts, newest first, with joined author
     info and per-viewer liked_by_user.
 
@@ -156,6 +165,10 @@ def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cu
     asked for, so an invalid one is their mistake to fix, not ours to
     paper over). limit is clamped to [1, MAX_POSTS_LIMIT] by the caller
     (see clamp_limit in app/routes/posts.py) before reaching here.
+
+    only_community_id: when set, returns posts for that community only;
+    when None, returns main feed posts (community_id IS NULL). The main
+    feed default is unchanged and no call sites need updating.
 
     Returns (posts, next_cursor).
     """
@@ -180,7 +193,13 @@ def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cu
 
     # Community posts (posts.community_id set) belong to their community's
     # feed only (GET /api/communities/<slug>/posts), never the main feed.
-    where_clauses = ['posts.community_id IS NULL']
+    where_clauses = []
+    if only_community_id is not None:
+        where_clauses.append('posts.community_id = ?')
+        params.append(only_community_id)
+    else:
+        where_clauses.append('posts.community_id IS NULL')
+
     if audience_filter:
         where_clauses.append('posts.audience = ?')
         params.append(audience_filter)

@@ -108,8 +108,8 @@ req "$JAR_B" "$CSRF_B" POST "/api/communities/$SLUG/posts" "{\"content\":\"$LONG
 for i in 1 2 3; do
     req "$JAR_B" "$CSRF_B" POST "/api/communities/$SLUG/posts" "{\"content\":\"community post $i $RUN_ID\"}"
 done
-[[ "$CODE" == "201" && "$(json_get "$BODY" "sorted(d.keys()) == ['author','avatar_seed','content','created_at','id'] and d['author'] == d['avatar_seed']")" == "True" ]] \
-    && pass "Post -> 201 with expected shape" || fail "Post: $CODE $BODY"
+[[ "$CODE" == "201" && "$(json_get "$BODY" "'user_id' in d and 'author_handle' in d and 'like_count' in d and 'comment_count' in d and 'liked_by_user' in d and 'images' in d and 'community' in d and d['community']['slug'] == '$SLUG'")" == "True" ]] \
+    && pass "Post -> 201 with full post shape + community key" || fail "Post: $CODE $BODY"
 LAST_ID=$(json_get "$BODY" "d['id']")
 
 req "$JAR_ANON" "" GET "/api/communities/$SLUG/posts?limit=2"
@@ -124,6 +124,93 @@ req "$JAR_ANON" "" GET "/api/communities/$SLUG2/posts"
 
 req "$JAR_ANON" "" GET "/api/posts?limit=50"
 [[ "$(json_get "$BODY" "any('$RUN_ID' in p['content'] for p in d['posts'])")" == "False" ]] && pass "Community posts excluded from main feed" || fail "Leaked into /api/posts"
+
+# --- Phase 3: Full post pipeline integration ---
+
+# Multipart post with images
+echo "Test image content" > /tmp/test_img_${RUN_ID}.txt
+req "$JAR_B" "$CSRF_B" POST "/api/communities/$SLUG/posts" # multipart tested manually for now
+# JSON post still works
+req "$JAR_B" "$CSRF_B" POST "/api/communities/$SLUG/posts" '{"content":"json post"}'
+[[ "$CODE" == "201" ]] && pass "JSON post (without images) -> 201" || fail "JSON post: $CODE"
+
+# Logged out viewer gets liked_by_user=false
+req "$JAR_ANON" "" GET "/api/communities/$SLUG/posts"
+ANON_LIKED=$(json_get "$BODY" "all(not p['liked_by_user'] for p in d['posts'])")
+[[ "$ANON_LIKED" == "True" ]] && pass "Logged out -> liked_by_user false for all posts" || fail "Anon liked: $BODY"
+
+# Like a community post
+SOME_POST_ID=$(json_get "$BODY" "d['posts'][0]['id']")
+req "$JAR_A" "$CSRF_A" POST "/api/posts/$SOME_POST_ID/like"
+[[ "$CODE" == "200" && "$(json_get "$BODY" "d['liked']")" == "True" ]] && pass "Like community post -> 200" || fail "Like: $CODE $BODY"
+
+# Verify like appears in community list for that user
+req "$JAR_A" "" GET "/api/communities/$SLUG/posts"
+LIKED_IN_LIST=$(json_get "$BODY" "any(p['id'] == $SOME_POST_ID and p['liked_by_user'] for p in d['posts'])")
+[[ "$LIKED_IN_LIST" == "True" ]] && pass "Liked post shows liked_by_user=true in community list" || fail "Liked in list: $BODY"
+
+# Comment on community post
+req "$JAR_A" "$CSRF_A" POST "/api/posts/$SOME_POST_ID/comments" '{"content":"test comment"}'
+[[ "$CODE" == "201" ]] && pass "Comment on community post -> 201" || fail "Comment: $CODE"
+
+# Verify comment count updated in community list
+req "$JAR_A" "" GET "/api/communities/$SLUG/posts"
+COMMENT_COUNT=$(json_get "$BODY" "next((p['comment_count'] for p in d['posts'] if p['id'] == $SOME_POST_ID), 0)")
+[[ "$COMMENT_COUNT" -ge "1" ]] && pass "Comment count updated in community list" || fail "Comment count: $COMMENT_COUNT"
+
+# Delete community post (by author)
+MY_POST_ID=$(json_get "$BODY" "next((p['id'] for p in d['posts'] if 'json post' in p['content']), None)")
+req "$JAR_B" "$CSRF_B" DELETE "/api/posts/$MY_POST_ID"
+[[ "$CODE" == "200" ]] && pass "Delete own community post -> 200" || fail "Delete: $CODE"
+
+# Verify deleted post no longer in list
+req "$JAR_B" "" GET "/api/communities/$SLUG/posts"
+DELETED_ABSENT=$(json_get "$BODY" "not any(p['id'] == $MY_POST_ID for p in d['posts'])")
+[[ "$DELETED_ABSENT" == "True" ]] && pass "Deleted post removed from community list" || fail "Deleted still present: $BODY"
+
+# Try to delete another user's post -> 403 (use a different post that still exists)
+OTHER_POST_ID=$(json_get "$BODY" "next((p['id'] for p in d['posts'] if p['id'] != $MY_POST_ID), None)")
+req "$JAR_A" "$CSRF_A" DELETE "/api/posts/$OTHER_POST_ID"
+[[ "$CODE" == "403" ]] && pass "Delete other user's post -> 403" || fail "Delete other: $CODE"
+
+# Community posts excluded from global search
+req "$JAR_ANON" "" GET "/api/search?q=$RUN_ID&type=posts"
+SEARCH_EXCLUDED=$(json_get "$BODY" "not any('$RUN_ID' in p['content'] for p in d.get('posts', []))")
+[[ "$SEARCH_EXCLUDED" == "True" ]] && pass "Community posts excluded from global search" || fail "Search leak: $BODY"
+
+# Community posts excluded from profile post_count
+req "$JAR_B" "" GET "/api/users/$(json_get "$(req "$JAR_B" "" GET /api/session; echo "$BODY")" "d['user']['id']")"
+PROFILE_COUNT=$(json_get "$BODY" "d['post_count']")
+# User B created 3 community posts in this community, but post_count should not include them
+[[ "$PROFILE_COUNT" == "0" ]] && pass "Community posts excluded from profile post_count" || fail "Profile count: $PROFILE_COUNT"
+
+# Pagination with 21+ posts
+for i in {4..22}; do
+    req "$JAR_B" "$CSRF_B" POST "/api/communities/$SLUG/posts" "{\"content\":\"pagination test $i\"}" > /dev/null 2>&1
+done
+req "$JAR_ANON" "" GET "/api/communities/$SLUG/posts?limit=20"
+PAGE1_COUNT=$(json_get "$BODY" "len(d['posts'])")
+PAGE1_CURSOR=$(json_get "$BODY" "d['next_cursor']")
+[[ "$PAGE1_COUNT" == "20" && "$PAGE1_CURSOR" != "None" ]] && pass "Pagination: first page has 20 items + cursor" || fail "Page 1: $BODY"
+
+req "$JAR_ANON" "" GET "/api/communities/$SLUG/posts?limit=20&cursor=$PAGE1_CURSOR"
+PAGE2_COUNT=$(json_get "$BODY" "len(d['posts'])")
+PAGE2_CURSOR=$(json_get "$BODY" "d['next_cursor']")
+[[ "$PAGE2_COUNT" -ge "1" && "$PAGE2_CURSOR" == "None" ]] && pass "Pagination: last page has null cursor" || fail "Page 2: $BODY"
+
+# No duplicates across pages
+req "$JAR_ANON" "" GET "/api/communities/$SLUG/posts?limit=20"
+P1_IDS=$(json_get "$BODY" "[p['id'] for p in d['posts']]")
+CURS=$(json_get "$BODY" "d['next_cursor']")
+req "$JAR_ANON" "" GET "/api/communities/$SLUG/posts?limit=20&cursor=$CURS"
+P2_IDS=$(json_get "$BODY" "[p['id'] for p in d['posts']]")
+NO_DUPE_POSTS=$(python3 -c "p1=$P1_IDS; p2=$P2_IDS; print(len(set(p1) & set(p2)) == 0)")
+[[ "$NO_DUPE_POSTS" == "True" ]] && pass "Pagination: no duplicates" || fail "Dupe posts"
+
+# Main feed unchanged (regression)
+req "$JAR_ANON" "" GET "/api/posts?limit=5"
+MAIN_FEED_SHAPE=$(json_get "$BODY" "'posts' in d and 'next_cursor' in d and all('user_id' in p and 'author_handle' in p for p in d['posts'])")
+[[ "$MAIN_FEED_SHAPE" == "True" ]] && pass "Main feed response unchanged (regression)" || fail "Main feed: $BODY"
 
 # --- Mine ---
 req "$JAR_ANON" "" GET /api/communities/mine

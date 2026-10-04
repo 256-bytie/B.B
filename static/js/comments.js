@@ -21,11 +21,12 @@ function isCurrentUserPostOwner(authorId) {
 // delegated per-container rather than globally, so any view that renders
 // post cards built with buildPostCardHtml needs its container id listed
 // here. Currently: the main feed, the Profile screen's Posts tab,
-// another user's profile Posts tab (user-profile-posts-container), and
-// the Posts facet of global search (search-posts-container) — so a post
-// found via search gets real like/comment/menu/profile-nav behavior
-// instead of a read-only preview.
-const postCardContainerIds = ['feed-posts-container', 'profile-posts-container', 'user-profile-posts-container', 'search-posts-container'];
+// another user's profile Posts tab (user-profile-posts-container), the
+// Posts facet of global search (search-posts-container), and the
+// community posts list (community-posts-list) — so a post found via
+// search or in a community gets real like/comment/menu/profile-nav
+// behavior instead of a read-only preview.
+const postCardContainerIds = ['feed-posts-container', 'profile-posts-container', 'user-profile-posts-container', 'search-posts-container', 'community-posts-list'];
 
 // Delegated click listener for "See more" / "See less" toggling. The
 // feed only ever renders a truncated preview for long posts (see

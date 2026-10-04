@@ -131,6 +131,7 @@ def _search_posts(cursor, q, current_user_id, limit, cursor_id):
                        AND likes.target_id = posts.id
                        AND likes.user_id = ?
         WHERE posts.content LIKE ?
+          AND posts.community_id IS NULL
     '''
     params = [current_user_id, like]
     if cursor_id is not None:
@@ -172,7 +173,7 @@ def _hashtag_counts(cursor):
     posts.content directly - filtered to rows that contain '#' first so
     the regex only runs over candidate rows, not the whole table.
     """
-    cursor.execute("SELECT content FROM posts WHERE content LIKE '%#%'")
+    cursor.execute("SELECT content FROM posts WHERE content LIKE '%#%' AND community_id IS NULL")
     counts = {}
     for (content,) in cursor.fetchall():
         for tag in HASHTAG_RE.findall(content):

@@ -231,25 +231,3 @@ def serialize_community(row, icon_bg, viewer_role):
             'role': viewer_role,
         },
     }
-
-
-def serialize_community_post(row):
-    """Community feed row. `author`/`avatar_seed` are the handle (username,
-    falling back to the email local-part like serialize_post); `avatar_url`
-    is only present when the author has uploaded a real profile picture.
-
-    Args:
-        row: tuple (post_id, content, created_at, username, email, profile_picture)
-    """
-    post_id, content, created_at, username, email, profile_picture = row
-    handle = username or email.split('@')[0]
-    result = {
-        'id': post_id,
-        'author': handle,
-        'avatar_seed': handle,
-        'content': content,
-        'created_at': _iso_utc(created_at),
-    }
-    if profile_picture:
-        result['avatar_url'] = profile_picture
-    return result

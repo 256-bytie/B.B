@@ -184,11 +184,30 @@ one batched `IN (...)` query against `post_images`, not N+1.
 
 - Schema lives in `migrations/003_communities.sql` (not `init_db()`):
   `communities`, `community_members` (role `creator`/`moderator`/`member`),
-  and nullable `posts.community_id`. NULL = main feed. `list_posts`
-  (`app/post_service.py`) always adds `posts.community_id IS NULL`, so
-  community posts never appear in `GET /api/posts` (including profile
-  `?user_id=` feeds). Search (`app/search_service.py`) does NOT filter
-  them yet.
+  and nullable `posts.community_id`. NULL = main feed.
+- **Phase 3: Community posts now use the real post pipeline.** `POST
+  /api/communities/<slug>/posts` accepts JSON or multipart (with images)
+  and delegates to `post_service.create_post(..., community_id=...)`.
+  Response shape is `serialize_post` (same keys as main feed posts:
+  `user_id`, `author_handle`, `like_count`, `comment_count`,
+  `liked_by_user`, `images`, etc.) plus a `community` key: `{slug, name}`.
+  `serialize_community_post` removed. Community posts have full
+  capabilities: images (up to 4), likes, comments, delete (author only).
+- **Leakage filters:** Community posts are **excluded** from:
+  - Main feed (`GET /api/posts`), including profile `?user_id=` feeds
+    (`posts.community_id IS NULL` in `list_posts`)
+  - Global search (`app/search_service.py` filters `posts.community_id IS NULL`)
+  - Hashtags/trending (`_hashtag_counts` filters `posts.community_id IS NULL`)
+  - Profile `post_count` (`app/user_service.py:77` filters `community_id IS NULL`)
+- `GET /api/communities/<slug>/posts` returns `{posts, next_cursor}` where
+  each post has the full `serialize_post` shape plus `community: {slug, name}`.
+  Keyset-paginated by `id DESC` (same convention as main feed). Works logged out.
+  Viewer's `liked_by_user` is correct for both logged-in and logged-out users.
+- Frontend: `static/js/community.js` uses `buildPostCardHtml` from `feed.js`
+  (not a separate row builder). `community-posts-list` is registered in
+  `postCardContainerIds` (`comments.js:28`) so like/comment/menu/delete/share
+  handlers work. Composer supports images (photo button + preview/remove).
+  Pagination with "Load more" button.
 - `member_count` is `COUNT(*)` over `community_members` at read time, not
   a stored column (same no-drift reasoning as the wallet ledger).
 - The serialized `id` is the **slug**; the integer PK never leaves the
@@ -211,7 +230,8 @@ one batched `IN (...)` query against `post_images`, not N+1.
 - A creator can't leave their own community (400). Handing ownership to
   someone else is not built yet.
 - Not built yet: members list, events, banners, edit/settings, and
-  restricted/private gating.
+  restricted/private gating. Phase 4 (access control) will gate by-post-id
+  endpoints (comments, likes) to enforce restricted/private.
 
 ## Non-obvious decisions worth preserving
 

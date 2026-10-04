@@ -11,8 +11,7 @@ public one for reading and joining. Gating is a later pass.
 import re
 import sqlite3
 
-from app.post_service import MAX_CONTENT_LEN
-from app.serializers import serialize_community, serialize_community_post
+from app.serializers import serialize_community
 
 VALID_TYPES = ('public', 'restricted', 'private')
 MAX_NAME_LEN = 21          # matches maxlength on community_create.html
@@ -205,59 +204,54 @@ def list_my_communities(conn, user_id):
     ]
 
 
-_POST_SELECT = '''
-    SELECT posts.id, posts.content, posts.created_at,
-           users.username, users.email, users.profile_picture
-    FROM posts
-    JOIN users ON posts.user_id = users.id
-'''
-
-
-def list_community_posts(conn, slug, limit, cursor_id):
+def list_community_posts(conn, slug, viewer_id, limit, cursor_id):
     """Keyset-paginated, newest first - same convention as GET /api/posts.
-    Returns (posts, next_cursor)."""
+    Returns (posts, next_cursor). Each post includes a 'community' key."""
+    # Avoid circular import: post_service imports serializers, which is fine,
+    # but if post_service imported community_service at module level we'd loop.
+    from app import post_service
+
     cursor = conn.cursor()
     row = _require_community(cursor, slug)
+    community_id, community_slug, community_name = row[0], row[1], row[2]
 
-    query = _POST_SELECT + ' WHERE posts.community_id = ?'
-    params = [row[0]]
-    if cursor_id is not None:
-        query += ' AND posts.id < ?'
-        params.append(cursor_id)
-    query += ' ORDER BY posts.id DESC LIMIT ?'
-    params.append(limit + 1)
+    posts, next_cursor = post_service.list_posts(
+        conn, viewer_id, '', None, limit, cursor_id, only_community_id=community_id
+    )
 
-    cursor.execute(query, params)
-    rows = cursor.fetchall()
-    has_next = len(rows) > limit
-    page = rows[:limit]
-    next_cursor = page[-1][0] if has_next and page else None
-    return [serialize_community_post(r) for r in page], next_cursor
+    # Add community key to each post
+    for post in posts:
+        post['community'] = {'slug': community_slug, 'name': community_name}
+
+    return posts, next_cursor
 
 
-def create_community_post(conn, slug, user_id, content):
+def create_community_post(conn, slug, user_id, content, audience, files):
+    """Create a community post using the real post pipeline. Membership is
+    checked here; post_service.create_post handles validation and file save.
+    Returns serialize_post shape plus 'community' key. Raises
+    CommunityPermissionError (403) if not a member, CommunityValidationError
+    (400) for bad input, CommunityNotFoundError (404) if slug doesn't exist.
+    """
+    # Avoid circular import
+    from app import post_service
+
     cursor = conn.cursor()
     row = _require_community(cursor, slug)
-    if _role(cursor, row[0], user_id) is None:
+    community_id, community_slug, community_name = row[0], row[1], row[2]
+
+    if _role(cursor, community_id, user_id) is None:
         raise CommunityPermissionError('Join this community to post')
 
-    # Same validation as the main compose endpoint (post_service.create_post).
-    content = (content or '').strip() if isinstance(content, str) else ''
-    if not content:
-        raise CommunityValidationError('Content cannot be empty')
-    if len(content) > MAX_CONTENT_LEN:
-        raise CommunityValidationError(f'Post exceeds {MAX_CONTENT_LEN} character limit.')
+    # Translate PostValidationError to CommunityValidationError so route
+    # error mapping stays unchanged (400 for both, just different exception).
+    try:
+        post = post_service.create_post(conn, user_id, content, audience, files, community_id=community_id)
+    except post_service.PostValidationError as e:
+        raise CommunityValidationError(str(e))
 
-    # audience is irrelevant for community posts; the column default fills it.
-    cursor.execute(
-        'INSERT INTO posts (user_id, content, community_id) VALUES (?, ?, ?)',
-        (user_id, content, row[0])
-    )
-    post_id = cursor.lastrowid
-    conn.commit()
-
-    cursor.execute(_POST_SELECT + ' WHERE posts.id = ?', (post_id,))
-    return serialize_community_post(cursor.fetchone())
+    post['community'] = {'slug': community_slug, 'name': community_name}
+    return post
 
 
 def list_communities(conn, viewer_id, q, limit, cursor_id):

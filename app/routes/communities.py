@@ -112,10 +112,10 @@ def list_community_posts(slug):
     limit = _clamp_limit(request.args.get('limit'))
     cursor_id = _parse_cursor(request.args.get('cursor'))
 
-    def page(conn, s):
-        posts, next_cursor = communities.list_community_posts(conn, s, limit, cursor_id)
+    def page(conn, s, viewer_id):
+        posts, next_cursor = communities.list_community_posts(conn, s, viewer_id, limit, cursor_id)
         return {'posts': posts, 'next_cursor': next_cursor}
-    return _call(page, slug)
+    return _call(page, slug, session.get('user_id'))
 
 
 @bp.route('/api/communities/<slug>/posts', methods=['POST'])
@@ -123,6 +123,18 @@ def create_community_post(slug):
     auth_error = _require_login()
     if auth_error:
         return auth_error
-    data = request.get_json(silent=True) or {}
+
+    # Accept JSON or multipart, mirroring routes/posts.py::create_post
+    is_multipart = request.content_type and 'multipart/form-data' in request.content_type
+    if is_multipart:
+        content = request.form.get('content')
+        audience = request.form.get('audience', '')  # ignored for community posts
+        files = request.files.getlist('images')
+    else:
+        data = request.get_json(silent=True) or {}
+        content = data.get('content')
+        audience = data.get('audience', '')
+        files = []
+
     return _call(communities.create_community_post, slug, session['user_id'],
-                 data.get('content'), success_status=201)
+                 content, audience, files, success_status=201)

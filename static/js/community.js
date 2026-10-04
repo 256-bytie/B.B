@@ -98,14 +98,27 @@ const communityApi = {
 			join ? 'Could not join community.' : 'Could not leave community.');
 	},
 
-	async listPosts(slug) {
-		const data = await this._request(`/api/communities/${encodeURIComponent(slug)}/posts`, {}, 'Could not load posts.');
-		return (data && data.posts) || [];
+	async listPosts(slug, cursor) {
+		const params = new URLSearchParams();
+		if (cursor) params.set('cursor', cursor);
+		const qs = params.toString();
+		const data = await this._request(`/api/communities/${encodeURIComponent(slug)}/posts${qs ? '?' + qs : ''}`, {}, 'Could not load posts.');
+		return { posts: (data && data.posts) || [], next_cursor: (data && data.next_cursor) || null };
 	},
 
-	createPost(slug, content) {
-		return this._request(`/api/communities/${encodeURIComponent(slug)}/posts`,
-			this._json('POST', { content }), 'Could not post. Try again.');
+	async createPost(slug, content, files) {
+		if (files && files.length > 0) {
+			const form = new FormData();
+			form.append('content', content);
+			for (const file of files) {
+				form.append('images', file);
+			}
+			return this._request(`/api/communities/${encodeURIComponent(slug)}/posts`,
+				{ method: 'POST', body: form }, 'Could not post. Try again.');
+		} else {
+			return this._request(`/api/communities/${encodeURIComponent(slug)}/posts`,
+				this._json('POST', { content }), 'Could not post. Try again.');
+		}
 	}
 };
 
@@ -420,73 +433,153 @@ function switchCommunityTab(tab) {
 	});
 	document.querySelectorAll('.community-panel').forEach(panel => panel.classList.add('hidden'));
 	document.getElementById(`community-panel-${tab}`).classList.remove('hidden');
-	if (tab === 'posts') loadCommunityPosts();
+	if (tab === 'posts') {
+		communityPostsItems = [];
+		communityPostsCursor = null;
+		loadCommunityPosts(true);
+	}
 }
 
-async function loadCommunityPosts() {
+let communityPostsItems = [];
+let communityPostsCursor = null;
+let communityPostsLoading = false;
+
+async function loadCommunityPosts(reset) {
+	if (communityPostsLoading && !reset) return;
+	if (!reset && communityPostsCursor === null) return;
 	const slug = communityCurrentSlug;
 	const list = document.getElementById('community-posts-list');
 	const loading = document.getElementById('community-posts-loading');
 	const empty = document.getElementById('community-posts-empty');
 	const errorEl = document.getElementById('community-posts-error');
-	loading.classList.remove('hidden');
-	empty.classList.add('hidden');
-	empty.classList.remove('flex');
-	errorEl.classList.add('hidden');
-	errorEl.classList.remove('flex');
-	list.innerHTML = '';
+	const footer = document.getElementById('community-posts-footer');
+
+	communityPostsLoading = true;
+
+	if (reset) {
+		communityPostsItems = [];
+		communityPostsCursor = null;
+		loading.classList.remove('hidden');
+		empty.classList.add('hidden');
+		empty.classList.remove('flex');
+		errorEl.classList.add('hidden');
+		errorEl.classList.remove('flex');
+		footer.classList.add('hidden');
+		list.innerHTML = '';
+	} else {
+		footer.innerHTML = '<button type="button" class="w-full py-3 text-sm text-gray-400" disabled>Loading…</button>';
+	}
+
 	try {
-		const posts = await communityApi.listPosts(slug);
+		const page = await communityApi.listPosts(slug, reset ? null : communityPostsCursor);
 		if (slug !== communityCurrentSlug) return;
+		communityPostsLoading = false;
 		loading.classList.add('hidden');
-		if (!posts.length) {
-			empty.classList.remove('hidden');
-			empty.classList.add('flex');
-			return;
+
+		// Dedupe by post id
+		const seen = new Set(communityPostsItems.map(p => p.id));
+		const newPosts = page.posts.filter(p => !seen.has(p.id));
+		communityPostsItems = communityPostsItems.concat(newPosts);
+		communityPostsCursor = page.next_cursor;
+
+		if (reset) {
+			if (!communityPostsItems.length) {
+				empty.classList.remove('hidden');
+				empty.classList.add('flex');
+				footer.classList.add('hidden');
+				return;
+			}
+			list.innerHTML = communityPostsItems.map(buildPostCardHtml).join('');
+		} else {
+			list.insertAdjacentHTML('beforeend', newPosts.map(buildPostCardHtml).join(''));
 		}
-		list.innerHTML = posts.map(communityBuildPostRowHtml).join('');
+
+		// Show/hide "Load more" button
+		if (communityPostsCursor) {
+			footer.classList.remove('hidden');
+			footer.innerHTML = '<button type="button" onclick="loadCommunityPosts(false)" class="w-full py-3 text-sm text-gray-500 hover:text-gray-700 font-medium">Load more</button>';
+		} else {
+			footer.classList.add('hidden');
+		}
 	} catch (e) {
 		if (slug !== communityCurrentSlug) return;
+		communityPostsLoading = false;
 		loading.classList.add('hidden');
-		document.getElementById('community-posts-error-detail').textContent = e.message || 'Check your connection and try again.';
-		errorEl.classList.remove('hidden');
-		errorEl.classList.add('flex');
+		if (reset || !communityPostsItems.length) {
+			document.getElementById('community-posts-error-detail').textContent = e.message || 'Check your connection and try again.';
+			errorEl.classList.remove('hidden');
+			errorEl.classList.add('flex');
+			footer.classList.add('hidden');
+		} else {
+			showToast(e.message || "Couldn't load more posts.");
+			footer.classList.remove('hidden');
+			footer.innerHTML = '<button type="button" onclick="loadCommunityPosts(false)" class="w-full py-3 text-sm text-gray-500 hover:text-gray-700 font-medium">Load more</button>';
+		}
 	}
 }
 
-function communityBuildPostRowHtml(post) {
-	const avatarUrl = post.avatar_url || `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(post.avatar_seed || post.author)}`;
-	return `<li class="flex gap-3 px-4 py-3.5">
-		<img src="${escapeHtml(avatarUrl)}" alt="" class="w-9 h-9 rounded-full object-cover bg-gray-100 shrink-0">
-		<div class="flex-1 min-w-0">
-			<div class="flex items-center gap-2">
-				<span class="text-[14px] font-semibold text-gray-900 truncate">${escapeHtml(post.author)}</span>
-				<span class="text-[13px] text-gray-400 shrink-0">${escapeHtml(communityPostTime(post.created_at))}</span>
-			</div>
-			<p class="text-[14px] text-gray-800 leading-relaxed mt-0.5 whitespace-pre-line">${escapeHtml(post.content)}</p>
-		</div>
-	</li>`;
-}
-
-// Community timestamps are ISO-8601 UTC ("...T...Z"); feed.js's
-// formatPostTime expects SQLite's "YYYY-MM-DD HH:MM:SS", so convert.
-function communityPostTime(iso) {
-	if (!iso) return '';
-	return formatPostTime(String(iso).replace('T', ' ').replace(/Z$/, ''));
-}
+let communityComposerFiles = [];
+const COMMUNITY_POST_MAX_IMAGES = 4;
 
 function communityComposerAutoGrow(el) {
 	el.style.height = '40px';
 	el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
 	const len = el.value.length;
 	const counter = document.getElementById('community-composer-count');
-	// Counter only appears once the user is within 200 chars of the cap.
 	const nearLimit = len >= COMMUNITY_POST_MAX_LEN - 200;
 	counter.classList.toggle('hidden', !nearLimit);
 	counter.classList.toggle('text-red-500', len >= COMMUNITY_POST_MAX_LEN);
 	counter.classList.toggle('text-gray-400', len < COMMUNITY_POST_MAX_LEN);
 	counter.textContent = `${len}/${COMMUNITY_POST_MAX_LEN}`;
-	document.getElementById('community-composer-post-btn').disabled = el.value.trim().length === 0 || communityPostBusy;
+	const btn = document.getElementById('community-composer-post-btn');
+	btn.disabled = (el.value.trim().length === 0 && communityComposerFiles.length === 0) || communityPostBusy;
+}
+
+function communityComposerPhotoClick() {
+	const input = document.createElement('input');
+	input.type = 'file';
+	input.accept = 'image/*';
+	input.multiple = true;
+	input.onchange = (e) => {
+		const files = Array.from(e.target.files || []);
+		for (const file of files) {
+			if (communityComposerFiles.length >= COMMUNITY_POST_MAX_IMAGES) {
+				showToast(`A post can have at most ${COMMUNITY_POST_MAX_IMAGES} images.`);
+				break;
+			}
+			if (file.size > 5 * 1024 * 1024) {
+				showToast('Each image must be under 5MB.');
+				continue;
+			}
+			communityComposerFiles.push(file);
+		}
+		communityComposerRenderPreviews();
+		communityComposerAutoGrow(document.getElementById('community-composer-input'));
+	};
+	input.click();
+}
+
+function communityComposerRenderPreviews() {
+	const container = document.getElementById('community-composer-previews');
+	if (!communityComposerFiles.length) {
+		container.classList.add('hidden');
+		container.innerHTML = '';
+		return;
+	}
+	container.classList.remove('hidden');
+	container.innerHTML = communityComposerFiles.map((file, i) => {
+		const url = URL.createObjectURL(file);
+		return `<div class="relative w-20 h-20 rounded-lg overflow-hidden bg-gray-100">
+			<img src="${url}" alt="" class="w-full h-full object-cover">
+			<button type="button" onclick="communityComposerRemoveImage(${i})" class="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/50 text-white flex items-center justify-center text-xs hover:bg-black/70">✕</button>
+		</div>`;
+	}).join('');
+}
+
+function communityComposerRemoveImage(index) {
+	communityComposerFiles.splice(index, 1);
+	communityComposerRenderPreviews();
+	communityComposerAutoGrow(document.getElementById('community-composer-input'));
 }
 
 let communityPostBusy = false;
@@ -495,17 +588,31 @@ async function submitCommunityPost() {
 	if (communityPostBusy) return;
 	const input = document.getElementById('community-composer-input');
 	const content = input.value.trim();
-	if (!content || !communityCurrentSlug) return;
+	if (!content && communityComposerFiles.length === 0) return;
+	if (!communityCurrentSlug) return;
 	const slug = communityCurrentSlug;
 	const btn = document.getElementById('community-composer-post-btn');
 	communityPostBusy = true;
 	btn.disabled = true;
 	try {
-		await communityApi.createPost(slug, content);
+		const post = await communityApi.createPost(slug, content, communityComposerFiles);
 		if (slug !== communityCurrentSlug) return;
+
+		// Prepend the new post to the list
+		const list = document.getElementById('community-posts-list');
+		const empty = document.getElementById('community-posts-empty');
+		if (empty.classList.contains('flex')) {
+			empty.classList.add('hidden');
+			empty.classList.remove('flex');
+		}
+		list.insertAdjacentHTML('afterbegin', buildPostCardHtml(post));
+		communityPostsItems.unshift(post);
+
+		// Clear composer
 		input.value = '';
+		communityComposerFiles = [];
+		communityComposerRenderPreviews();
 		communityComposerAutoGrow(input);
-		loadCommunityPosts();
 	} catch (e) {
 		showToast(e.message || 'Could not post. Try again.');
 	} finally {

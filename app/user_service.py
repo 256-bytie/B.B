@@ -74,7 +74,7 @@ def get_public_profile(conn, target_user_id, viewer_user_id):
     if row is None:
         raise UserNotFoundError('User not found')
 
-    cursor.execute('SELECT COUNT(*) FROM posts WHERE user_id = ?', (target_user_id,))
+    cursor.execute('SELECT COUNT(*) FROM posts WHERE user_id = ? AND community_id IS NULL', (target_user_id,))
     post_count = cursor.fetchone()[0]
 
     cursor.execute('SELECT COUNT(*) FROM follows WHERE followee_id = ?', (target_user_id,))
