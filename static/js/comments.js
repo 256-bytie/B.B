@@ -603,6 +603,8 @@ function closeDeletePostDialog() {
 function removePostFromDom(postId) {
 	document.querySelectorAll(`article[data-post-id="${postId}"]`).forEach(card => card.remove());
 
+	if (typeof communityOnPostRemoved === 'function') communityOnPostRemoved(postId);
+
 	const feedContainer = document.getElementById('feed-posts-container');
 	if (feedContainer && !feedContainer.querySelector('article[data-post-id]')) {
 		feedContainer.innerHTML = `

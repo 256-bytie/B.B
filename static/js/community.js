@@ -443,6 +443,7 @@ function switchCommunityTab(tab) {
 let communityPostsItems = [];
 let communityPostsCursor = null;
 let communityPostsLoading = false;
+let communityPostsToken = 0;
 
 async function loadCommunityPosts(reset) {
 	if (communityPostsLoading && !reset) return;
@@ -455,6 +456,10 @@ async function loadCommunityPosts(reset) {
 	const footer = document.getElementById('community-posts-footer');
 
 	communityPostsLoading = true;
+	// A reset invalidates every in-flight request; a stale response must
+	// neither render nor touch the shared loading flag.
+	if (reset) communityPostsToken++;
+	const token = communityPostsToken;
 
 	if (reset) {
 		communityPostsItems = [];
@@ -472,7 +477,7 @@ async function loadCommunityPosts(reset) {
 
 	try {
 		const page = await communityApi.listPosts(slug, reset ? null : communityPostsCursor);
-		if (slug !== communityCurrentSlug) return;
+		if (slug !== communityCurrentSlug || token !== communityPostsToken) return;
 		communityPostsLoading = false;
 		loading.classList.add('hidden');
 
@@ -502,7 +507,7 @@ async function loadCommunityPosts(reset) {
 			footer.classList.add('hidden');
 		}
 	} catch (e) {
-		if (slug !== communityCurrentSlug) return;
+		if (slug !== communityCurrentSlug || token !== communityPostsToken) return;
 		communityPostsLoading = false;
 		loading.classList.add('hidden');
 		if (reset || !communityPostsItems.length) {
@@ -516,6 +521,26 @@ async function loadCommunityPosts(reset) {
 			footer.innerHTML = '<button type="button" onclick="loadCommunityPosts(false)" class="w-full py-3 text-sm text-gray-500 hover:text-gray-700 font-medium">Load more</button>';
 		}
 	}
+}
+
+// Called by removePostFromDom (comments.js) after a confirmed delete. Keeps
+// the in-memory list in sync, restores the empty state when the last post
+// is gone, and pulls the next page if the visible page was emptied but more
+// posts exist.
+function communityOnPostRemoved(postId) {
+	const id = String(postId);
+	if (!communityPostsItems.some(p => String(p.id) === id)) return;
+	communityPostsItems = communityPostsItems.filter(p => String(p.id) !== id);
+	const list = document.getElementById('community-posts-list');
+	if (!list || list.querySelector('article[data-post-id]')) return;
+	if (communityPostsCursor !== null) {
+		loadCommunityPosts(false);
+		return;
+	}
+	const empty = document.getElementById('community-posts-empty');
+	empty.classList.remove('hidden');
+	empty.classList.add('flex');
+	document.getElementById('community-posts-footer').classList.add('hidden');
 }
 
 let communityComposerFiles = [];
@@ -532,7 +557,7 @@ function communityComposerAutoGrow(el) {
 	counter.classList.toggle('text-gray-400', len < COMMUNITY_POST_MAX_LEN);
 	counter.textContent = `${len}/${COMMUNITY_POST_MAX_LEN}`;
 	const btn = document.getElementById('community-composer-post-btn');
-	btn.disabled = (el.value.trim().length === 0 && communityComposerFiles.length === 0) || communityPostBusy;
+	btn.disabled = el.value.trim().length === 0 || communityPostBusy;
 }
 
 function communityComposerPhotoClick() {
@@ -588,7 +613,7 @@ async function submitCommunityPost() {
 	if (communityPostBusy) return;
 	const input = document.getElementById('community-composer-input');
 	const content = input.value.trim();
-	if (!content && communityComposerFiles.length === 0) return;
+	if (!content) return;
 	if (!communityCurrentSlug) return;
 	const slug = communityCurrentSlug;
 	const btn = document.getElementById('community-composer-post-btn');
