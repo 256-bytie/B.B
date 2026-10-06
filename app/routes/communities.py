@@ -107,6 +107,22 @@ def leave_community(slug):
     return _call(communities.leave_community, slug, session['user_id'])
 
 
+@bp.route('/api/communities/<slug>/icon', methods=['POST'])
+def update_community_icon(slug):
+    auth_error = _require_login()
+    if auth_error:
+        return auth_error
+    return _call(communities.update_community_image, slug, session['user_id'], 'icon', request.files.get('image'))
+
+
+@bp.route('/api/communities/<slug>/cover', methods=['POST'])
+def update_community_cover(slug):
+    auth_error = _require_login()
+    if auth_error:
+        return auth_error
+    return _call(communities.update_community_image, slug, session['user_id'], 'cover', request.files.get('image'))
+
+
 @bp.route('/api/communities/<slug>/posts', methods=['GET'])
 def list_community_posts(slug):
     limit = _clamp_limit(request.args.get('limit'))

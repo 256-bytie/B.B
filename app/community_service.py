@@ -10,6 +10,7 @@ import sqlite3
 
 from app.serializers import serialize_community
 from app.community_access import viewer_role, can_view, can_join
+from app.upload_utils import delete_if_local
 
 VALID_TYPES = ('public', 'restricted', 'private')
 MAX_NAME_LEN = 21          # matches maxlength on community_create.html
@@ -79,7 +80,8 @@ def _unique_slug(cursor, name):
 def _fetch_community_row(cursor, slug):
     cursor.execute('''
         SELECT id, slug, name, description, topic, type, icon_emoji, created_at,
-               (SELECT COUNT(*) FROM community_members m WHERE m.community_id = c.id)
+               (SELECT COUNT(*) FROM community_members m WHERE m.community_id = c.id),
+               c.icon_image, c.cover_image
         FROM communities c
         WHERE slug = ?
     ''', (slug,))
@@ -108,7 +110,32 @@ def get_community(conn, slug, viewer_id):
     cursor = conn.cursor()
     row = _require_visible_community(cursor, slug, viewer_id)
     icon_bg = topic_style(row[4])[1]
-    return serialize_community(row, icon_bg, _role(cursor, row[0], viewer_id))
+    return serialize_community(row[:9], icon_bg, _role(cursor, row[0], viewer_id), row[9], row[10])
+
+
+def update_community_image(conn, slug, user_id, kind, file_storage):
+    """Validate, save, and replace a community icon or cover image."""
+    from app import user_service
+
+    column = {'icon': 'icon_image', 'cover': 'cover_image'}[kind]
+    cursor = conn.cursor()
+    row = _require_visible_community(cursor, slug, user_id)
+    if viewer_role(cursor, row[0], user_id) not in ('creator', 'moderator'):
+        raise CommunityPermissionError('Only the creator or a moderator can change community images')
+    try:
+        user_service._validate_image_file(file_storage)
+    except user_service.UserValidationError as e:
+        raise CommunityValidationError(str(e))
+    old_url = row[9 if kind == 'icon' else 10]
+    new_url = user_service._save_upload(file_storage)
+    try:
+        cursor.execute(f'UPDATE communities SET {column} = ? WHERE id = ?', (new_url, row[0]))
+        conn.commit()
+    except Exception:
+        delete_if_local(new_url, user_service.UPLOAD_FOLDER)
+        raise
+    delete_if_local(old_url, user_service.UPLOAD_FOLDER)
+    return get_community(conn, slug, user_id)
 
 
 def create_community(conn, creator_id, name, description, topic, community_type):
@@ -217,14 +244,14 @@ def list_my_communities(conn, user_id):
     cursor.execute('''
         SELECT c.id, c.slug, c.name, c.description, c.topic, c.type, c.icon_emoji, c.created_at,
                (SELECT COUNT(*) FROM community_members m2 WHERE m2.community_id = c.id),
-               m.role
+               m.role, c.icon_image, c.cover_image
         FROM community_members m
         JOIN communities c ON c.id = m.community_id
         WHERE m.user_id = ?
         ORDER BY m.joined_at DESC, m.rowid DESC
     ''', (user_id,))
     return [
-        serialize_community(row[:9], topic_style(row[4])[1], row[9])
+        serialize_community(row[:9], topic_style(row[4])[1], row[9], row[10], row[11])
         for row in cursor.fetchall()
     ]
 
@@ -288,7 +315,7 @@ def list_communities(conn, viewer_id, q, limit, cursor_id):
     query = '''
         SELECT c.id, c.slug, c.name, c.description, c.topic, c.type, c.icon_emoji, c.created_at,
                (SELECT COUNT(*) FROM community_members m WHERE m.community_id = c.id),
-               vm.role
+               vm.role, c.icon_image, c.cover_image
         FROM communities c
         LEFT JOIN community_members vm ON vm.community_id = c.id AND vm.user_id = ?
         WHERE c.type != 'private'
@@ -320,6 +347,6 @@ def list_communities(conn, viewer_id, q, limit, cursor_id):
     next_cursor = page[-1][0] if has_next and page else None
 
     return [
-        serialize_community(row[:9], topic_style(row[4])[1], row[9])
+        serialize_community(row[:9], topic_style(row[4])[1], row[9], row[10], row[11])
         for row in page
     ], next_cursor

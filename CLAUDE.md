@@ -182,9 +182,12 @@ one batched `IN (...)` query against `post_images`, not N+1.
 
 ## Communities
 
-- Schema lives in `migrations/003_communities.sql` (not `init_db()`):
+- Schema lives in `migrations/003_communities.sql` and
+  `migrations/005_community_images.sql` (not `init_db()`):
   `communities`, `community_members` (role `creator`/`moderator`/`member`),
-  and nullable `posts.community_id`. NULL = main feed.
+  nullable `communities.icon_image` / `cover_image`, and nullable
+  `posts.community_id`. NULL image values use frontend fallbacks; NULL
+  `community_id` = main feed.
 - **Phase 3: Community posts now use the real post pipeline.** `POST
   /api/communities/<slug>/posts` accepts JSON or multipart (with images)
   and delegates to `post_service.create_post(..., community_id=...)`.
@@ -240,7 +243,10 @@ one batched `IN (...)` query against `post_images`, not N+1.
   to the viewer (null for logged-out). Response: `{communities: [...], next_cursor}`.
 - A creator can't leave their own community (400). Handing ownership to
   someone else is not built yet.
-- Not built yet: members list, events, banners, edit/settings, and
+- Community responses include `icon_image` and `cover_image` URL fields (or
+  null). `POST /api/communities/<slug>/icon` and `/cover` accept one
+  multipart `image` upload; only creators and moderators may change them.
+- Not built yet: members list, events, edit/settings, and
   restricted/private gating. Phase 4 (access control) will gate by-post-id
   endpoints (comments, likes) to enforce restricted/private.
 

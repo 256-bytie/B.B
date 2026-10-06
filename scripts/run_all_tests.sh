@@ -40,6 +40,7 @@ TESTS=(
     "test_file_cleanup.sh"
     "test_wallet.sh"
     "test_communities.sh"
+    "test_community_images.sh"
 )
 
 PASSED=0
