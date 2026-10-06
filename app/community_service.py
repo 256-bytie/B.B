@@ -4,14 +4,12 @@ Flask-free, same shape as app/wallet.py / app/post_service.py: a plain
 sqlite3 connection in, plain values out. app/routes/communities.py is the
 thin HTTP layer on top.
 
-Access control note: `type` (public/restricted/private) is stored and
-returned but NOT enforced yet - every community currently behaves like a
-public one for reading and joining. Gating is a later pass.
 """
 import re
 import sqlite3
 
 from app.serializers import serialize_community
+from app.community_access import viewer_role, can_view, can_join
 
 VALID_TYPES = ('public', 'restricted', 'private')
 MAX_NAME_LEN = 21          # matches maxlength on community_create.html
@@ -88,15 +86,7 @@ def _fetch_community_row(cursor, slug):
     return cursor.fetchone()
 
 
-def _role(cursor, community_id, user_id):
-    if user_id is None:
-        return None
-    cursor.execute(
-        'SELECT role FROM community_members WHERE community_id = ? AND user_id = ?',
-        (community_id, user_id)
-    )
-    row = cursor.fetchone()
-    return row[0] if row else None
+_role = viewer_role
 
 
 def _require_community(cursor, slug):
@@ -105,12 +95,18 @@ def _require_community(cursor, slug):
         raise CommunityNotFoundError('Community not found')
     return row
 
+def _require_visible_community(cursor, slug, viewer_id):
+    row = _require_community(cursor, slug)
+    if not can_view(row[5], viewer_role(cursor, row[0], viewer_id)):
+        raise CommunityNotFoundError('Community not found')
+    return row
+
 
 def get_community(conn, slug, viewer_id):
     """Serialized community with membership relative to viewer_id (None =
     logged out). Raises CommunityNotFoundError."""
     cursor = conn.cursor()
-    row = _require_community(cursor, slug)
+    row = _require_visible_community(cursor, slug, viewer_id)
     icon_bg = topic_style(row[4])[1]
     return serialize_community(row, icon_bg, _role(cursor, row[0], viewer_id))
 
@@ -162,7 +158,10 @@ def create_community(conn, creator_id, name, description, topic, community_type)
 def join_community(conn, slug, user_id):
     """Idempotent: joining twice is a no-op."""
     cursor = conn.cursor()
-    row = _require_community(cursor, slug)
+    row = _require_visible_community(cursor, slug, user_id)
+    role = viewer_role(cursor, row[0], user_id)
+    if not can_join(row[5], role):
+        raise CommunityPermissionError('This community is invite-only')
     cursor.execute(
         "INSERT OR IGNORE INTO community_members (community_id, user_id, role) VALUES (?, ?, 'member')",
         (row[0], user_id)
@@ -175,8 +174,8 @@ def leave_community(conn, slug, user_id):
     """Creators can't leave (needs an ownership-transfer flow). Leaving a
     community you're not in is a no-op."""
     cursor = conn.cursor()
-    row = _require_community(cursor, slug)
-    if _role(cursor, row[0], user_id) == 'creator':
+    row = _require_visible_community(cursor, slug, user_id)
+    if viewer_role(cursor, row[0], user_id) == 'creator':
         raise CommunityValidationError("The creator can't leave their own community")
     cursor.execute(
         'DELETE FROM community_members WHERE community_id = ? AND user_id = ?',
@@ -184,6 +183,32 @@ def leave_community(conn, slug, user_id):
     )
     conn.commit()
     return get_community(conn, slug, user_id)
+
+def add_member(conn, slug, actor_id, username):
+    cursor = conn.cursor(); row = _require_visible_community(cursor, slug, actor_id)
+    if viewer_role(cursor, row[0], actor_id) != 'creator':
+        raise CommunityPermissionError('Only the creator can add members')
+    cursor.execute('SELECT id, username FROM users WHERE lower(username) = lower(?)', (username or '',))
+    target = cursor.fetchone()
+    if not target: raise CommunityValidationError('No user with that username')
+    cursor.execute("INSERT OR IGNORE INTO community_members (community_id,user_id,role) VALUES (?,?,'member')", (row[0], target[0]))
+    cursor.execute('SELECT COUNT(*) FROM community_members WHERE community_id = ?', (row[0],))
+    conn.commit()
+    return {'username': target[1], 'role': 'member', 'member_count': cursor.fetchone()[0]}
+
+def remove_member(conn, slug, actor_id, username):
+    cursor = conn.cursor(); row = _require_visible_community(cursor, slug, actor_id)
+    if viewer_role(cursor, row[0], actor_id) != 'creator':
+        raise CommunityPermissionError('Only the creator can add members')
+    cursor.execute('SELECT id FROM users WHERE lower(username) = lower(?)', (username or '',)); target = cursor.fetchone()
+    cursor.execute('SELECT creator_id FROM communities WHERE id = ?', (row[0],))
+    creator_id = cursor.fetchone()[0]
+    if target and target[0] == creator_id: raise CommunityValidationError("The creator can't be removed")
+    if not target: raise CommunityValidationError('That user is not a member')
+    cursor.execute("DELETE FROM community_members WHERE community_id = ? AND user_id = ? AND role != 'creator'", (row[0], target[0]))
+    if cursor.rowcount == 0: raise CommunityValidationError('That user is not a member')
+    cursor.execute('SELECT COUNT(*) FROM community_members WHERE community_id = ?', (row[0],)); count = cursor.fetchone()[0]; conn.commit()
+    return {'member_count': count}
 
 
 def list_my_communities(conn, user_id):
@@ -212,7 +237,7 @@ def list_community_posts(conn, slug, viewer_id, limit, cursor_id):
     from app import post_service
 
     cursor = conn.cursor()
-    row = _require_community(cursor, slug)
+    row = _require_visible_community(cursor, slug, viewer_id)
     community_id, community_slug, community_name = row[0], row[1], row[2]
 
     posts, next_cursor = post_service.list_posts(
@@ -221,7 +246,7 @@ def list_community_posts(conn, slug, viewer_id, limit, cursor_id):
 
     # Add community key to each post
     for post in posts:
-        post['community'] = {'slug': community_slug, 'name': community_name}
+        post['community'] = {'slug': community_slug, 'name': community_name, 'type': row[5]}
 
     return posts, next_cursor
 
@@ -237,10 +262,10 @@ def create_community_post(conn, slug, user_id, content, audience, files):
     from app import post_service
 
     cursor = conn.cursor()
-    row = _require_community(cursor, slug)
+    row = _require_visible_community(cursor, slug, user_id)
     community_id, community_slug, community_name = row[0], row[1], row[2]
 
-    if _role(cursor, community_id, user_id) is None:
+    if viewer_role(cursor, community_id, user_id) is None:
         raise CommunityPermissionError('Join this community to post')
 
     # Translate PostValidationError to CommunityValidationError so route
@@ -250,7 +275,7 @@ def create_community_post(conn, slug, user_id, content, audience, files):
     except post_service.PostValidationError as e:
         raise CommunityValidationError(str(e))
 
-    post['community'] = {'slug': community_slug, 'name': community_name}
+    post['community'] = {'slug': community_slug, 'name': community_name, 'type': row[5]}
     return post
 
 

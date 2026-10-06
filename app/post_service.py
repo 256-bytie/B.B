@@ -17,6 +17,7 @@ import uuid
 from werkzeug.utils import secure_filename
 
 from app.serializers import serialize_post, serialize_comment
+from app.community_access import post_community, viewer_role, can_view, can_interact
 
 UPLOAD_FOLDER = 'static/uploads'
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
@@ -50,6 +51,20 @@ class CommentNotFoundError(Exception):
 
 class CommentOwnershipError(Exception):
     """A 403: the comment exists but isn't the requester's."""
+
+class PostAccessError(Exception):
+    pass
+
+def _check_post_access(cursor, post_id, user_id, *, interact):
+    info = post_community(cursor, post_id)
+    if info is None:
+        return
+    community_id, ctype = info
+    role = viewer_role(cursor, community_id, user_id)
+    if not can_view(ctype, role):
+        raise PostNotFoundError('Post not found')
+    if interact and not can_interact(ctype, role, user_id):
+        raise PostAccessError('Join this community to ' + ('comment' if interact == 'comment' else 'like'))
 
 
 def _validate_images(files):
@@ -247,7 +262,7 @@ def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cu
         for post_id, image_path in cursor.fetchall():
             images_by_post.setdefault(post_id, []).append(image_path)
         cursor.execute(f'''
-            SELECT posts.id, c.slug, c.name,
+            SELECT posts.id, c.slug, c.name, c.type,
                    EXISTS(SELECT 1 FROM community_members m
                           WHERE m.community_id = c.id AND m.user_id = ?)
             FROM posts
@@ -255,8 +270,8 @@ def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cu
             WHERE posts.id IN ({placeholders})
         ''', [current_user_id] + post_ids)
         community_by_post = {
-            pid: {'slug': slug, 'name': name, 'is_member': bool(is_member)}
-            for pid, slug, name, is_member in cursor.fetchall()
+            pid: {'slug': slug, 'name': name, 'is_member': bool(is_member), 'type': ctype}
+            for pid, slug, name, ctype, is_member in cursor.fetchall()
         }
     else:
         images_by_post = {}
@@ -281,6 +296,7 @@ def get_comments(conn, post_id, current_user_id):
     cursor.execute('SELECT id FROM posts WHERE id = ?', (post_id,))
     if not cursor.fetchone():
         raise PostNotFoundError('Post not found')
+    _check_post_access(cursor, post_id, current_user_id, interact=False)
 
     cursor.execute('''
         SELECT comments.id, comments.post_id, comments.user_id, comments.content,
@@ -327,6 +343,7 @@ def create_comment(conn, post_id, user_id, content, parent_comment_id, image_fil
     cursor.execute('SELECT id FROM posts WHERE id = ?', (post_id,))
     if not cursor.fetchone():
         raise PostNotFoundError('Post not found')
+    _check_post_access(cursor, post_id, user_id, interact='comment')
 
     if parent_comment_id is not None:
         cursor.execute('SELECT post_id FROM comments WHERE id = ?', (parent_comment_id,))
@@ -435,6 +452,10 @@ def _toggle_like(conn, user_id, target_type, target_id, table, exists_query, not
 def toggle_post_like(conn, user_id, post_id):
     """Like/unlike a post. Returns (liked, like_count). Raises
     PostNotFoundError if post_id doesn't exist."""
+    cursor = conn.cursor()
+    cursor.execute('SELECT id FROM posts WHERE id = ?', (post_id,))
+    if not cursor.fetchone(): raise PostNotFoundError('Post not found')
+    _check_post_access(cursor, post_id, user_id, interact='like')
     return _toggle_like(
         conn, user_id, 'post', post_id, 'posts',
         'SELECT id FROM posts WHERE id = ?',
@@ -445,6 +466,14 @@ def toggle_post_like(conn, user_id, post_id):
 def toggle_comment_like(conn, user_id, comment_id):
     """Like/unlike a comment. Returns (liked, like_count). Raises
     CommentNotFoundError if comment_id doesn't exist."""
+    cursor = conn.cursor()
+    cursor.execute('SELECT post_id FROM comments WHERE id = ?', (comment_id,))
+    row = cursor.fetchone()
+    if not row: raise CommentNotFoundError('Comment not found')
+    try:
+        _check_post_access(cursor, row[0], user_id, interact='like')
+    except PostNotFoundError:
+        raise CommentNotFoundError('Comment not found')
     return _toggle_like(
         conn, user_id, 'comment', comment_id, 'comments',
         'SELECT id FROM comments WHERE id = ?',

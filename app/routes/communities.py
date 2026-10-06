@@ -138,3 +138,16 @@ def create_community_post(slug):
 
     return _call(communities.create_community_post, slug, session['user_id'],
                  content, audience, files, success_status=201)
+
+@bp.route('/api/communities/<slug>/members', methods=['POST'])
+def add_member(slug):
+    auth_error = _require_login()
+    if auth_error: return auth_error
+    data = request.get_json(silent=True) or {}
+    return _call(communities.add_member, slug, session['user_id'], data.get('username'), success_status=201)
+
+@bp.route('/api/communities/<slug>/members/<username>', methods=['DELETE'])
+def remove_member(slug, username):
+    auth_error = _require_login()
+    if auth_error: return auth_error
+    return _call(communities.remove_member, slug, session['user_id'], username)

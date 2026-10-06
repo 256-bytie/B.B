@@ -43,6 +43,8 @@ def create_post():
         return jsonify(post), 201
     except posts.PostValidationError as e:
         return jsonify({'error': str(e)}), 400
+    except posts.PostAccessError as e:
+        return jsonify({'error': str(e)}), 403
     except Exception as e:
         return jsonify({'error': f'Database error: {str(e)}'}), 500
 
@@ -117,6 +119,8 @@ def get_comments(post_id):
         return jsonify(comments), 200
     except posts.PostNotFoundError as e:
         return jsonify({'error': str(e)}), 404
+    except posts.PostAccessError as e:
+        return jsonify({'error': str(e)}), 403
     except Exception as e:
         return jsonify({'error': f'Database error: {str(e)}'}), 500
 
@@ -159,6 +163,8 @@ def create_comment(post_id):
         return jsonify({'error': str(e)}), 400
     except (posts.PostNotFoundError, posts.CommentNotFoundError) as e:
         return jsonify({'error': str(e)}), 404
+    except posts.PostAccessError as e:
+        return jsonify({'error': str(e)}), 403
     except Exception as e:
         return jsonify({'error': f'Database error: {str(e)}'}), 500
 
@@ -177,6 +183,8 @@ def like_post(post_id):
         return jsonify({'liked': liked, 'like_count': like_count}), 200
     except posts.PostNotFoundError as e:
         return jsonify({'error': str(e)}), 404
+    except posts.PostAccessError as e:
+        return jsonify({'error': str(e)}), 403
     except Exception as e:
         return jsonify({'error': f'Database error: {str(e)}'}), 500
 
@@ -195,6 +203,8 @@ def like_comment(comment_id):
         return jsonify({'liked': liked, 'like_count': like_count}), 200
     except posts.CommentNotFoundError as e:
         return jsonify({'error': str(e)}), 404
+    except posts.PostAccessError as e:
+        return jsonify({'error': str(e)}), 403
     except Exception as e:
         return jsonify({'error': f'Database error: {str(e)}'}), 500
 
