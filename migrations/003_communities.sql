@@ -1,6 +1,6 @@
 -- 003_communities.sql
 --
--- Communities (b/<slug>) and their membership, plus posts.community_id.
+-- Communities and their membership, plus posts.community_id.
 --
 -- posts.community_id is nullable: NULL means "posted to the main feed",
 -- which is every row that exists before this migration, so existing data

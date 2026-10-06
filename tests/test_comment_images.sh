@@ -29,7 +29,7 @@ SIGNUP_RESP=$(curl -s -X POST "$API/api/signup" \
     -d '{"full_name":"Image Tester","email":"imgtester@test.com","password":"pass123"}' \
     -c cookies.txt)
 
-if echo "$SIGNUP_RESP" | grep -q '"user_id"'; then
+if echo "$SIGNUP_RESP" | grep -q '"success":true'; then
     echo "✓ Signup successful"
 else
     echo "✗ Signup failed: $SIGNUP_RESP"
@@ -177,14 +177,6 @@ else
     exit 1
 fi
 
-# Check that null is returned for comments without images
-if echo "$GET_RESP" | grep -q '"image":null'; then
-    echo "✓ Image field null for text-only comments"
-else
-    echo "✗ Image field should be null for text-only comments"
-    exit 1
-fi
-
 # Test 10: JSON text-only comment still works
 echo "[10/10] Creating JSON text-only comment..."
 TEXT_RESP=$(curl -s -X POST "$API/api/posts/$POST_ID/comments" \
@@ -197,6 +189,17 @@ if echo "$TEXT_RESP" | grep -q '"id"' && echo "$TEXT_RESP" | grep -q '"image":nu
     echo "✓ JSON text-only comment works with image:null"
 else
     echo "✗ JSON text-only comment failed: $TEXT_RESP"
+    exit 1
+fi
+
+# Text-only comments come back with image:null in GET. (Checked here, after
+# the text-only comment exists - every comment created before step 10 has an
+# image, so this assertion cannot hold any earlier.)
+GET_RESP=$(curl -s -X GET "$API/api/posts/$POST_ID/comments" -b cookies.txt)
+if echo "$GET_RESP" | grep -q '"image":null'; then
+    echo "✓ Image field null for text-only comments"
+else
+    echo "✗ Image field should be null for text-only comments"
     exit 1
 fi
 

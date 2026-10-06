@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+# Tests, app.py and the DB path are all relative to the repo root; run from
+# there regardless of the caller's cwd.
+cd "$(dirname "$0")/.."
+
 echo "=========================================="
 echo "Running Full Test Suite"
 echo "=========================================="
@@ -43,7 +47,7 @@ FAILED=0
 
 for TEST in "${TESTS[@]}"; do
     echo "Running $TEST..."
-    if ./$TEST > /tmp/${TEST}.log 2>&1; then
+    if bash "tests/$TEST" > /tmp/${TEST}.log 2>&1; then
         echo "✓ $TEST PASSED"
         PASSED=$((PASSED + 1))
     else

@@ -1,4 +1,4 @@
-"""Community domain logic (b/<slug> communities, membership, posts).
+"""Community domain logic (communities, membership, posts).
 
 Flask-free, same shape as app/wallet.py / app/post_service.py: a plain
 sqlite3 connection in, plain values out. app/routes/communities.py is the

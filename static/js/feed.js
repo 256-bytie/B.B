@@ -256,6 +256,80 @@ function buildFeedSkeletonHtml(count) {
     return row.repeat(count);
 }
 
+// ---- Home feed: community attribution row ----
+// Posts made inside a community carry post.community = {slug, name,
+// is_member}. Only the Home feed (renderFeedPosts / loadMoreFeedPosts)
+// calls buildFeedPostCardHtml, which prepends a community row inside the
+// card; every other surface (community view, profile, search, post view)
+// keeps using buildPostCardHtml unchanged.
+// Restricted communities cannot be joined directly (members are added by the
+// creator), so non-members get a static label instead of a Join button.
+const FEED_INVITE_ONLY_HTML = `
+<span class="feed-community-join-wrap flex items-center gap-2 shrink-0">
+<span class="w-1 h-1 rounded-full bg-gray-300"></span>
+<span class="feed-community-invite text-[13px] font-semibold text-gray-400">Invite only</span>
+</span>`;
+
+function buildFeedCommunityRowHtml(community) {
+    const slug = escapeHtml(community.slug);
+    const name = escapeHtml(community.name);
+    const inviteOnly = community.type === 'restricted';
+    const joinHtml = community.is_member ? '' : inviteOnly ? FEED_INVITE_ONLY_HTML : `
+<span class="feed-community-join-wrap flex items-center gap-2 shrink-0">
+<span class="w-1 h-1 rounded-full bg-blue-500"></span>
+<button type="button" class="feed-community-join h-6 px-3 rounded-full bg-blue-50 text-blue-600 text-[13px] font-semibold active:scale-95 transition-transform duration-100 disabled:opacity-60" data-community-slug="${slug}" onclick="feedJoinCommunity(this)">Join</button>
+</span>`;
+    return `
+<div class="feed-community-row flex items-center gap-3 mb-2" data-community-slug="${slug}">
+<span class="feed-card-avatar-rail shrink-0 flex justify-center text-slate-500"><i class="fa-solid fa-user-group text-[17px]"></i></span>
+<div class="flex items-center gap-2 min-w-0">
+<button type="button" class="feed-community-open truncate font-semibold text-[15px] leading-tight text-slate-600 text-left" data-community-slug="${slug}" onclick="openCommunityView(this.dataset.communitySlug)">${name}</button>${joinHtml}
+</div>
+</div>`;
+}
+
+function buildFeedPostCardHtml(post) {
+    const html = buildPostCardHtml(post);
+    const community = post.community;
+    if (!community || !community.slug) return html;
+    return html.replace(/^(\s*<article[^>]*>)/, (m) => m + buildFeedCommunityRowHtml(community));
+}
+
+const feedCommunityJoining = new Set();
+
+async function feedJoinCommunity(btn) {
+    const slug = btn.dataset.communitySlug;
+    if (!slug || feedCommunityJoining.has(slug)) return;
+    feedCommunityJoining.add(slug);
+    btn.disabled = true;
+    try {
+        const community = await communityApi.setMembership(slug, true);
+        // Every card from this community drops its Join button.
+        document.querySelectorAll('#feed-posts-container .feed-community-row').forEach(row => {
+            if (row.dataset.communitySlug !== slug) return;
+            const wrap = row.querySelector('.feed-community-join-wrap');
+            if (wrap) wrap.remove();
+        });
+        showToast(`Joined ${community.name}`);
+        if (typeof communityBrowseSyncItem === 'function') communityBrowseSyncItem(community);
+        if (typeof refreshSideNavCommunities === 'function') refreshSideNavCommunities();
+    } catch (e) {
+        showToast((e && e.message) || 'Could not join community. Try again.');
+        if (e && e.status === 403) {
+            // Invite-only (type not known client-side): swap the button for the label.
+            document.querySelectorAll('#feed-posts-container .feed-community-row').forEach(row => {
+                if (row.dataset.communitySlug !== slug) return;
+                const wrap = row.querySelector('.feed-community-join-wrap');
+                if (wrap) wrap.outerHTML = FEED_INVITE_ONLY_HTML;
+            });
+        } else {
+            btn.disabled = false;
+        }
+    } finally {
+        feedCommunityJoining.delete(slug);
+    }
+}
+
 // Render an array of posts into the feed container, or an empty state
 function renderFeedPosts(posts) {
     const container = document.getElementById('feed-posts-container');
@@ -269,7 +343,7 @@ No posts yet
         return;
     }
 
-    container.innerHTML = posts.map(buildPostCardHtml).join('');
+    container.innerHTML = posts.map(buildFeedPostCardHtml).join('');
 }
 
 // Feed pagination state. Reset on every fresh load (see fetchAndRenderPosts).
@@ -399,7 +473,7 @@ async function loadMoreFeedPosts() {
         const data = await response.json();
 
         if (container && data.posts.length > 0) {
-            container.insertAdjacentHTML('beforeend', data.posts.map(buildPostCardHtml).join(''));
+            container.insertAdjacentHTML('beforeend', data.posts.map(buildFeedPostCardHtml).join(''));
         }
 
         feedNextCursor = data.next_cursor;

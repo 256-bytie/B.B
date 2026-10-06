@@ -611,20 +611,13 @@ async function handlePostSubmit() {
         const data = await response.json();
 
         if (response.ok) {
-            const postedTo = composeState.community;
             textarea.value = '';
             composeState.images = [];
             composeState.audience = 'Public';
             composeState.community = null;
             clearDraft();
             resetSubmitButtonState();
-            if (postedTo) {
-                // Community posts never appear in the main feed, so land on
-                // the community where the new post is visible.
-                openCommunityView(postedTo.slug);
-            } else {
-                showView('feed');
-            }
+            showView('feed');
             showToast('Post published');
         } else {
             setSubmitButtonLoading(false);

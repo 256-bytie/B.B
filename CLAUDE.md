@@ -193,15 +193,26 @@ one batched `IN (...)` query against `post_images`, not N+1.
   `liked_by_user`, `images`, etc.) plus a `community` key: `{slug, name}`.
   `serialize_community_post` removed. Community posts have full
   capabilities: images (up to 4), likes, comments, delete (author only).
+- **Home feed includes community posts.** `GET /api/posts` (no `user_id`
+  filter) returns normal posts plus community posts, each carrying
+  `community: {slug, name, is_member}`; `feed.js` renders a community row on
+  those cards (`buildFeedPostCardHtml`, Home feed only). Posts from `private`
+  communities appear only for members. Per-author lists (`?user_id=`, i.e.
+  profiles) still exclude community posts so they match `post_count`.
+  Posting from the main composer routes to a community via the composer's
+  community picker (`composeState.community`, `GET /api/communities/mine`).
 - **Leakage filters:** Community posts are **excluded** from:
-  - Main feed (`GET /api/posts`), including profile `?user_id=` feeds
-    (`posts.community_id IS NULL` in `list_posts`)
+  - Profile `?user_id=` feeds (`posts.community_id IS NULL` when
+    `user_id_filter` is set in `list_posts`)
   - Global search (`app/search_service.py` filters `posts.community_id IS NULL`)
   - Hashtags/trending (`_hashtag_counts` filters `posts.community_id IS NULL`)
   - Profile `post_count` (`app/user_service.py:77` filters `community_id IS NULL`)
 - `GET /api/communities/<slug>/posts` returns `{posts, next_cursor}` where
   each post has the full `serialize_post` shape plus `community: {slug, name}`.
-  Keyset-paginated by `id DESC` (same convention as main feed). Works logged out.
+  Delegates to `post_service.list_posts(only_community_id=...)`, so it shares the
+  main feed's ordering and cursor: `ORDER BY created_at DESC, id DESC` with an
+  `id < cursor` keyset (and the same `id`/`created_at`-agree assumption noted
+  under `GET /api/posts` above). Works logged out.
   Viewer's `liked_by_user` is correct for both logged-in and logged-out users.
 - Frontend: `static/js/community.js` uses `buildPostCardHtml` from `feed.js`
   (not a separate row builder). `community-posts-list` is registered in

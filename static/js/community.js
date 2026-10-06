@@ -9,6 +9,7 @@
 //   POST   /api/communities/<slug>/leave       -> full community object
 //   GET    /api/communities/<slug>/posts?cursor=&limit=
 //   POST   /api/communities/<slug>/posts       body: {content}
+// (No update route yet: the Edit Community screen is UI-only.)
 //
 // `communityApi` talks to those routes only. Any non-2xx response or
 // network failure throws a CommunityApiError carrying the server's
@@ -27,12 +28,12 @@ const COMMUNITY_TOPICS = [
 	{ key: 'discussion', label: 'Discussion', icon: 'M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM21 12c0 4.556-4.03 8.25-9 8.25a9.76 9.76 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z' }
 ];
 
-// `creatable: false` types are stored by the server but not enforced yet, so
-// the create wizard does not offer them (see audit D1).
+// All three types are enforced server-side (Phase 4: community_access.py),
+// so the create wizard offers all of them. `creatable: false` hides a type.
 const COMMUNITY_TYPES = [
 	{ value: 'public', creatable: true, label: 'Public', desc: 'Anyone can search for, view, and contribute to this community.', icon: 'M21 12a9 9 0 11-18 0 9 9 0 0118 0zM3.6 9h16.8M3.6 15h16.8M11.5 3a17 17 0 000 18M12.5 3a17 17 0 010 18' },
-	{ value: 'restricted', creatable: false, label: 'Restricted', desc: 'Anyone can view, but only approved members can contribute.', icon: 'M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178zM15 12a3 3 0 11-6 0 3 3 0 016 0z' },
-	{ value: 'private', creatable: false, label: 'Private', desc: 'Only approved members can view and contribute.', icon: 'M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z' }
+	{ value: 'restricted', creatable: true, label: 'Restricted', desc: 'Anyone can view, but only approved members can contribute.', icon: 'M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178zM15 12a3 3 0 11-6 0 3 3 0 016 0z' },
+	{ value: 'private', creatable: true, label: 'Private', desc: 'Only approved members can view and contribute.', icon: 'M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z' }
 ];
 
 // ---- Data layer ----
@@ -326,11 +327,23 @@ async function loadCommunityView() {
 	} catch (e) {
 		if (token !== communityLoadToken) return;
 		const notFound = e.status === 404;
+		if (e.status === 404 || e.status === 403) communityForgetSlug(communityCurrentSlug);
 		document.getElementById('community-error-title').textContent = notFound ? 'Community not found' : "Couldn't load this community";
 		document.getElementById('community-error-detail').textContent = notFound ? 'It may have been removed or the link is wrong.' : (e.message || 'Check your connection and try again.');
 		document.getElementById('community-error-retry').classList.toggle('hidden', notFound);
 		errorEl.classList.remove('hidden');
 	}
+}
+
+// A community that 404s/403s for this viewer (removed, made private, or the
+// person was removed from it) must not linger in cached lists.
+function communityForgetSlug(slug) {
+	const i = communityBrowseItems.findIndex(c => c.slug === slug);
+	if (i !== -1) {
+		communityBrowseItems.splice(i, 1);
+		communityBrowseRender();
+	}
+	if (typeof refreshSideNavCommunities === 'function') refreshSideNavCommunities();
 }
 
 function communityTopicIcon(topicKey) {
@@ -344,50 +357,59 @@ function communityFormatCount(n) {
 }
 
 function renderCommunityHeader(community) {
-	document.getElementById('community-topbar-title').textContent = `b/${community.name}`;
-	document.getElementById('community-name').textContent = `b/${community.name}`;
+	document.getElementById('community-name').textContent = community.name;
 	document.getElementById('community-description').textContent = community.description || '';
-	document.getElementById('community-member-count').querySelector('span').textContent = `${communityFormatCount(community.member_count || 0)} members`;
+	document.getElementById('community-description').classList.toggle('hidden', !community.description);
 
 	const typeMeta = COMMUNITY_TYPES.find(t => t.value === community.type);
-	document.getElementById('community-meta').textContent = typeMeta ? typeMeta.label : 'Public';
+
+	// "51 members" + optional green "N online". The server does not report
+	// presence yet, so the online chip only renders if/when the community
+	// object carries a numeric `online_count`; nothing is faked.
+	document.getElementById('community-meta-members').textContent = `${communityFormatCount(community.member_count || 0)} members`;
+	const onlineEl = document.getElementById('community-meta-online');
+	const hasOnline = typeof community.online_count === 'number';
+	onlineEl.classList.toggle('hidden', !hasOnline);
+	onlineEl.classList.toggle('inline-flex', hasOnline);
+	if (hasOnline) document.getElementById('community-meta-online-text').textContent = `${communityFormatCount(community.online_count)} online`;
 
 	const iconEl = document.getElementById('community-icon');
-	iconEl.className = `w-16 h-16 -mt-11 rounded-2xl border-[3px] border-white shadow-sm flex items-center justify-center text-2xl shrink-0 ${community.icon_bg || 'bg-gray-100'}`;
-	iconEl.textContent = community.icon_emoji || '👥';
+	iconEl.textContent = community.icon_emoji || '\u{1F465}';
 
 	document.getElementById('community-banner-icon').innerHTML = `<path d="${communityTopicIcon(community.topic)}" stroke-linecap="round" stroke-linejoin="round"></path>`;
 
 	const role = community.membership ? community.membership.role : null;
 	const isMember = community.membership ? community.membership.is_member : false;
 	const actionBtn = document.getElementById('community-action-btn');
+	const ACTION_PILL = 'h-9 rounded-full flex items-center justify-center transition-colors active:scale-[0.98] duration-100 ';
 	if (role === 'creator' || role === 'moderator') {
-		actionBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.375.185.72.415 1.035.68l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.43l-1.004.828a6.9 6.9 0 010 1.226l1.004.828c.424.35.534.954.26 1.43l-1.297 2.247a1.125 1.125 0 01-1.369.49l-1.217-.456c-.315.265-.66.495-1.035.68l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281a5.85 5.85 0 01-1.035-.68l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.43l1.004-.828a6.9 6.9 0 010-1.226l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.49l1.216.456c.315-.265.66-.495 1.035-.68l.214-1.28z" stroke-linecap="round" stroke-linejoin="round"></path><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round"></path></svg> Manage`;
+		// Pencil -> Edit Community screen (light outlined circle, matches More options).
+		actionBtn.className = ACTION_PILL + 'w-9 border border-gray-200 text-gray-700 hover:bg-gray-50';
+		actionBtn.setAttribute('aria-label', 'Edit community');
+		actionBtn.innerHTML = '<svg class="w-[17px] h-[17px]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M16.9 3.6a2.1 2.1 0 013 3L8 18.5l-4 1 1-4L16.9 3.6z" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 		actionBtn.dataset.mode = 'manage';
 	} else if (isMember) {
+		actionBtn.className = ACTION_PILL + 'pl-3.5 pr-4 gap-1.5 border border-gray-200 text-[13px] font-semibold text-gray-900 hover:bg-gray-50';
+		actionBtn.setAttribute('aria-label', 'Joined');
 		actionBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"></path></svg> Joined`;
 		actionBtn.dataset.mode = 'leave';
+	} else if (community.type === 'restricted') {
+		// Restricted: members are added by the creator; there is nothing to click.
+		actionBtn.className = ACTION_PILL + 'px-4 border border-gray-200 text-[13px] font-semibold text-gray-400 cursor-default';
+		actionBtn.setAttribute('aria-label', 'Invite only');
+		actionBtn.innerHTML = 'Invite only';
+		actionBtn.dataset.mode = 'none';
 	} else {
+		actionBtn.className = ACTION_PILL + 'px-4 border border-gray-200 text-[13px] font-semibold text-gray-900 hover:bg-gray-50';
+		actionBtn.setAttribute('aria-label', 'Join');
 		actionBtn.innerHTML = 'Join';
 		actionBtn.dataset.mode = 'join';
 	}
+	actionBtn.disabled = actionBtn.dataset.mode === 'none';
 
 	document.getElementById('community-about-description').textContent = community.description || '';
 	document.getElementById('community-about-type').textContent = typeMeta ? `${typeMeta.label} — ${typeMeta.desc}` : '';
 	document.getElementById('community-about-created').textContent = community.created_at ? new Date(community.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '';
-
-	if (typeof session !== 'undefined' && session && session.user) {
-		const handle = session.user.username || (session.user.email ? session.user.email.split('@')[0] : '');
-		document.getElementById('community-composer-avatar').src = session.user.profile_picture || `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(handle)}`;
-	}
-	// Only members can post (server returns 403 otherwise), so the composer
-	// is shown to members and replaced by a hint for everyone else.
-	document.getElementById('community-composer').classList.toggle('hidden', !isMember);
-	document.getElementById('community-composer-locked').classList.toggle('hidden', isMember);
-	const input = document.getElementById('community-composer-input');
-	input.value = '';
-	input.style.height = '40px';
-	communityComposerAutoGrow(input);
 }
 
 let communityMembershipBusy = false;
@@ -396,12 +418,16 @@ async function communityHandleActionBtn() {
 	if (!communityCurrentData || communityMembershipBusy) return;
 	const btn = document.getElementById('community-action-btn');
 	const mode = btn.dataset.mode;
+	if (mode === 'none') return;
 	if (mode === 'manage') {
-		showToast('Coming soon');
+		openCommunityEdit();
 		return;
 	}
 	const join = mode === 'join';
-	if (!join && !confirm(`Leave b/${communityCurrentData.name}?`)) return;
+	if (!join) {
+		const rejoinNote = communityCurrentData.type === 'public' ? '' : " You'll need to be added again to rejoin.";
+		if (!confirm(`Leave ${communityCurrentData.name}?${rejoinNote}`)) return;
+	}
 	const slug = communityCurrentSlug;
 	communityMembershipBusy = true;
 	btn.disabled = true;
@@ -410,27 +436,28 @@ async function communityHandleActionBtn() {
 		if (slug !== communityCurrentSlug) return; // user navigated away mid-request
 		communityCurrentData = community;
 		renderCommunityHeader(community);
-		showToast(join ? `Joined b/${community.name}` : `Left b/${community.name}`);
+		showToast(join ? `Joined ${community.name}` : `Left ${community.name}`);
 		communityBrowseSyncItem(community);
 		refreshSideNavCommunities();
 	} catch (e) {
 		showToast(e.message || 'Something went wrong. Try again.');
 	} finally {
 		communityMembershipBusy = false;
-		btn.disabled = false;
+		btn.disabled = btn.dataset.mode === 'none'; // leaving a restricted community lands on the inert pill
 	}
 }
 
 function switchCommunityTab(tab) {
 	document.querySelectorAll('.community-tab').forEach(btn => {
 		const active = btn.dataset.tab === tab;
-		btn.classList.toggle('border-red-500', active);
-		btn.classList.toggle('text-red-500', active);
+		btn.classList.toggle('bg-gray-100', active);
+		btn.classList.toggle('text-gray-900', active);
 		btn.classList.toggle('font-semibold', active);
-		btn.classList.toggle('border-transparent', !active);
 		btn.classList.toggle('text-gray-500', !active);
 		btn.classList.toggle('font-medium', !active);
 	});
+	document.getElementById('community-feed-controls').classList.toggle('hidden', tab !== 'posts');
+	communitySetSortMenu(false);
 	document.querySelectorAll('.community-panel').forEach(panel => panel.classList.add('hidden'));
 	document.getElementById(`community-panel-${tab}`).classList.remove('hidden');
 	if (tab === 'posts') {
@@ -438,6 +465,112 @@ function switchCommunityTab(tab) {
 		communityPostsCursor = null;
 		loadCommunityPosts(true);
 	}
+}
+
+// ---- Sort menu (Best / Hot / New) ----
+// Only "Best" (the feed's current ordering) exists server-side; Hot and New
+// need ranking support, so they close the menu with the standard toast and
+// leave the selection unchanged.
+
+let communitySort = 'best';
+
+function communityIsSortMenuOpen() {
+	const menu = document.getElementById('community-sort-menu');
+	return !!menu && !menu.classList.contains('hidden');
+}
+
+function communitySetSortMenu(open) {
+	const menu = document.getElementById('community-sort-menu');
+	const btn = document.getElementById('community-sort-btn');
+	if (!menu || !btn) return;
+	menu.classList.toggle('hidden', !open);
+	// Keep the compact menu inside the viewport: if left-aligned under the
+	// button it would overflow the right edge, flip it to right-aligned.
+	menu.classList.remove('right-0', 'left-auto');
+	menu.classList.add('left-0');
+	if (open) {
+		const r = menu.getBoundingClientRect();
+		if (r.right > window.innerWidth - 8) {
+			menu.classList.remove('left-0');
+			menu.classList.add('left-auto', 'right-0');
+		}
+	}
+	btn.setAttribute('aria-expanded', String(open));
+	btn.classList.toggle('bg-gray-100', open);
+	btn.classList.toggle('text-gray-900', open);
+	btn.classList.toggle('text-gray-500', !open);
+	document.getElementById('community-sort-chevron').classList.toggle('rotate-180', open);
+}
+
+function communityToggleSortMenu(event) {
+	if (event) event.stopPropagation();
+	communitySetSortMenu(!communityIsSortMenuOpen());
+}
+
+function communitySelectSort(value) {
+	communitySetSortMenu(false);
+	if (value !== communitySort) {
+		showToast('Coming soon');
+		return;
+	}
+}
+
+document.addEventListener('click', function(e) {
+	if (communityIsSortMenuOpen() && !e.target.closest('#community-sort-menu')) communitySetSortMenu(false);
+});
+document.addEventListener('keydown', function(e) {
+	if (e.key === 'Escape' && communityIsSortMenuOpen()) communitySetSortMenu(false);
+});
+
+// ---- Edit Community (UI only: no update endpoint exists yet) ----
+
+const COMMUNITY_EDIT_PRIVACY_COPY = {
+	public: "Anyone can find this community and see what's inside.",
+	restricted: "Anyone can find this community and see what's inside, but only approved members can post.",
+	private: "Only approved members can find this community and see what's inside."
+};
+let communityEditOriginal = null;
+
+function openCommunityEdit() {
+	const c = communityCurrentData;
+	if (!c) return;
+	communityEditOriginal = { name: c.name || '', description: c.description || '' };
+	const photo = document.getElementById('community-edit-photo');
+	photo.className = `w-full h-full rounded-full flex items-center justify-center text-[44px] ${c.icon_bg || 'bg-sky-100'}`;
+	photo.textContent = c.icon_emoji || '\u{1F465}';
+	document.getElementById('community-edit-cover-icon').innerHTML = `<path d="${communityTopicIcon(c.topic)}" stroke-linecap="round" stroke-linejoin="round"></path>`;
+	const typeMeta = COMMUNITY_TYPES.find(t => t.value === c.type) || COMMUNITY_TYPES[0];
+	document.getElementById('community-edit-privacy-icon').innerHTML = `<path d="${typeMeta.icon}" stroke-linecap="round" stroke-linejoin="round"></path>`;
+	document.getElementById('community-edit-privacy-label').textContent = typeMeta.label;
+	document.getElementById('community-edit-privacy-desc').textContent = COMMUNITY_EDIT_PRIVACY_COPY[typeMeta.value] || typeMeta.desc;
+	document.getElementById('community-edit-name').value = communityEditOriginal.name;
+	document.getElementById('community-edit-description').value = communityEditOriginal.description;
+	communityEditUpdate();
+	showView('community-edit');
+	window.scrollTo(0, 0);
+}
+
+function communityEditBack() {
+	showView('community');
+}
+
+function communityEditUpdate() {
+	const nameEl = document.getElementById('community-edit-name');
+	const descEl = document.getElementById('community-edit-description');
+	const nameCount = document.getElementById('community-edit-name-count');
+	const descCount = document.getElementById('community-edit-desc-count');
+	nameCount.textContent = `${nameEl.value.length}/50`;
+	descCount.textContent = `${descEl.value.length}/200`;
+	descCount.classList.toggle('text-red-500', descEl.value.length > 200);
+	descCount.classList.toggle('text-gray-400', descEl.value.length <= 200);
+	const o = communityEditOriginal || { name: '', description: '' };
+	const dirty = nameEl.value.trim() !== o.name || descEl.value.trim() !== o.description;
+	document.getElementById('community-edit-save-btn').disabled = !(dirty && nameEl.value.trim().length > 0);
+}
+
+function communityEditSave() {
+	// Persisting needs a backend update route that does not exist yet.
+	showToast('Coming soon');
 }
 
 let communityPostsItems = [];
@@ -699,6 +832,7 @@ function communityRowActionHtml(c) {
 	const m = c.membership || {};
 	if (m.role === 'creator') return '<span class="shrink-0 text-[12px] font-semibold text-gray-400 px-2">Yours</span>';
 	if (m.is_member) return '<span class="shrink-0 text-[13px] font-semibold text-gray-500 px-2 flex items-center gap-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"></path></svg>Joined</span>';
+	if (c.type === 'restricted') return '<span class="shrink-0 text-[12px] font-semibold text-gray-400 px-2">Invite only</span>';
 	const busy = communityBrowseJoining.has(c.slug);
 	return `<button type="button" class="community-browse-join shrink-0 h-8 px-4 rounded-full bg-brand-red text-white text-[13px] font-semibold disabled:opacity-40 active:scale-[0.98] transition-transform duration-100" data-slug="${escapeHtml(c.slug)}" ${busy ? 'disabled' : ''}>Join</button>`;
 }
@@ -709,7 +843,7 @@ function communityRowHtml(c) {
 		<button type="button" class="community-row-open flex-1 min-w-0 flex items-center gap-3 text-left" data-slug="${escapeHtml(c.slug)}">
 			<span class="w-11 h-11 rounded-xl ${escapeHtml(c.icon_bg || 'bg-gray-100')} flex items-center justify-center text-xl shrink-0">${escapeHtml(c.icon_emoji || '👥')}</span>
 			<span class="flex-1 min-w-0">
-				<span class="block text-[15px] font-bold text-gray-900 truncate">b/${escapeHtml(c.name)}</span>
+				<span class="block text-[15px] font-bold text-gray-900 truncate">${escapeHtml(c.name)}</span>
 				<span class="block text-[13px] text-gray-500 truncate">${count}${c.description ? ' · ' + escapeHtml(c.description) : ''}</span>
 			</span>
 		</button>
@@ -787,7 +921,7 @@ async function communityBrowseJoin(slug) {
 		const community = await communityApi.setMembership(slug, true);
 		communityBrowseJoining.delete(slug);
 		communityBrowseSyncItem(community);
-		showToast(`Joined b/${community.name}`);
+		showToast(`Joined ${community.name}`);
 		refreshSideNavCommunities();
 	} catch (e) {
 		communityBrowseJoining.delete(slug);
@@ -818,7 +952,7 @@ function communitySideNavOpen(slug) {
 
 function sideNavCommunityRowHtml(c) {
 	const slug = escapeHtml(c.slug);
-	const label = `b/${escapeHtml(c.name)}`;
+	const label = escapeHtml(c.name);
 	const fav = sideNavFavoriteSlugs.has(c.slug);
 	return `<div class="w-full flex items-center gap-1 pl-3 pr-2 py-1 rounded-xl">
 		<button type="button" class="flex-1 min-w-0 flex items-center gap-3 py-2 text-left" data-community-slug="${slug}" onclick="communitySideNavOpen(this.dataset.communitySlug)">

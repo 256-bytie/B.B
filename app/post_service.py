@@ -166,9 +166,12 @@ def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cu
     paper over). limit is clamped to [1, MAX_POSTS_LIMIT] by the caller
     (see clamp_limit in app/routes/posts.py) before reaching here.
 
-    only_community_id: when set, returns posts for that community only;
-    when None, returns main feed posts (community_id IS NULL). The main
-    feed default is unchanged and no call sites need updating.
+    only_community_id: when set, returns posts for that community only.
+    When None (Home feed) community posts are included alongside normal
+    posts, each carrying a 'community' {slug, name} key. Posts from
+    private communities appear only for members. When user_id_filter is
+    set (profile lists) community posts stay excluded, matching the
+    profile post count.
 
     Returns (posts, next_cursor).
     """
@@ -191,14 +194,23 @@ def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cu
     '''
     params = [current_user_id]
 
-    # Community posts (posts.community_id set) belong to their community's
-    # feed only (GET /api/communities/<slug>/posts), never the main feed.
+    # Community posts (posts.community_id set) appear in their community's
+    # feed and in the Home feed. Private-community posts are visible in the
+    # Home feed to members only. Per-author lists (profiles) exclude them.
     where_clauses = []
     if only_community_id is not None:
         where_clauses.append('posts.community_id = ?')
         params.append(only_community_id)
-    else:
+    elif user_id_filter is not None:
         where_clauses.append('posts.community_id IS NULL')
+    else:
+        where_clauses.append('''(posts.community_id IS NULL
+            OR posts.community_id IN (
+                SELECT c.id FROM communities c WHERE c.type != 'private'
+                UNION
+                SELECT m.community_id FROM community_members m WHERE m.user_id = ?
+            ))''')
+        params.append(current_user_id)
 
     if audience_filter:
         where_clauses.append('posts.audience = ?')
@@ -234,13 +246,29 @@ def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cu
         images_by_post = {}
         for post_id, image_path in cursor.fetchall():
             images_by_post.setdefault(post_id, []).append(image_path)
+        cursor.execute(f'''
+            SELECT posts.id, c.slug, c.name,
+                   EXISTS(SELECT 1 FROM community_members m
+                          WHERE m.community_id = c.id AND m.user_id = ?)
+            FROM posts
+            JOIN communities c ON c.id = posts.community_id
+            WHERE posts.id IN ({placeholders})
+        ''', [current_user_id] + post_ids)
+        community_by_post = {
+            pid: {'slug': slug, 'name': name, 'is_member': bool(is_member)}
+            for pid, slug, name, is_member in cursor.fetchall()
+        }
     else:
         images_by_post = {}
+        community_by_post = {}
 
     posts = []
     for row in page_rows:
         image_list = [(img,) for img in images_by_post.get(row[0], [])]
-        posts.append(serialize_post(row, image_list, row[13]))
+        post = serialize_post(row, image_list, row[13])
+        if row[0] in community_by_post:
+            post['community'] = community_by_post[row[0]]
+        posts.append(post)
 
     return posts, next_cursor
 

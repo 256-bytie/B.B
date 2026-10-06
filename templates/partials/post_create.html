@@ -24,10 +24,17 @@
 			<div class="w-12 h-12 rounded-full overflow-hidden shrink-0 bg-gray-200">
 				<img id="compose-avatar-img" alt="" class="w-full h-full object-cover" src=""/>
 			</div>
-			<!-- User Details -->
-			<div class="flex items-center gap-1 cursor-pointer">
-				<span id="compose-user-name" class="font-semibold text-[15px] leading-tight text-gray-900"></span>
-				<i class="fa-solid fa-chevron-down text-sm text-gray-500"></i>
+			<!-- User Details + community picker -->
+			<div class="flex flex-col items-start gap-2 min-w-0">
+				<div class="flex items-center gap-1 cursor-pointer">
+					<span id="compose-user-name" class="font-semibold text-[15px] leading-tight text-gray-900"></span>
+					<i class="fa-solid fa-chevron-down text-sm text-gray-500"></i>
+				</div>
+				<button id="community-picker-btn" type="button" onclick="openCommunityPicker()" aria-haspopup="dialog" aria-expanded="false" class="max-w-full inline-flex items-center gap-1.5 h-8 pl-3.5 pr-2 rounded-full border border-slate-400 text-[14px] font-semibold text-slate-600 active:bg-gray-50 transition-colors duration-100">
+					<span id="community-picker-emoji" class="hidden text-[15px] leading-none shrink-0"></span>
+					<span id="community-picker-label" class="truncate">Select a community</span>
+					<svg class="w-4 h-4 shrink-0 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="m8 9 4-4 4 4M8 15l4 4 4-4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+				</button>
 			</div>
 		</div>
 		<!-- END: User Info Header -->
@@ -92,6 +99,36 @@
 		</div>
 	</div>
 	<!-- END: Audience Picker Bottom Sheet -->
+
+	<!-- BEGIN: Community Picker Bottom Sheet -->
+	<div id="community-picker-backdrop" class="hidden fixed inset-0 z-40 bg-black/30 transition-opacity" onclick="closeCommunityPicker()"></div>
+	<div id="community-picker-sheet" class="hidden fixed left-0 right-0 bottom-0 z-50 bg-white rounded-t-[24px] shadow-[0_-8px_24px_rgba(0,0,0,0.12)] pt-3 pb-6 max-w-[430px] mx-auto flex-col max-h-[75vh]" role="dialog" aria-modal="true" aria-label="Choose a community">
+		<div class="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-4 shrink-0"></div>
+		<h3 class="text-[19px] font-bold text-gray-900 mb-2 px-4 shrink-0">Post to</h3>
+		<div class="overflow-y-auto flex-1 min-h-0">
+			<div id="community-picker-loading" class="hidden py-10 flex items-center justify-center text-gray-400">
+				<svg class="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+					<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+				</svg>
+			</div>
+			<div id="community-picker-error" class="hidden flex-col items-center text-center px-8 py-10">
+				<p class="text-[15px] font-semibold text-gray-900">Couldn't load your communities</p>
+				<p id="community-picker-error-detail" class="text-[13px] text-gray-500 mt-1">Check your connection and try again.</p>
+				<button type="button" onclick="loadCommunityPickerList()" class="h-10 px-5 rounded-full bg-brand-red text-white text-[14px] font-semibold mt-4 active:scale-[0.98] transition-transform duration-100">Try again</button>
+			</div>
+			<div id="community-picker-empty" class="hidden flex-col items-center text-center px-8 py-8">
+				<p class="text-[15px] font-semibold text-gray-900">You haven't joined any communities</p>
+				<p class="text-[13px] text-gray-500 mt-1">Join one to post in it.</p>
+				<button type="button" onclick="communityPickerBrowse()" class="h-10 px-5 rounded-full bg-brand-red text-white text-[14px] font-semibold mt-4 active:scale-[0.98] transition-transform duration-100">Browse communities</button>
+			</div>
+			<div id="community-picker-list" class="hidden flex-col px-2 divide-y divide-gray-100"></div>
+		</div>
+		<div class="border-t border-gray-100 mt-2 pt-2 px-2 shrink-0">
+			<button type="button" class="w-full text-center py-3 text-[15px] text-gray-500 font-medium rounded-xl hover:bg-gray-50 transition-colors" onclick="closeCommunityPicker()">Cancel</button>
+		</div>
+	</div>
+	<!-- END: Community Picker Bottom Sheet -->
 
 	<!-- BEGIN: Discard Confirm Dialog -->
 	<div id="discard-backdrop" class="hidden fixed inset-0 z-50 bg-black/30"></div>

@@ -39,7 +39,7 @@ function apiFetch(url, options = {}) {
 // responding to a browser Back/Forward navigation doesn't push a second,
 // redundant history entry on top of the one the browser just navigated to.
 function showView(viewName, { skipUrlSync = false } = {}) {
-    const views = ['login', 'signup', 'feed', 'profile', 'edit-profile', 'user-profile', 'create-post', 'businesses', 'courses', 'gpa-calculator', 'chat', 'library', 'library-contribute', 'search', 'wallet', 'community', 'community-create', 'community-browse'];
+    const views = ['login', 'signup', 'feed', 'profile', 'edit-profile', 'user-profile', 'create-post', 'businesses', 'courses', 'gpa-calculator', 'chat', 'library', 'library-contribute', 'search', 'wallet', 'community', 'community-edit', 'community-create', 'community-browse'];
     views.forEach(v => {
         const view = document.getElementById(v + '-view');
         if (view) {
@@ -156,6 +156,10 @@ const BOTTOM_NAV_ACTIVE_ITEM = {
     'profile': 'bottom-nav-profile'
 };
 
+// Views that show the bottom bar without highlighting any item (they are
+// not one of its destinations, but should keep it reachable).
+const BOTTOM_NAV_VISIBLE_VIEWS = ['community'];
+
 // ---- Businesses screen navigation ----
 // Screens Businesses can be opened from (side nav is reachable from all of
 // them); the back arrow returns to whichever one it came from. Mirrors
@@ -185,7 +189,7 @@ function updateBottomNav(viewName) {
     const bottomNav = document.getElementById('bottom-nav');
     if (bottomNav) {
         const activeItemId = BOTTOM_NAV_ACTIVE_ITEM[viewName];
-        bottomNav.classList.toggle('hidden', !activeItemId);
+        bottomNav.classList.toggle('hidden', !activeItemId && !BOTTOM_NAV_VISIBLE_VIEWS.includes(viewName));
         // Feed scroll may have retracted the bar; any view switch restores it.
         bottomNav.classList.remove('bottom-nav-retracted');
         bottomNav.querySelectorAll('.bottom-nav-item').forEach(function(item) {

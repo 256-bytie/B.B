@@ -264,7 +264,7 @@ function buildSearchCommunityRowHtml(c) {
 <li><button type="button" class="search-community-row flex items-center gap-3 w-full py-2.5 text-left" data-slug="${escapeHtml(c.slug)}">
 <span class="w-11 h-11 rounded-xl ${escapeHtml(c.icon_bg || 'bg-gray-100')} flex items-center justify-center text-xl shrink-0">${escapeHtml(c.icon_emoji || '👥')}</span>
 <div class="flex-1 min-w-0">
-<p class="text-[14.5px] font-bold text-gray-900 truncate">b/${escapeHtml(c.name)}</p>
+<p class="text-[14.5px] font-bold text-gray-900 truncate">${escapeHtml(c.name)}</p>
 <p class="text-[13px] text-gray-500 truncate">${count}${c.description ? ' · ' + escapeHtml(c.description) : ''}</p>
 </div>
 <i class="fa-solid fa-chevron-right text-gray-300 text-[12px] shrink-0"></i>

@@ -248,7 +248,7 @@ postCardContainerIds.forEach(function(containerId) {
 		});
 
 		if (!response.ok) {
-			throw new Error('Failed to like post');
+			throw await apiErrorFromResponse(response, 'Failed to like post');
 		}
 
 		const data = await response.json();
@@ -291,6 +291,7 @@ postCardContainerIds.forEach(function(containerId) {
 
 	} catch (error) {
 		console.error('Error liking post:', error);
+		notifyAccessDenied(error);
 
 		// Revert optimistic update
 		likeBtn.dataset.liked = originalLiked;

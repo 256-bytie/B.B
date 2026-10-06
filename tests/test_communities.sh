@@ -22,7 +22,8 @@ GREEN='\033[0;32m'; RED='\033[0;31m'; YELLOW='\033[1;33m'; NC='\033[0m'
 pass() { echo -e "${GREEN}✓ PASS${NC}: $1"; PASSED=$((PASSED + 1)); }
 fail() { echo -e "${RED}✗ FAIL${NC}: $1"; FAILED=$((FAILED + 1)); }
 info() { echo -e "${YELLOW}ℹ INFO${NC}: $1"; }
-cleanup() { rm -f "$JAR_A" "$JAR_B" "$JAR_ANON"; }
+PNG="/tmp/cm_${RUN_ID}.png"; BADFILE="/tmp/cm_${RUN_ID}.txt"
+cleanup() { rm -f "$JAR_A" "$JAR_B" "$JAR_ANON" "$PNG" "$BADFILE"; }
 trap cleanup EXIT
 
 json_get() { python3 -c "import json,sys; d=json.loads(sys.argv[1]); print($2)" "$1" 2>/dev/null; }
@@ -42,6 +43,24 @@ req() {
     local resp; resp=$(curl "${args[@]}")
     BODY=$(echo "$resp" | sed '$d'); CODE=$(echo "$resp" | tail -n1)
 }
+
+# mreq JAR CSRF PATH [curl -F args...] -> multipart POST, sets BODY and CODE
+mreq() {
+    local jar="$1" csrf="$2" path="$3"; shift 3
+    local resp; resp=$(curl -s -w "\n%{http_code}" -b "$jar" -X POST "$BASE_URL$path" -H "X-CSRF-Token: $csrf" "$@")
+    BODY=$(echo "$resp" | sed '$d'); CODE=$(echo "$resp" | tail -n1)
+}
+
+# Fixtures: a valid 1x1 PNG and a non-image file.
+python3 - "$PNG" <<'PY'
+import struct, sys, zlib
+def chunk(t, d):
+    return struct.pack('>I', len(d)) + t + d + struct.pack('>I', zlib.crc32(t + d) & 0xffffffff)
+png = (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', 1, 1, 8, 2, 0, 0, 0))
+       + chunk(b'IDAT', zlib.compress(b'\x00\xff\x00\x00')) + chunk(b'IEND', b''))
+open(sys.argv[1], 'wb').write(png)
+PY
+echo "not an image" > "$BADFILE"
 
 info "Starting Communities tests"
 curl -s -c "$JAR_ANON" "$BASE_URL/api/session" > /dev/null
@@ -91,6 +110,8 @@ req "$JAR_ANON" "" GET "/api/communities/nosuchcommunity${RUN_ID}"
 # --- Posting requires membership ---
 req "$JAR_B" "$CSRF_B" POST "/api/communities/$SLUG/posts" '{"content":"hi"}'
 [[ "$CODE" == "403" && "$(json_get "$BODY" "d['error']")" == "Join this community to post" ]] && pass "Non-member post -> 403" || fail "Non-member post: $CODE $BODY"
+mreq "$JAR_B" "$CSRF_B" "/api/communities/$SLUG/posts" -F "content=nonmember image $RUN_ID" -F "images=@$PNG;type=image/png"
+[[ "$CODE" == "403" ]] && pass "Non-member multipart post -> 403" || fail "Non-member multipart: $CODE $BODY"
 
 # --- Join (idempotent) ---
 req "$JAR_B" "$CSRF_B" POST "/api/communities/$SLUG/join"
@@ -122,14 +143,77 @@ req "$JAR_ANON" "" GET "/api/communities/$SLUG/posts?limit=2&cursor=$CURSOR"
 req "$JAR_ANON" "" GET "/api/communities/$SLUG2/posts"
 [[ "$(json_get "$BODY" "len(d['posts'])")" == "0" ]] && pass "Posts are scoped to their community" || fail "Scope: $BODY"
 
+# --- Home feed includes community posts (private: members only) ---
 req "$JAR_ANON" "" GET "/api/posts?limit=50"
-[[ "$(json_get "$BODY" "any('$RUN_ID' in p['content'] for p in d['posts'])")" == "False" ]] && pass "Community posts excluded from main feed" || fail "Leaked into /api/posts"
+[[ "$CODE" == "200" && "$(json_get "$BODY" "any('$RUN_ID' in p['content'] and p.get('community', {}).get('slug') == '$SLUG' and p['community'].get('name') and p['community']['is_member'] is False for p in d['posts'])")" == "True" ]] \
+    && pass "Home feed includes public community posts with community {slug,name,is_member:false} (logged out)" || fail "Home feed community post: $CODE $BODY"
+
+req "$JAR_B" "" GET "/api/posts?limit=50"
+[[ "$(json_get "$BODY" "any(p.get('community', {}).get('slug') == '$SLUG' and p['community']['is_member'] is True for p in d['posts'])")" == "True" ]] \
+    && pass "Home feed marks is_member:true for the member's own community" || fail "Home feed is_member: $BODY"
+
+PRIV_NAME="Priv${RUN_ID: -6}"
+req "$JAR_A" "$CSRF_A" POST "/api/communities" "{\"name\":\"$PRIV_NAME\",\"description\":\"d\",\"topic\":\"Tech\",\"type\":\"private\"}"
+PRIV_SLUG=$(json_get "$BODY" "d['id']")
+req "$JAR_A" "$CSRF_A" POST "/api/communities/$PRIV_SLUG/posts" "{\"content\":\"private home feed post $RUN_ID\"}"
+PRIV_POST_ID=$(json_get "$BODY" "d['id']")
+[[ "$CODE" == "201" ]] || fail "Private community post create: $CODE $BODY"
+req "$JAR_A" "" GET "/api/posts?limit=50"
+[[ "$(json_get "$BODY" "any(p['id'] == $PRIV_POST_ID for p in d['posts'])")" == "True" ]] \
+    && pass "Private community post appears in the Home feed for its member" || fail "Private post missing for member: $BODY"
+req "$JAR_B" "" GET "/api/posts?limit=50"
+B_SEES_PRIV=$(json_get "$BODY" "any(p['id'] == $PRIV_POST_ID for p in d['posts'])")
+req "$JAR_ANON" "" GET "/api/posts?limit=50"
+ANON_SEES_PRIV=$(json_get "$BODY" "any(p['id'] == $PRIV_POST_ID for p in d['posts'])")
+[[ "$B_SEES_PRIV" == "False" && "$ANON_SEES_PRIV" == "False" ]] \
+    && pass "Private community post hidden from the Home feed for non-members and logged-out" || fail "Private post leaked: B=$B_SEES_PRIV anon=$ANON_SEES_PRIV"
+req "$JAR_A" "$CSRF_A" DELETE "/api/posts/$PRIV_POST_ID"
 
 # --- Phase 3: Full post pipeline integration ---
 
-# Multipart post with images
-echo "Test image content" > /tmp/test_img_${RUN_ID}.txt
-req "$JAR_B" "$CSRF_B" POST "/api/communities/$SLUG/posts" # multipart tested manually for now
+# --- Multipart posts (images) ---
+mreq "$JAR_B" "$CSRF_B" "/api/communities/$SLUG/posts" -F "content=image post $RUN_ID" -F "images=@$PNG;type=image/png"
+IMG_POST_ID=$(json_get "$BODY" "d['id']")
+IMG_URL=$(json_get "$BODY" "d['images'][0]")
+[[ "$CODE" == "201" && "$(json_get "$BODY" "len(d['images']) == 1 and d['community']['slug'] == '$SLUG'")" == "True" ]] \
+    && pass "Multipart post with 1 image -> 201, 1 image, community key" || fail "Multipart 1 image: $CODE $BODY"
+
+[[ "$(curl -s -o /dev/null -w '%{http_code}' "$BASE_URL$IMG_URL")" == "200" ]] && pass "Uploaded image is served" || fail "Image not served: $IMG_URL"
+
+mreq "$JAR_B" "$CSRF_B" "/api/communities/$SLUG/posts" -F "content=two images $RUN_ID" -F "images=@$PNG;type=image/png" -F "images=@$PNG;type=image/png"
+IMG2_POST_ID=$(json_get "$BODY" "d['id']")
+IMG2_URLS=$(json_get "$BODY" "' '.join(d['images'])")
+[[ "$CODE" == "201" && "$(json_get "$BODY" "len(d['images']) == 2")" == "True" ]] && pass "Multipart post with 2 images -> 201" || fail "Multipart 2 images: $CODE $BODY"
+
+req "$JAR_ANON" "" GET "/api/communities/$SLUG/posts"
+[[ "$(json_get "$BODY" "any(p['id'] == $IMG_POST_ID and p['images'] == ['$IMG_URL'] for p in d['posts'])")" == "True" ]] \
+    && pass "Image post lists with its image URL" || fail "Image post in list: $BODY"
+
+mreq "$JAR_B" "$CSRF_B" "/api/communities/$SLUG/posts" -F "content=bad image $RUN_ID" -F "images=@$BADFILE;type=text/plain"
+BAD_CODE="$CODE"
+req "$JAR_ANON" "" GET "/api/communities/$SLUG/posts"
+[[ "$BAD_CODE" == "400" && "$(json_get "$BODY" "not any('bad image $RUN_ID' in p['content'] for p in d['posts'])")" == "True" ]] \
+    && pass "Invalid image -> 400 and no post inserted" || fail "Invalid image: $BAD_CODE $BODY"
+
+mreq "$JAR_B" "$CSRF_B" "/api/communities/$SLUG/posts" -F "content=too many $RUN_ID" \
+    -F "images=@$PNG;type=image/png" -F "images=@$PNG;type=image/png" -F "images=@$PNG;type=image/png" \
+    -F "images=@$PNG;type=image/png" -F "images=@$PNG;type=image/png"
+[[ "$CODE" == "400" ]] && pass "More than 4 images -> 400" || fail "5 images: $CODE $BODY"
+
+mreq "$JAR_B" "$CSRF_B" "/api/communities/$SLUG/posts" -F "content=" -F "images=@$PNG;type=image/png"
+[[ "$CODE" == "400" ]] && pass "Image with empty content -> 400 (text required)" || fail "Image-only: $CODE $BODY"
+
+mreq "$JAR_ANON" "" "/api/communities/$SLUG/posts" -F "content=anon $RUN_ID" -F "images=@$PNG;type=image/png"
+[[ "$CODE" == "401" || "$CODE" == "403" ]] && pass "Logged-out multipart post rejected ($CODE)" || fail "Anon multipart: $CODE"
+
+# Deleting an image post removes its files.
+req "$JAR_B" "$CSRF_B" DELETE "/api/posts/$IMG_POST_ID"
+D1="$CODE"
+req "$JAR_B" "$CSRF_B" DELETE "/api/posts/$IMG2_POST_ID"
+D2="$CODE"
+GONE=1; for u in $IMG_URL $IMG2_URLS; do [[ "$(curl -s -o /dev/null -w '%{http_code}' "$BASE_URL$u")" == "404" ]] || GONE=0; done
+[[ "$D1" == "200" && "$D2" == "200" && "$GONE" == "1" ]] && pass "Deleting image posts removes image files" || fail "Image cleanup: $D1 $D2 gone=$GONE"
+
 # JSON post still works
 req "$JAR_B" "$CSRF_B" POST "/api/communities/$SLUG/posts" '{"content":"json post"}'
 [[ "$CODE" == "201" ]] && pass "JSON post (without images) -> 201" || fail "JSON post: $CODE"
@@ -173,16 +257,55 @@ OTHER_POST_ID=$(json_get "$BODY" "next((p['id'] for p in d['posts'] if p['id'] !
 req "$JAR_A" "$CSRF_A" DELETE "/api/posts/$OTHER_POST_ID"
 [[ "$CODE" == "403" ]] && pass "Delete other user's post -> 403" || fail "Delete other: $CODE"
 
-# Community posts excluded from global search
-req "$JAR_ANON" "" GET "/api/search?q=$RUN_ID&type=posts"
-SEARCH_EXCLUDED=$(json_get "$BODY" "not any('$RUN_ID' in p['content'] for p in d.get('posts', []))")
-[[ "$SEARCH_EXCLUDED" == "True" ]] && pass "Community posts excluded from global search" || fail "Search leak: $BODY"
+# --- Leakage filters ---
+# /api/search* require a login (anonymous gets 401), so use JAR_A. Each check
+# has a positive control (a main-feed post that MUST be found) so an error
+# response can't pass as "nothing leaked".
+TAG_C="cmtag${RUN_ID: -6}"; TAG_M="mntag${RUN_ID: -6}"
+req "$JAR_B" "$CSRF_B" POST "/api/communities/$SLUG/posts" "{\"content\":\"tagged community post $RUN_ID #$TAG_C\"}"
+[[ "$CODE" == "201" ]] || fail "Tagged community post: $CODE $BODY"
+req "$JAR_B" "$CSRF_B" POST "/api/posts" "{\"content\":\"main feed post $RUN_ID #$TAG_M\"}"
+MAIN_POST_ID=$(json_get "$BODY" "d['id']")
+[[ "$CODE" == "201" ]] || fail "Main feed post: $CODE $BODY"
 
-# Community posts excluded from profile post_count
-req "$JAR_B" "" GET "/api/users/$(json_get "$(req "$JAR_B" "" GET /api/session; echo "$BODY")" "d['user']['id']")"
+req "$JAR_A" "" GET "/api/search?q=$RUN_ID&type=posts"
+[[ "$CODE" == "200" && "$(json_get "$BODY" "any('main feed post' in p['content'] for p in d['posts'])")" == "True" ]] \
+    && pass "Search finds the main-feed post (positive control)" || fail "Search control: $CODE $BODY"
+[[ "$(json_get "$BODY" "not any('community post' in p['content'] for p in d['posts'])")" == "True" ]] \
+    && pass "Community posts excluded from global search" || fail "Search leak: $BODY"
+
+req "$JAR_A" "" GET "/api/search/suggestions?q=$TAG_M"
+[[ "$CODE" == "200" && "$(json_get "$BODY" "any(s['text'].lower() == '#$TAG_M' for s in d['suggestions'])")" == "True" ]] \
+    && pass "Suggestions include the main-feed hashtag (positive control)" || fail "Suggestion control: $CODE $BODY"
+req "$JAR_A" "" GET "/api/search/suggestions?q=$TAG_C"
+[[ "$CODE" == "200" && "$(json_get "$BODY" "not any('$TAG_C' in s['text'].lower() for s in d['suggestions'])")" == "True" ]] \
+    && pass "Community hashtag excluded from suggestions" || fail "Suggestion leak: $CODE $BODY"
+
+req "$JAR_A" "" GET "/api/search?q=$TAG_C&type=topics"
+[[ "$CODE" == "200" && "$(json_get "$BODY" "len(d['topics']) == 0")" == "True" ]] \
+    && pass "Community hashtag excluded from topics search" || fail "Topics leak: $CODE $BODY"
+req "$JAR_A" "" GET "/api/search?q=$TAG_M&type=topics"
+[[ "$CODE" == "200" && "$(json_get "$BODY" "len(d['topics']) >= 1")" == "True" ]] \
+    && pass "Topics search finds the main-feed hashtag (positive control)" || fail "Topics control: $CODE $BODY"
+
+req "$JAR_A" "" GET "/api/search/trending?limit=20"
+[[ "$CODE" == "200" && "$(json_get "$BODY" "not any(t['tag'] == '$TAG_C'.lower() for t in d['topics'])")" == "True" ]] \
+    && pass "Community hashtag excluded from trending" || fail "Trending leak: $CODE $BODY"
+
+# Profile: count and feed exclude community posts but include main-feed ones.
+req "$JAR_B" "" GET "/api/session"
+B_ID=$(json_get "$BODY" "d['user']['id']")
+req "$JAR_B" "" GET "/api/users/$B_ID"
 PROFILE_COUNT=$(json_get "$BODY" "d['post_count']")
-# User B created 3 community posts in this community, but post_count should not include them
-[[ "$PROFILE_COUNT" == "0" ]] && pass "Community posts excluded from profile post_count" || fail "Profile count: $PROFILE_COUNT"
+# B has several community posts plus exactly one main-feed post.
+[[ "$PROFILE_COUNT" == "1" ]] && pass "Profile post_count excludes community posts (1 main post)" || fail "Profile count: $PROFILE_COUNT"
+
+req "$JAR_ANON" "" GET "/api/posts?user_id=$B_ID&limit=50"
+[[ "$(json_get "$BODY" "[p['id'] for p in d['posts']] == [$MAIN_POST_ID]")" == "True" ]] \
+    && pass "Profile feed contains only the main-feed post" || fail "Profile feed: $BODY"
+
+req "$JAR_B" "$CSRF_B" DELETE "/api/posts/$MAIN_POST_ID"
+[[ "$CODE" == "200" ]] || fail "Main post cleanup: $CODE"
 
 # Pagination with 21+ posts
 for i in {4..22}; do

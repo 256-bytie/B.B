@@ -1,3 +1,26 @@
+// ---- Access-denied feedback (community posts) ----
+// Builds an Error carrying the server's {error} text and the HTTP status.
+async function apiErrorFromResponse(response, fallback) {
+	let message = fallback;
+	try {
+		const data = await response.json();
+		if (data && data.error) message = data.error;
+	} catch (e) { /* non-JSON body: keep the fallback */ }
+	const err = new Error(message);
+	err.status = response.status;
+	err.fromServer = true;
+	return err;
+}
+
+// 403/404 on a like or comment means the viewer lost (or never had) access to
+// that community's content. The optimistic UI is already rolled back by the
+// caller; this tells the person why. Other failures stay silent as before.
+function notifyAccessDenied(error) {
+	if (error && error.fromServer && (error.status === 403 || error.status === 404)) {
+		showToast(error.message);
+	}
+}
+
 // ---- Reply-to-a-specific-comment context ----
 // Backend now has real parent_comment_id threading (see app/routes/posts.py).
 // Tapping "Reply" on a comment or reply records that comment's id as the
@@ -468,7 +491,7 @@ document.addEventListener('click', async function(e) {
 		});
 
 		if (!response.ok) {
-			throw new Error('Failed to like post');
+			throw await apiErrorFromResponse(response, 'Failed to like post');
 		}
 
 		const data = await response.json();
@@ -504,6 +527,7 @@ document.addEventListener('click', async function(e) {
 
 	} catch (error) {
 		console.error('Error liking post:', error);
+		notifyAccessDenied(error);
 
 		// Revert optimistic update
 		overlayLikeBtn.dataset.liked = originalLiked;
@@ -584,7 +608,7 @@ document.addEventListener('click', async function(e) {
 		});
 
 		if (!response.ok) {
-			throw new Error('Failed to like comment');
+			throw await apiErrorFromResponse(response, 'Failed to like comment');
 		}
 
 		const data = await response.json();
@@ -595,6 +619,7 @@ document.addEventListener('click', async function(e) {
 
 	} catch (error) {
 		console.error('Error liking comment:', error);
+		notifyAccessDenied(error);
 
 		// Revert optimistic update
 		likeBtn.dataset.liked = originalLiked;

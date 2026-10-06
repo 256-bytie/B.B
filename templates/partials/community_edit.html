@@ -1,0 +1,68 @@
+<!-- BEGIN: Community Edit View -->
+<!-- UI only: there is no PATCH /api/communities/<slug> yet, so Save, the photo
+     pickers and the privacy picker show the standard "Coming soon" toast.
+     Opened from the pencil button on the community screen (creator/moderator);
+     populated by openCommunityEdit() in community.js. -->
+<div id="community-edit-view" class="view-section bg-white min-h-screen flex justify-center">
+<main class="w-full max-w-[640px] bg-white min-h-screen flex flex-col relative">
+
+	<header class="flex items-center justify-between px-4 h-16 bg-white sticky top-0 z-10 border-b border-gray-100 shrink-0">
+		<div class="flex items-center gap-4 min-w-0">
+			<button type="button" aria-label="Back" onclick="communityEditBack()" class="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-gray-800 hover:bg-gray-50 transition-colors active:scale-95 duration-100 shrink-0">
+				<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.25" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="m15 18-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+			</button>
+			<h1 class="text-[20px] font-bold text-gray-900 truncate">Edit Community</h1>
+		</div>
+		<button type="button" id="community-edit-save-btn" onclick="communityEditSave()" disabled class="h-10 px-5 rounded-full bg-brand-red text-white text-[15px] font-semibold shrink-0 disabled:opacity-60 active:scale-[0.98] transition-transform duration-100">Save</button>
+	</header>
+
+	<div class="flex-1 overflow-y-auto px-5 pt-6 pb-16">
+		<!-- Community photo -->
+		<h2 class="text-[16px] font-bold text-gray-900">Community Photo</h2>
+		<div class="relative w-[92px] h-[92px] mt-3">
+			<div id="community-edit-photo" class="w-full h-full rounded-full flex items-center justify-center text-[44px] bg-sky-100"></div>
+			<button type="button" aria-label="Change community photo" onclick="showToast('Coming soon')" class="absolute -bottom-1 -right-2 w-9 h-9 rounded-full bg-white border border-gray-100 shadow-sm flex items-center justify-center text-gray-800 active:scale-95 transition-transform duration-100">
+				<svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 9a2 2 0 0 1 2-2h1.5a1 1 0 0 0 .8-.4l.9-1.2a1 1 0 0 1 .8-.4h6a1 1 0 0 1 .8.4l.9 1.2a1 1 0 0 0 .8.4H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Z" stroke-linejoin="round"></path><circle cx="12" cy="13" r="3.5"></circle></svg>
+			</button>
+		</div>
+		<p class="text-[14px] text-gray-500 mt-3">Recommended: Square image</p>
+
+		<!-- Cover photo -->
+		<h2 class="text-[16px] font-bold text-gray-900 mt-8">Cover Photo <span class="font-normal text-gray-500">(Optional)</span></h2>
+		<div class="relative mt-3 w-full rounded-2xl overflow-hidden flex items-center justify-center" style="aspect-ratio: 3.2 / 1; background: linear-gradient(180deg, #5BA3F2 0%, #8CC0F8 100%);">
+			<svg id="community-edit-cover-icon" class="w-12 h-12 text-white" fill="none" stroke="currentColor" stroke-width="1.25" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"></svg>
+			<button type="button" aria-label="Change cover photo" onclick="showToast('Coming soon')" class="absolute bottom-2.5 right-2.5 w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center text-gray-800 active:scale-95 transition-transform duration-100">
+				<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 9a2 2 0 0 1 2-2h1.5a1 1 0 0 0 .8-.4l.9-1.2a1 1 0 0 1 .8-.4h6a1 1 0 0 1 .8.4l.9 1.2a1 1 0 0 0 .8.4H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Z" stroke-linejoin="round"></path><circle cx="12" cy="13" r="3.5"></circle></svg>
+			</button>
+		</div>
+		<p class="text-[14px] text-gray-500 mt-3">Recommended: 16:9 landscape image</p>
+
+		<!-- Name -->
+		<label for="community-edit-name" class="block text-[16px] font-bold text-gray-900 mt-8">Community Name</label>
+		<div class="relative mt-3">
+			<input type="text" id="community-edit-name" maxlength="50" autocomplete="off" oninput="communityEditUpdate()" class="w-full h-[52px] pl-5 pr-16 rounded-full bg-white border border-gray-200 text-[17px] text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red/40">
+			<span id="community-edit-name-count" class="absolute right-5 top-1/2 -translate-y-1/2 text-[13px] text-gray-400 pointer-events-none">0/50</span>
+		</div>
+
+		<!-- Privacy -->
+		<h2 class="text-[16px] font-bold text-gray-900 mt-7">Privacy</h2>
+		<button type="button" onclick="showToast('Coming soon')" class="w-full h-[52px] mt-3 px-5 rounded-full bg-white border border-gray-200 flex items-center justify-between text-gray-900 active:bg-gray-50 transition-colors">
+			<span class="flex items-center gap-3 text-[17px]">
+				<svg id="community-edit-privacy-icon" class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"></svg>
+				<span id="community-edit-privacy-label">Public</span>
+			</span>
+			<svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="m6 9 6 6 6-6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+		</button>
+		<p id="community-edit-privacy-desc" class="text-[14px] text-gray-500 mt-3"></p>
+
+		<!-- Description -->
+		<label for="community-edit-description" class="block text-[16px] font-bold text-gray-900 mt-7">Description</label>
+		<div class="relative mt-3">
+			<textarea id="community-edit-description" maxlength="200" rows="3" oninput="communityEditUpdate()" class="w-full pl-5 pr-5 pt-4 pb-9 rounded-3xl bg-white border border-gray-200 text-[17px] text-gray-900 leading-snug resize-none focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red/40"></textarea>
+			<span id="community-edit-desc-count" class="absolute right-5 bottom-3 text-[13px] text-gray-400 pointer-events-none">0/200</span>
+		</div>
+		<p class="text-[14px] text-gray-500 mt-3">Describe your community</p>
+	</div>
+</main>
+</div>
+<!-- END: Community Edit View -->
