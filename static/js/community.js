@@ -9,7 +9,11 @@
 //   POST   /api/communities/<slug>/leave       -> full community object
 //   GET    /api/communities/<slug>/posts?cursor=&limit=
 //   POST   /api/communities/<slug>/posts       body: {content}
-// (No update route yet: the Edit Community screen is UI-only.)
+//   POST   /api/communities/<slug>/icon        multipart: image -> full community object
+//   POST   /api/communities/<slug>/cover       multipart: image -> full community object
+// Community objects carry `icon_image` / `cover_image` (URL or null). When
+// set they replace the emoji icon / default gradient banner everywhere.
+// (No text-field update route yet: Save on the Edit Community screen is UI-only.)
 //
 // `communityApi` talks to those routes only. Any non-2xx response or
 // network failure throws a CommunityApiError carrying the server's
@@ -97,6 +101,15 @@ const communityApi = {
 		const path = join ? 'join' : 'leave';
 		return this._request(`/api/communities/${encodeURIComponent(slug)}/${path}`, { method: 'POST' },
 			join ? 'Could not join community.' : 'Could not leave community.');
+	},
+
+	// kind: 'icon' | 'cover'. Resolves to the full community object.
+	uploadImage(slug, kind, file) {
+		const form = new FormData();
+		form.append('image', file);
+		return this._request(`/api/communities/${encodeURIComponent(slug)}/${kind}`,
+			{ method: 'POST', body: form },
+			kind === 'icon' ? 'Could not update community photo.' : 'Could not update cover photo.');
 	},
 
 	async listPosts(slug, cursor) {
@@ -356,6 +369,13 @@ function communityFormatCount(n) {
 	return String(n);
 }
 
+// Inner HTML for a community icon slot: the uploaded image when there is
+// one, else the topic emoji. The slot element needs overflow-hidden.
+function communityIconInnerHtml(c) {
+	if (c.icon_image) return `<img src="${escapeHtml(c.icon_image)}" alt="" class="w-full h-full object-cover">`;
+	return escapeHtml(c.icon_emoji || '\u{1F465}');
+}
+
 function renderCommunityHeader(community) {
 	document.getElementById('community-name').textContent = community.name;
 	document.getElementById('community-description').textContent = community.description || '';
@@ -374,9 +394,14 @@ function renderCommunityHeader(community) {
 	if (hasOnline) document.getElementById('community-meta-online-text').textContent = `${communityFormatCount(community.online_count)} online`;
 
 	const iconEl = document.getElementById('community-icon');
-	iconEl.textContent = community.icon_emoji || '\u{1F465}';
+	iconEl.innerHTML = communityIconInnerHtml(community);
 
 	document.getElementById('community-banner-icon').innerHTML = `<path d="${communityTopicIcon(community.topic)}" stroke-linecap="round" stroke-linejoin="round"></path>`;
+	const bannerImg = document.getElementById('community-banner-img');
+	if (community.cover_image) bannerImg.src = community.cover_image;
+	else bannerImg.removeAttribute('src');
+	bannerImg.classList.toggle('hidden', !community.cover_image);
+	document.getElementById('community-banner-icon').classList.toggle('hidden', !!community.cover_image);
 
 	const role = community.membership ? community.membership.role : null;
 	const isMember = community.membership ? community.membership.is_member : false;
@@ -522,7 +547,9 @@ document.addEventListener('keydown', function(e) {
 	if (e.key === 'Escape' && communityIsSortMenuOpen()) communitySetSortMenu(false);
 });
 
-// ---- Edit Community (UI only: no update endpoint exists yet) ----
+// ---- Edit Community ----
+// Name/description/privacy are UI only (no PATCH route yet). Photo and cover
+// upload immediately on selection, like the profile photo flow.
 
 const COMMUNITY_EDIT_PRIVACY_COPY = {
 	public: "Anyone can find this community and see what's inside.",
@@ -539,6 +566,7 @@ function openCommunityEdit() {
 	photo.className = `w-full h-full rounded-full flex items-center justify-center text-[44px] ${c.icon_bg || 'bg-sky-100'}`;
 	photo.textContent = c.icon_emoji || '\u{1F465}';
 	document.getElementById('community-edit-cover-icon').innerHTML = `<path d="${communityTopicIcon(c.topic)}" stroke-linecap="round" stroke-linejoin="round"></path>`;
+	communityEditRenderImages(c);
 	const typeMeta = COMMUNITY_TYPES.find(t => t.value === c.type) || COMMUNITY_TYPES[0];
 	document.getElementById('community-edit-privacy-icon').innerHTML = `<path d="${typeMeta.icon}" stroke-linecap="round" stroke-linejoin="round"></path>`;
 	document.getElementById('community-edit-privacy-label').textContent = typeMeta.label;
@@ -566,6 +594,77 @@ function communityEditUpdate() {
 	const o = communityEditOriginal || { name: '', description: '' };
 	const dirty = nameEl.value.trim() !== o.name || descEl.value.trim() !== o.description;
 	document.getElementById('community-edit-save-btn').disabled = !(dirty && nameEl.value.trim().length > 0);
+}
+
+const COMMUNITY_IMAGE_MAX_SIZE = 5 * 1024 * 1024; // matches backend MAX_IMAGE_SIZE
+const COMMUNITY_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+const communityImageBusy = { icon: false, cover: false };
+
+// Show the uploaded photo/cover (or fall back to the emoji / gradient) on the edit screen.
+function communityEditRenderImages(c) {
+	const photoImg = document.getElementById('community-edit-photo-img');
+	if (c.icon_image) photoImg.src = c.icon_image; else photoImg.removeAttribute('src');
+	photoImg.classList.toggle('hidden', !c.icon_image);
+	const coverImg = document.getElementById('community-edit-cover-img');
+	if (c.cover_image) coverImg.src = c.cover_image; else coverImg.removeAttribute('src');
+	coverImg.classList.toggle('hidden', !c.cover_image);
+	document.getElementById('community-edit-cover-icon').classList.toggle('hidden', !!c.cover_image);
+}
+
+function communityEditPickImage(kind) {
+	if (communityImageBusy[kind]) return;
+	const input = document.createElement('input');
+	input.type = 'file';
+	input.accept = COMMUNITY_IMAGE_TYPES.join(',');
+	input.onchange = (e) => communityEditUploadImage(kind, e.target.files && e.target.files[0]);
+	input.click();
+}
+
+async function communityEditUploadImage(kind, file) {
+	if (!file || communityImageBusy[kind] || !communityCurrentSlug) return;
+	if (!COMMUNITY_IMAGE_TYPES.includes(file.type)) {
+		showToast('Use a PNG, JPG, GIF or WebP image.');
+		return;
+	}
+	if (file.size > COMMUNITY_IMAGE_MAX_SIZE) {
+		showToast('Image must be under 5MB.');
+		return;
+	}
+
+	const slug = communityCurrentSlug;
+	const imgEl = document.getElementById(kind === 'icon' ? 'community-edit-photo-img' : 'community-edit-cover-img');
+	const overlayEl = document.getElementById(kind === 'icon' ? 'community-edit-photo-overlay' : 'community-edit-cover-overlay');
+	const coverIconEl = document.getElementById('community-edit-cover-icon');
+
+	// Optimistic local preview while the upload is in flight.
+	const objectUrl = URL.createObjectURL(file);
+	imgEl.src = objectUrl;
+	imgEl.classList.remove('hidden');
+	if (kind === 'cover') coverIconEl.classList.add('hidden');
+	overlayEl.classList.remove('hidden');
+	overlayEl.classList.add('flex');
+	communityImageBusy[kind] = true;
+
+	try {
+		const community = await communityApi.uploadImage(slug, kind, file);
+		if (slug === communityCurrentSlug) {
+			communityCurrentData = community;
+			renderCommunityHeader(community);
+			communityEditRenderImages(community);
+		}
+		communityBrowseSyncItem(community);
+		refreshSideNavCommunities();
+		showToast(kind === 'icon' ? 'Community photo updated' : 'Cover photo updated');
+	} catch (e) {
+		// Roll the preview back to whatever the server last confirmed.
+		if (slug === communityCurrentSlug && communityCurrentData) communityEditRenderImages(communityCurrentData);
+		showToast(e.message || 'Failed to update photo. Please try again.');
+	} finally {
+		URL.revokeObjectURL(objectUrl);
+		communityImageBusy[kind] = false;
+		overlayEl.classList.add('hidden');
+		overlayEl.classList.remove('flex');
+	}
 }
 
 function communityEditSave() {
@@ -841,7 +940,7 @@ function communityRowHtml(c) {
 	const count = `${communityFormatCount(c.member_count || 0)} member${c.member_count === 1 ? '' : 's'}`;
 	return `<li class="flex items-center gap-3 px-4 py-3">
 		<button type="button" class="community-row-open flex-1 min-w-0 flex items-center gap-3 text-left" data-slug="${escapeHtml(c.slug)}">
-			<span class="w-11 h-11 rounded-xl ${escapeHtml(c.icon_bg || 'bg-gray-100')} flex items-center justify-center text-xl shrink-0">${escapeHtml(c.icon_emoji || '👥')}</span>
+			<span class="w-11 h-11 rounded-xl ${escapeHtml(c.icon_bg || 'bg-gray-100')} overflow-hidden flex items-center justify-center text-xl shrink-0">${communityIconInnerHtml(c)}</span>
 			<span class="flex-1 min-w-0">
 				<span class="block text-[15px] font-bold text-gray-900 truncate">${escapeHtml(c.name)}</span>
 				<span class="block text-[13px] text-gray-500 truncate">${count}${c.description ? ' · ' + escapeHtml(c.description) : ''}</span>
@@ -956,7 +1055,7 @@ function sideNavCommunityRowHtml(c) {
 	const fav = sideNavFavoriteSlugs.has(c.slug);
 	return `<div class="w-full flex items-center gap-1 pl-3 pr-2 py-1 rounded-xl">
 		<button type="button" class="flex-1 min-w-0 flex items-center gap-3 py-2 text-left" data-community-slug="${slug}" onclick="communitySideNavOpen(this.dataset.communitySlug)">
-			<span class="w-7 h-7 rounded-full ${escapeHtml(c.icon_bg || 'bg-gray-100')} flex items-center justify-center text-sm shrink-0">${escapeHtml(c.icon_emoji || '👥')}</span>
+			<span class="w-7 h-7 rounded-full ${escapeHtml(c.icon_bg || 'bg-gray-100')} overflow-hidden flex items-center justify-center text-sm shrink-0">${communityIconInnerHtml(c)}</span>
 			<span class="flex-1 min-w-0 text-[15px] font-medium text-gray-700 truncate">${label}</span>
 		</button>
 		<button type="button" class="side-nav-star-btn shrink-0 p-2 ${fav ? 'text-yellow-400' : 'text-gray-300'}" data-community-slug="${slug}" onclick="toggleSideNavStar(this)" aria-pressed="${fav}" aria-label="Favorite ${label}">

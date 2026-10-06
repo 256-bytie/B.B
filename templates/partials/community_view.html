@@ -28,6 +28,7 @@
 	<div id="community-content" class="hidden">
 		<!-- BEGIN: Banner (back / search / more float over it) -->
 		<div id="community-banner" class="relative overflow-hidden flex items-center justify-center" style="aspect-ratio: 32 / 9; max-height: 150px; width: 100%; background: linear-gradient(180deg, #2E86EC 0%, #5AA3F4 55%, #8CC3FB 100%);">
+			<img id="community-banner-img" alt="" class="hidden absolute inset-0 w-full h-full object-cover" src="">
 			<button type="button" aria-label="Back" onclick="closeCommunityView()" class="absolute top-3 left-3 w-9 h-9 rounded-full flex items-center justify-center text-white active:scale-95 transition-transform duration-100" style="background: rgba(10,35,95,0.45);">
 				<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="m15 18-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
 			</button>
@@ -45,7 +46,7 @@
 		<!-- BEGIN: Identity -->
 		<div class="px-4 pt-4 pb-4">
 			<div class="flex items-center gap-3">
-				<div id="community-icon" class="w-12 h-12 rounded-full border border-gray-100 flex items-center justify-center text-[26px] shrink-0 bg-gray-100"></div>
+				<div id="community-icon" class="w-12 h-12 rounded-full border border-gray-100 overflow-hidden flex items-center justify-center text-[26px] shrink-0 bg-gray-100"></div>
 				<div class="flex-1 min-w-0">
 					<h2 id="community-name" class="text-[19px] font-bold text-gray-900 truncate leading-tight">&nbsp;</h2>
 					<p id="community-meta" class="text-gray-500 text-[14px] mt-0.5 flex items-center gap-2 flex-wrap">

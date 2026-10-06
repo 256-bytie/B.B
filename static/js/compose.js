@@ -349,7 +349,7 @@ function renderCommunityPickerList(list) {
         return `
         <button type="button" data-slug="${escapeHtml(c.slug)}" onclick="selectComposeCommunity(this.dataset.slug)" class="flex items-center justify-between gap-3 px-2 py-3 hover:bg-gray-50 text-left w-full">
             <span class="flex items-center gap-3 min-w-0">
-                <span class="w-10 h-10 rounded-full ${escapeHtml(c.icon_bg || 'bg-gray-100')} flex items-center justify-center text-xl shrink-0">${escapeHtml(c.icon_emoji || '\u{1F465}')}</span>
+                <span class="w-10 h-10 rounded-full ${escapeHtml(c.icon_bg || 'bg-gray-100')} overflow-hidden flex items-center justify-center text-xl shrink-0">${communityIconInnerHtml(c)}</span>
                 <span class="flex flex-col min-w-0">
                     <span class="text-[15px] font-medium text-gray-900 truncate">${escapeHtml(c.name)}</span>
                     <span class="text-[13px] text-gray-500">${escapeHtml(String(count))} ${noun}</span>

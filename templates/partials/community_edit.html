@@ -1,6 +1,8 @@
 <!-- BEGIN: Community Edit View -->
-<!-- UI only: there is no PATCH /api/communities/<slug> yet, so Save, the photo
-     pickers and the privacy picker show the standard "Coming soon" toast.
+<!-- Photo and cover pickers upload immediately (POST /api/communities/<slug>/icon
+     and /cover) - see communityEditPickImage() in community.js. There is no
+     PATCH /api/communities/<slug> yet, so Save and the privacy picker still show
+     the standard "Coming soon" toast.
      Opened from the pencil button on the community screen (creator/moderator);
      populated by openCommunityEdit() in community.js. -->
 <div id="community-edit-view" class="view-section bg-white min-h-screen flex justify-center">
@@ -21,7 +23,11 @@
 		<h2 class="text-[16px] font-bold text-gray-900">Community Photo</h2>
 		<div class="relative w-[92px] h-[92px] mt-3">
 			<div id="community-edit-photo" class="w-full h-full rounded-full flex items-center justify-center text-[44px] bg-sky-100"></div>
-			<button type="button" aria-label="Change community photo" onclick="showToast('Coming soon')" class="absolute -bottom-1 -right-2 w-9 h-9 rounded-full bg-white border border-gray-100 shadow-sm flex items-center justify-center text-gray-800 active:scale-95 transition-transform duration-100">
+			<img id="community-edit-photo-img" alt="" class="hidden absolute inset-0 w-full h-full rounded-full object-cover" src="">
+			<div id="community-edit-photo-overlay" class="hidden absolute inset-0 rounded-full bg-black/30 items-center justify-center">
+				<svg class="w-6 h-6 animate-spin text-white" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+			</div>
+			<button type="button" id="community-edit-photo-btn" aria-label="Change community photo" onclick="communityEditPickImage('icon')" class="absolute -bottom-1 -right-2 w-9 h-9 rounded-full bg-white border border-gray-100 shadow-sm flex items-center justify-center text-gray-800 active:scale-95 transition-transform duration-100">
 				<svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 9a2 2 0 0 1 2-2h1.5a1 1 0 0 0 .8-.4l.9-1.2a1 1 0 0 1 .8-.4h6a1 1 0 0 1 .8.4l.9 1.2a1 1 0 0 0 .8.4H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Z" stroke-linejoin="round"></path><circle cx="12" cy="13" r="3.5"></circle></svg>
 			</button>
 		</div>
@@ -30,8 +36,12 @@
 		<!-- Cover photo -->
 		<h2 class="text-[16px] font-bold text-gray-900 mt-8">Cover Photo <span class="font-normal text-gray-500">(Optional)</span></h2>
 		<div class="relative mt-3 w-full rounded-2xl overflow-hidden flex items-center justify-center" style="aspect-ratio: 3.2 / 1; background: linear-gradient(180deg, #5BA3F2 0%, #8CC0F8 100%);">
+			<img id="community-edit-cover-img" alt="" class="hidden absolute inset-0 w-full h-full object-cover" src="">
 			<svg id="community-edit-cover-icon" class="w-12 h-12 text-white" fill="none" stroke="currentColor" stroke-width="1.25" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"></svg>
-			<button type="button" aria-label="Change cover photo" onclick="showToast('Coming soon')" class="absolute bottom-2.5 right-2.5 w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center text-gray-800 active:scale-95 transition-transform duration-100">
+			<div id="community-edit-cover-overlay" class="hidden absolute inset-0 bg-black/30 items-center justify-center">
+				<svg class="w-6 h-6 animate-spin text-white" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+			</div>
+			<button type="button" id="community-edit-cover-btn" aria-label="Change cover photo" onclick="communityEditPickImage('cover')" class="absolute bottom-2.5 right-2.5 w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center text-gray-800 active:scale-95 transition-transform duration-100">
 				<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 9a2 2 0 0 1 2-2h1.5a1 1 0 0 0 .8-.4l.9-1.2a1 1 0 0 1 .8-.4h6a1 1 0 0 1 .8.4l.9 1.2a1 1 0 0 0 .8.4H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Z" stroke-linejoin="round"></path><circle cx="12" cy="13" r="3.5"></circle></svg>
 			</button>
 		</div>
