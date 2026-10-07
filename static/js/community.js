@@ -7,8 +7,9 @@
 //   GET    /api/communities/<slug>
 //   POST   /api/communities/<slug>/join        -> full community object
 //   POST   /api/communities/<slug>/leave       -> full community object
+//   GET    /api/communities/<slug>/members     -> {admin, moderators: [...], all: [...]} (users in serialize_user_public shape)
 //   GET    /api/communities/<slug>/posts?cursor=&limit=
-//   POST   /api/communities/<slug>/posts       body: {content}
+//   POST   /api/communities/<slug>/posts       body: {content} or multipart (sent by compose.js)
 //   POST   /api/communities/<slug>/icon        multipart: image -> full community object
 //   POST   /api/communities/<slug>/cover       multipart: image -> full community object
 // Community objects carry `icon_image` / `cover_image` (URL or null). When
@@ -42,8 +43,6 @@ const COMMUNITY_TYPES = [
 
 // ---- Data layer ----
 
-const COMMUNITY_POST_MAX_LEN = 2000; // matches post_service.MAX_CONTENT_LEN
-
 class CommunityApiError extends Error {
 	constructor(message, status) {
 		super(message);
@@ -74,6 +73,11 @@ const communityApi = {
 
 	get(slug) {
 		return this._request(`/api/communities/${encodeURIComponent(slug)}`, {}, 'Could not load community.');
+	},
+
+	// {admin: User|null, moderators: [User], all: [User]} - see switchCommunityTab('about').
+	members(slug) {
+		return this._request(`/api/communities/${encodeURIComponent(slug)}/members`, {}, 'Could not load members.');
 	},
 
 	// Directory/search. Resolves to {communities, next_cursor}.
@@ -119,21 +123,6 @@ const communityApi = {
 		const data = await this._request(`/api/communities/${encodeURIComponent(slug)}/posts${qs ? '?' + qs : ''}`, {}, 'Could not load posts.');
 		return { posts: (data && data.posts) || [], next_cursor: (data && data.next_cursor) || null };
 	},
-
-	async createPost(slug, content, files) {
-		if (files && files.length > 0) {
-			const form = new FormData();
-			form.append('content', content);
-			for (const file of files) {
-				form.append('images', file);
-			}
-			return this._request(`/api/communities/${encodeURIComponent(slug)}/posts`,
-				{ method: 'POST', body: form }, 'Could not post. Try again.');
-		} else {
-			return this._request(`/api/communities/${encodeURIComponent(slug)}/posts`,
-				this._json('POST', { content }), 'Could not post. Try again.');
-		}
-	}
 };
 
 // ---- Create Community wizard ----
@@ -432,9 +421,12 @@ function renderCommunityHeader(community) {
 	}
 	actionBtn.disabled = actionBtn.dataset.mode === 'none';
 
+	document.getElementById('community-about-name').textContent = community.name || '';
 	document.getElementById('community-about-description').textContent = community.description || '';
-	document.getElementById('community-about-type').textContent = typeMeta ? `${typeMeta.label} — ${typeMeta.desc}` : '';
-	document.getElementById('community-about-created').textContent = community.created_at ? new Date(community.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '';
+	document.getElementById('community-about-type').textContent = typeMeta ? typeMeta.label : '';
+	const typeIconEl = document.querySelector('#community-about-type-icon path');
+	if (typeIconEl) typeIconEl.setAttribute('d', typeMeta ? typeMeta.icon : '');
+	document.getElementById('community-about-created').textContent = community.created_at ? 'Created ' + new Date(community.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
 }
 
 let communityMembershipBusy = false;
@@ -485,12 +477,62 @@ function switchCommunityTab(tab) {
 	communitySetSortMenu(false);
 	document.querySelectorAll('.community-panel').forEach(panel => panel.classList.add('hidden'));
 	document.getElementById(`community-panel-${tab}`).classList.remove('hidden');
+	if (tab === 'about') communityLoadMembers();
 	if (tab === 'posts') {
 		communityPostsItems = [];
 		communityPostsCursor = null;
 		loadCommunityPosts(true);
 	}
 }
+
+// ---- Members card (About tab) ----
+let communityMembersToken = 0;
+
+function communityMemberRowHtml(u) {
+	const handle = u.handle || u.username || '';
+	const name = u.full_name || handle;
+	const avatar = u.profile_picture || `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(handle)}`;
+	return `<button type="button" class="community-member-row w-full flex items-center gap-3 py-1.5 text-left active:opacity-70 transition-opacity duration-100"
+			data-user-id="${escapeHtml(String(u.id))}" data-name="${escapeHtml(name)}" data-handle="${escapeHtml(handle)}" data-avatar="${escapeHtml(u.profile_picture || '')}">
+		<img src="${escapeHtml(avatar)}" alt="" class="w-10 h-10 rounded-full object-cover bg-gray-200 shrink-0">
+		<span class="min-w-0">
+			<span class="block text-[15px] font-semibold text-gray-900 truncate">${escapeHtml(name)}</span>
+			<span class="block text-[13px] text-gray-500 truncate">@${escapeHtml(handle)}</span>
+		</span>
+	</button>`;
+}
+
+function communityRenderMemberSection(sectionId, listId, users) {
+	const has = Array.isArray(users) && users.length > 0;
+	document.getElementById(sectionId).classList.toggle('hidden', !has);
+	document.getElementById(listId).innerHTML = has ? users.map(communityMemberRowHtml).join('') : '';
+	return has;
+}
+
+async function communityLoadMembers() {
+	const slug = communityCurrentSlug;
+	if (!slug) return;
+	const token = ++communityMembersToken;
+	const card = document.getElementById('community-members-card');
+	try {
+		const data = await communityApi.members(slug);
+		if (token !== communityMembersToken) return;
+		const anyAdmin = communityRenderMemberSection('community-members-admin-section', 'community-members-admin', data.admin ? [data.admin] : []);
+		// No moderators set -> the whole Moderators section stays hidden.
+		const anyMods = communityRenderMemberSection('community-members-mods-section', 'community-members-mods', data.moderators);
+		const anyAll = communityRenderMemberSection('community-members-all-section', 'community-members-all', data.all);
+		card.classList.toggle('hidden', !(anyAdmin || anyMods || anyAll));
+	} catch (e) {
+		if (token !== communityMembersToken) return;
+		card.classList.add('hidden');
+	}
+}
+
+document.addEventListener('click', (ev) => {
+	const row = ev.target.closest('.community-member-row');
+	if (!row) return;
+	openUserProfileView({ id: row.dataset.userId, name: row.dataset.name, handle: row.dataset.handle, avatar: row.dataset.avatar });
+});
 
 // ---- Sort menu (Best / Hot / New) ----
 // Only "Best" (the feed's current ordering) exists server-side; Hot and New
@@ -773,109 +815,6 @@ function communityOnPostRemoved(postId) {
 	empty.classList.remove('hidden');
 	empty.classList.add('flex');
 	document.getElementById('community-posts-footer').classList.add('hidden');
-}
-
-let communityComposerFiles = [];
-const COMMUNITY_POST_MAX_IMAGES = 4;
-
-function communityComposerAutoGrow(el) {
-	el.style.height = '40px';
-	el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
-	const len = el.value.length;
-	const counter = document.getElementById('community-composer-count');
-	const nearLimit = len >= COMMUNITY_POST_MAX_LEN - 200;
-	counter.classList.toggle('hidden', !nearLimit);
-	counter.classList.toggle('text-red-500', len >= COMMUNITY_POST_MAX_LEN);
-	counter.classList.toggle('text-gray-400', len < COMMUNITY_POST_MAX_LEN);
-	counter.textContent = `${len}/${COMMUNITY_POST_MAX_LEN}`;
-	const btn = document.getElementById('community-composer-post-btn');
-	btn.disabled = el.value.trim().length === 0 || communityPostBusy;
-}
-
-function communityComposerPhotoClick() {
-	const input = document.createElement('input');
-	input.type = 'file';
-	input.accept = 'image/*';
-	input.multiple = true;
-	input.onchange = (e) => {
-		const files = Array.from(e.target.files || []);
-		for (const file of files) {
-			if (communityComposerFiles.length >= COMMUNITY_POST_MAX_IMAGES) {
-				showToast(`A post can have at most ${COMMUNITY_POST_MAX_IMAGES} images.`);
-				break;
-			}
-			if (file.size > 5 * 1024 * 1024) {
-				showToast('Each image must be under 5MB.');
-				continue;
-			}
-			communityComposerFiles.push(file);
-		}
-		communityComposerRenderPreviews();
-		communityComposerAutoGrow(document.getElementById('community-composer-input'));
-	};
-	input.click();
-}
-
-function communityComposerRenderPreviews() {
-	const container = document.getElementById('community-composer-previews');
-	if (!communityComposerFiles.length) {
-		container.classList.add('hidden');
-		container.innerHTML = '';
-		return;
-	}
-	container.classList.remove('hidden');
-	container.innerHTML = communityComposerFiles.map((file, i) => {
-		const url = URL.createObjectURL(file);
-		return `<div class="relative w-20 h-20 rounded-lg overflow-hidden bg-gray-100">
-			<img src="${url}" alt="" class="w-full h-full object-cover">
-			<button type="button" onclick="communityComposerRemoveImage(${i})" class="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/50 text-white flex items-center justify-center text-xs hover:bg-black/70">✕</button>
-		</div>`;
-	}).join('');
-}
-
-function communityComposerRemoveImage(index) {
-	communityComposerFiles.splice(index, 1);
-	communityComposerRenderPreviews();
-	communityComposerAutoGrow(document.getElementById('community-composer-input'));
-}
-
-let communityPostBusy = false;
-
-async function submitCommunityPost() {
-	if (communityPostBusy) return;
-	const input = document.getElementById('community-composer-input');
-	const content = input.value.trim();
-	if (!content) return;
-	if (!communityCurrentSlug) return;
-	const slug = communityCurrentSlug;
-	const btn = document.getElementById('community-composer-post-btn');
-	communityPostBusy = true;
-	btn.disabled = true;
-	try {
-		const post = await communityApi.createPost(slug, content, communityComposerFiles);
-		if (slug !== communityCurrentSlug) return;
-
-		// Prepend the new post to the list
-		const list = document.getElementById('community-posts-list');
-		const empty = document.getElementById('community-posts-empty');
-		if (empty.classList.contains('flex')) {
-			empty.classList.add('hidden');
-			empty.classList.remove('flex');
-		}
-		list.insertAdjacentHTML('afterbegin', buildPostCardHtml(post));
-		communityPostsItems.unshift(post);
-
-		// Clear composer
-		input.value = '';
-		communityComposerFiles = [];
-		communityComposerRenderPreviews();
-		communityComposerAutoGrow(input);
-	} catch (e) {
-		showToast(e.message || 'Could not post. Try again.');
-	} finally {
-		communityPostBusy = false;
-		communityComposerAutoGrow(input);
-	}
 }
 
 // ---- Community browse / discovery ----

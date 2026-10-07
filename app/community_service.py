@@ -226,7 +226,7 @@ def add_member(conn, slug, actor_id, username):
 def remove_member(conn, slug, actor_id, username):
     cursor = conn.cursor(); row = _require_visible_community(cursor, slug, actor_id)
     if viewer_role(cursor, row[0], actor_id) != 'creator':
-        raise CommunityPermissionError('Only the creator can add members')
+        raise CommunityPermissionError('Only the creator can remove members')
     cursor.execute('SELECT id FROM users WHERE lower(username) = lower(?)', (username or '',)); target = cursor.fetchone()
     cursor.execute('SELECT creator_id FROM communities WHERE id = ?', (row[0],))
     creator_id = cursor.fetchone()[0]

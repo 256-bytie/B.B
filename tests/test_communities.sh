@@ -16,6 +16,8 @@ EMAIL_B="comm_b_${RUN_ID}@example.com"
 JAR_A="comm_cookie_a_${RUN_ID}.txt"
 JAR_B="comm_cookie_b_${RUN_ID}.txt"
 JAR_ANON="comm_cookie_anon_${RUN_ID}.txt"
+JAR_C="comm_cookie_c_${RUN_ID}.txt"
+EMAIL_C="comm_c_${RUN_ID}@example.com"
 NAME="Test Comm ${RUN_ID: -6}"
 
 GREEN='\033[0;32m'; RED='\033[0;31m'; YELLOW='\033[1;33m'; NC='\033[0m'
@@ -23,7 +25,7 @@ pass() { echo -e "${GREEN}✓ PASS${NC}: $1"; PASSED=$((PASSED + 1)); }
 fail() { echo -e "${RED}✗ FAIL${NC}: $1"; FAILED=$((FAILED + 1)); }
 info() { echo -e "${YELLOW}ℹ INFO${NC}: $1"; }
 PNG="/tmp/cm_${RUN_ID}.png"; BADFILE="/tmp/cm_${RUN_ID}.txt"
-cleanup() { rm -f "$JAR_A" "$JAR_B" "$JAR_ANON" "$PNG" "$BADFILE"; }
+cleanup() { rm -f "$JAR_A" "$JAR_B" "$JAR_C" "$JAR_ANON" "$PNG" "$BADFILE"; }
 trap cleanup EXIT
 
 json_get() { python3 -c "import json,sys; d=json.loads(sys.argv[1]); print($2)" "$1" 2>/dev/null; }
@@ -140,8 +142,12 @@ CURSOR=$(json_get "$BODY" "d['next_cursor']")
 req "$JAR_ANON" "" GET "/api/communities/$SLUG/posts?limit=2&cursor=$CURSOR"
 [[ "$(json_get "$BODY" "(len(d['posts']), d['next_cursor'])")" == "(1, None)" ]] && pass "Cursor page 2 ends with next_cursor null" || fail "Page 2: $BODY"
 
+# SLUG2 is private and created by B: B sees an empty list (posts are scoped
+# to their community); an outsider gets 404 (Phase 4).
+req "$JAR_B" "" GET "/api/communities/$SLUG2/posts"
+[[ "$CODE" == "200" && "$(json_get "$BODY" "len(d['posts'])")" == "0" ]] && pass "Posts are scoped to their community" || fail "Scope: $CODE $BODY"
 req "$JAR_ANON" "" GET "/api/communities/$SLUG2/posts"
-[[ "$(json_get "$BODY" "len(d['posts'])")" == "0" ]] && pass "Posts are scoped to their community" || fail "Scope: $BODY"
+[[ "$CODE" == "404" ]] && pass "Private community posts hidden from outsiders" || fail "Private outsider posts: $CODE $BODY"
 
 # --- Home feed includes community posts (private: members only) ---
 req "$JAR_ANON" "" GET "/api/posts?limit=50"
@@ -462,6 +468,134 @@ req "$JAR_ANON" "" GET "/api/communities?cursor=abc"
 req "$JAR_ANON" "" GET /api/communities
 NO_PK_LEAK=$(json_get "$BODY" "all(c['id'] == c['slug'] and isinstance(c['id'], str) for c in d['communities'])")
 [[ "$NO_PK_LEAK" == "True" ]] && pass "No integer pk leaked (id == slug)" || fail "PK leak check: $BODY"
+
+# ============================================================
+# Phase 4: access control (public / restricted / private)
+# ============================================================
+CSRF_C=$(signup "$JAR_C" "$EMAIL_C")
+req "$JAR_B" "" GET "/api/session"; B_USER=$(json_get "$BODY" "d['user']['username']")
+req "$JAR_C" "" GET "/api/session"; C_USER=$(json_get "$BODY" "d['user']['username']")
+mkc() { # type -> slug (creator A)
+    req "$JAR_A" "$CSRF_A" POST /api/communities "{\"name\":\"$1 ${RUN_ID: -6}\",\"description\":\"d\",\"topic\":\"Tech\",\"type\":\"$1\"}"
+    json_get "$BODY" "d['slug']"
+}
+PUB=$(mkc public); RST=$(mkc restricted); PRV=$(mkc private)
+mkpost() { # slug -> post id (as A)
+    req "$JAR_A" "$CSRF_A" POST "/api/communities/$1/posts" "{\"content\":\"p4 post $RUN_ID\"}"; json_get "$BODY" "d['id']"
+}
+mkcomment() { # post id -> comment id (as A)
+    req "$JAR_A" "$CSRF_A" POST "/api/posts/$1/comments" "{\"content\":\"p4 comment $RUN_ID\"}"; json_get "$BODY" "d['id']"
+}
+PUB_P=$(mkpost "$PUB"); RST_P=$(mkpost "$RST"); PRV_P=$(mkpost "$PRV")
+PUB_C=$(mkcomment "$PUB_P"); RST_C=$(mkcomment "$RST_P"); PRV_C=$(mkcomment "$PRV_P")
+[[ -n "$PUB_C" && -n "$RST_C" && -n "$PRV_C" ]] && pass "P4 fixtures: 3 communities, posts, comments" || { fail "P4 fixtures"; }
+
+expect() { # label expected_code [expected_error]  (uses CODE/BODY)
+    local ok=1; [[ "$CODE" == "$2" ]] || ok=0
+    [[ -z "$3" || "$(json_get "$BODY" "d.get('error')")" == "$3" ]] || ok=0
+    [[ $ok == 1 ]] && pass "$1" || fail "$1 -> $CODE $BODY"
+}
+
+# --- public: any logged-in user interacts without joining; posting still needs membership ---
+req "$JAR_C" "$CSRF_C" POST "/api/posts/$PUB_P/comments" '{"content":"outsider comment"}'; expect "Public: non-member can comment" 201
+req "$JAR_C" "$CSRF_C" POST "/api/posts/$PUB_P/like"; expect "Public: non-member can like post" 200
+req "$JAR_C" "$CSRF_C" POST "/api/comments/$PUB_C/like"; expect "Public: non-member can like comment" 200
+req "$JAR_C" "$CSRF_C" POST "/api/communities/$PUB/posts" '{"content":"x"}'; expect "Public: non-member cannot post" 403 "Join this community to post"
+
+# --- restricted: view open, everything else members only ---
+req "$JAR_ANON" "" GET "/api/communities/$RST"; expect "Restricted: logged-out can view community" 200
+req "$JAR_ANON" "" GET "/api/communities/$RST/posts"; expect "Restricted: logged-out can read posts" 200
+req "$JAR_ANON" "" GET "/api/posts/$RST_P/comments"; expect "Restricted: logged-out can read comments" 200
+req "$JAR_C" "$CSRF_C" POST "/api/communities/$RST/join"; expect "Restricted: outsider join -> 403 invite-only" 403 "This community is invite-only"
+req "$JAR_C" "$CSRF_C" POST "/api/communities/$RST/posts" '{"content":"x"}'; expect "Restricted: outsider post -> 403" 403 "Join this community to post"
+req "$JAR_C" "$CSRF_C" POST "/api/posts/$RST_P/comments" '{"content":"x"}'; expect "Restricted: outsider comment -> 403" 403 "Join this community to comment"
+req "$JAR_C" "$CSRF_C" POST "/api/posts/$RST_P/like"; expect "Restricted: outsider like post -> 403" 403 "Join this community to like"
+req "$JAR_C" "$CSRF_C" POST "/api/comments/$RST_C/like"; expect "Restricted: outsider like comment -> 403" 403 "Join this community to like"
+req "$JAR_A" "$CSRF_A" POST "/api/posts/$RST_P/like"; expect "Restricted control: creator likes post" 200
+req "$JAR_A" "$CSRF_A" POST "/api/posts/$RST_P/comments" '{"content":"control"}'; expect "Restricted control: creator comments" 201
+req "$JAR_ANON" "" POST "/api/posts/$RST_P/comments" '{"content":"x"}'; [[ "$CODE" == "401" || "$CODE" == "403" ]] && pass "Restricted: logged-out comment rejected ($CODE)" || fail "Restricted anon comment: $CODE"
+
+# --- private: indistinguishable from nonexistent for non-members and logged-out ---
+req "$JAR_C" "" GET "/api/communities/no-such-slug-$RUN_ID"; UNK_COMM="$BODY"
+req "$JAR_C" "" GET "/api/posts/999999999/comments"; UNK_POST="$BODY"
+req "$JAR_C" "$CSRF_C" POST "/api/comments/999999999/like"; UNK_CMT="$BODY"
+priv_denied() { # label jar csrf method path [json]
+    req "$2" "$3" "$4" "$5" "$6"
+    local want="$UNK_COMM"; [[ "$5" == /api/posts/* ]] && want="$UNK_POST"; [[ "$5" == /api/comments/* ]] && want="$UNK_CMT"
+    [[ "$CODE" == "404" && "$BODY" == "$want" ]] && pass "$1" || fail "$1 -> $CODE $BODY (want 404 $want)"
+}
+for who in C ANON; do
+    jar="JAR_$who"; csrf="CSRF_$who"; [[ $who == ANON ]] && csrf=""
+    jar="${!jar}"; csrf="${!csrf}"
+    priv_denied "Private/$who: GET community 404 == unknown" "$jar" "$csrf" GET "/api/communities/$PRV"
+    priv_denied "Private/$who: GET posts 404 == unknown" "$jar" "$csrf" GET "/api/communities/$PRV/posts"
+    priv_denied "Private/$who: GET comments 404 == unknown" "$jar" "$csrf" GET "/api/posts/$PRV_P/comments"
+done
+priv_denied "Private/C: join 404 == unknown" "$JAR_C" "$CSRF_C" POST "/api/communities/$PRV/join"
+priv_denied "Private/C: leave 404 == unknown" "$JAR_C" "$CSRF_C" POST "/api/communities/$PRV/leave"
+priv_denied "Private/C: post 404 == unknown" "$JAR_C" "$CSRF_C" POST "/api/communities/$PRV/posts" '{"content":"x"}'
+priv_denied "Private/C: comment 404 == unknown" "$JAR_C" "$CSRF_C" POST "/api/posts/$PRV_P/comments" '{"content":"x"}'
+priv_denied "Private/C: like post 404 == unknown" "$JAR_C" "$CSRF_C" POST "/api/posts/$PRV_P/like"
+priv_denied "Private/C: like comment 404 == unknown" "$JAR_C" "$CSRF_C" POST "/api/comments/$PRV_C/like"
+req "$JAR_A" "" GET "/api/communities/$PRV/posts"; expect "Private control: creator reads posts" 200
+req "$JAR_A" "" GET "/api/posts/$PRV_P/comments"; expect "Private control: creator reads comments" 200
+
+# --- add member ---
+req "$JAR_B" "$CSRF_B" POST "/api/communities/$PRV/members" "{\"username\":\"$C_USER\"}"; expect "Add member: private outsider -> 404" 404 "Community not found"
+req "$JAR_B" "$CSRF_B" POST "/api/communities/$RST/members" "{\"username\":\"$C_USER\"}"; expect "Add member: restricted non-creator -> 403" 403 "Only the creator can add members"
+req "$JAR_A" "$CSRF_A" POST "/api/communities/$PRV/members" '{"username":"no_such_user_zz"}'; expect "Add member: unknown username -> 400" 400 "No user with that username"
+req "$JAR_A" "$CSRF_A" POST "/api/communities/$PRV/members" '{}'; expect "Add member: missing username -> 400" 400
+req "$JAR_A" "" GET "/api/communities/$PRV"; MC0=$(json_get "$BODY" "d['member_count']")
+req "$JAR_A" "$CSRF_A" POST "/api/communities/$PRV/members" "{\"username\":\"$(echo "$C_USER" | tr '[:lower:]' '[:upper:]')\"}"
+[[ "$CODE" == "201" && "$(json_get "$BODY" "d['member_count']")" == "$((MC0 + 1))" ]] && pass "Add member: creator adds C (case-insensitive), count +1" || fail "Add member: $CODE $BODY"
+req "$JAR_A" "$CSRF_A" POST "/api/communities/$PRV/members" "{\"username\":\"$C_USER\"}"
+[[ "$(json_get "$BODY" "d['member_count']")" == "$((MC0 + 1))" ]] && pass "Add member: re-add is a no-op" || fail "Re-add: $BODY"
+req "$JAR_C" "" GET "/api/communities/$PRV"; expect "Added member can now view the private community" 200
+req "$JAR_C" "$CSRF_C" POST "/api/posts/$PRV_P/comments" '{"content":"member comment"}'; expect "Added member can comment" 201
+req "$JAR_C" "$CSRF_C" POST "/api/posts/$PRV_P/like"; expect "Added member can like post" 200
+req "$JAR_C" "$CSRF_C" POST "/api/comments/$PRV_C/like"; expect "Added member can like comment" 200
+req "$JAR_C" "$CSRF_C" POST "/api/communities/$PRV/posts" '{"content":"member post"}'; expect "Added member can post" 201
+req "$JAR_C" "$CSRF_C" POST "/api/communities/$PRV/members" "{\"username\":\"$B_USER\"}"; expect "Member (non-creator) cannot add members" 403 "Only the creator can add members"
+req "$JAR_C" "" GET "/api/posts?limit=50"
+[[ "$(json_get "$BODY" "any(p['id'] == $PRV_P for p in d['posts'])")" == "True" ]] && pass "Home feed shows the private post to an added member" || fail "Home feed member: $BODY"
+
+# --- remove member ---
+req "$JAR_C" "$CSRF_C" DELETE "/api/communities/$PRV/members/$B_USER"; expect "Remove member: non-creator -> 403" 403 "Only the creator can remove members"
+req "$JAR_A" "$CSRF_A" DELETE "/api/communities/$PRV/members/$B_USER"; expect "Remove member: non-member target -> 400" 400 "That user is not a member"
+req "$JAR_A" "$CSRF_A" GET "/api/session"; A_USER=$(json_get "$BODY" "d['user']['username']")
+req "$JAR_A" "$CSRF_A" DELETE "/api/communities/$PRV/members/$A_USER"; expect "Remove member: creator cannot be removed -> 400" 400 "The creator can't be removed"
+req "$JAR_A" "$CSRF_A" DELETE "/api/communities/$PRV/members/$C_USER"; expect "Remove member: creator removes C" 200
+priv_denied "Removed member immediately gets 404 on the private community" "$JAR_C" "$CSRF_C" GET "/api/communities/$PRV"
+priv_denied "Removed member gets 404 on private comments" "$JAR_C" "$CSRF_C" GET "/api/posts/$PRV_P/comments"
+req "$JAR_C" "" GET "/api/posts?limit=50"
+[[ "$(json_get "$BODY" "not any(p['id'] == $PRV_P for p in d['posts'])")" == "True" ]] && pass "Home feed hides the private post again after removal" || fail "Home feed removed: $BODY"
+req "$JAR_A" "" GET "/api/posts/$PRV_P/comments"
+[[ "$(json_get "$BODY" "any('member comment' in c['content'] for c in d)")" == "True" ]] \
+    && pass "Removed member's comments are kept" || fail "Removed member comments: $BODY"
+
+# --- leave / rejoin ---
+req "$JAR_B" "$CSRF_B" POST "/api/communities/$RST/join"; expect "Restricted: B (not added) cannot join" 403 "This community is invite-only"
+req "$JAR_A" "$CSRF_A" POST "/api/communities/$RST/members" "{\"username\":\"$B_USER\"}"; expect "Restricted: creator adds B" 201
+req "$JAR_B" "$CSRF_B" POST "/api/communities/$RST/leave"; expect "Restricted: B leaves" 200
+req "$JAR_B" "$CSRF_B" POST "/api/communities/$RST/join"; expect "Restricted: rejoin after leaving -> 403" 403 "This community is invite-only"
+req "$JAR_B" "$CSRF_B" POST "/api/communities/$PUB/join"; expect "Public: join" 200
+req "$JAR_B" "$CSRF_B" POST "/api/communities/$PUB/leave"; expect "Public: leave" 200
+req "$JAR_B" "$CSRF_B" POST "/api/communities/$PUB/join"; expect "Public: rejoin -> 200" 200
+
+# --- cross-community comment attachment ---
+req "$JAR_A" "$CSRF_A" POST "/api/posts/$PUB_P/comments" "{\"content\":\"reply\",\"parent_comment_id\":$PRV_C}"
+[[ "$CODE" == "400" || "$CODE" == "404" ]] && pass "Parent comment from another community rejected ($CODE)" || fail "Cross-parent: $CODE $BODY"
+
+# --- Home feed carries community.type ---
+req "$JAR_A" "" GET "/api/posts?limit=50"
+[[ "$(json_get "$BODY" "all(p['community'].get('type') in ('public','restricted','private') for p in d['posts'] if p.get('community'))")" == "True" ]] && pass "Home feed community key includes type" || fail "Home feed type: $BODY"
+
+# --- main-feed (non-community) posts unaffected ---
+req "$JAR_A" "$CSRF_A" POST /api/posts "{\"content\":\"p4 main post $RUN_ID\"}"; MAIN_P=$(json_get "$BODY" "d['id']")
+req "$JAR_C" "$CSRF_C" POST "/api/posts/$MAIN_P/comments" '{"content":"stranger comment"}'; expect "Main feed: stranger can comment" 201
+req "$JAR_C" "$CSRF_C" POST "/api/posts/$MAIN_P/like"; expect "Main feed: stranger can like" 200
+req "$JAR_ANON" "" GET "/api/posts/$MAIN_P/comments"; expect "Main feed: logged-out can read comments" 200
+req "$JAR_A" "$CSRF_A" DELETE "/api/posts/$MAIN_P"
 
 echo ""
 echo "Passed: $PASSED  Failed: $FAILED"

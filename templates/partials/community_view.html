@@ -48,7 +48,12 @@
 			<div class="flex items-center gap-3">
 				<div id="community-icon" class="w-12 h-12 rounded-full border border-gray-100 overflow-hidden flex items-center justify-center text-[26px] shrink-0 bg-gray-100"></div>
 				<div class="flex-1 min-w-0">
-					<h2 id="community-name" class="text-[19px] font-bold text-gray-900 truncate leading-tight">&nbsp;</h2>
+					<div class="flex items-center gap-1.5 min-w-0">
+						<h2 id="community-name" class="text-[19px] font-bold text-gray-900 truncate leading-tight min-w-0">&nbsp;</h2>
+						<button type="button" id="community-name-chevron" aria-label="About this community" onclick="switchCommunityTab('about')" class="shrink-0 -ml-0.5 w-5 h-5 flex items-center justify-center text-gray-500 active:opacity-60 transition-opacity duration-100">
+							<svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="m9 6 6 6-6 6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+						</button>
+					</div>
 					<p id="community-meta" class="text-gray-500 text-[14px] mt-0.5 flex items-center gap-2 flex-wrap">
 						<span id="community-meta-members">&nbsp;</span>
 						<span id="community-meta-online" class="hidden items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-green-500"></span><span id="community-meta-online-text"></span></span>
@@ -117,13 +122,39 @@
 		<!-- END: Posts tab -->
 
 		<!-- BEGIN: About tab (fields come from GET /api/communities/<slug>) -->
-		<div id="community-panel-about" class="community-panel hidden px-4 py-5">
-			<h3 class="text-[13px] font-semibold text-gray-400 tracking-wide mb-2">DESCRIPTION</h3>
-			<p id="community-about-description" class="text-[14px] text-gray-800 leading-relaxed"></p>
-			<h3 class="text-[13px] font-semibold text-gray-400 tracking-wide mt-6 mb-2">COMMUNITY TYPE</h3>
-			<p id="community-about-type" class="text-[14px] text-gray-800"></p>
-			<h3 class="text-[13px] font-semibold text-gray-400 tracking-wide mt-6 mb-2">CREATED</h3>
-			<p id="community-about-created" class="text-[14px] text-gray-800"></p>
+		<div id="community-panel-about" class="community-panel hidden px-4 py-4">
+			<div class="rounded-2xl bg-gray-50 px-5 py-5">
+				<h3 class="text-[13px] font-semibold text-gray-500 tracking-wide uppercase">About community</h3>
+				<p id="community-about-name" class="text-[17px] font-bold text-gray-900 leading-snug mt-5"></p>
+				<p id="community-about-description" class="text-[16px] text-gray-500 leading-relaxed"></p>
+				<div class="mt-4 flex flex-col gap-2.5 text-[14px] text-gray-500">
+					<div class="flex items-center gap-3">
+						<svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 8.25v-1.5m0 1.5c-1.355 0-2.697.056-4.024.166C6.845 8.51 6 9.473 6 10.608v2.513m6-4.871c1.355 0 2.697.056 4.024.166C17.155 8.51 18 9.473 18 10.608v2.513M15 8.25v-1.5m-6 1.5v-1.5m12 9.75-1.5.75a3.354 3.354 0 0 1-3 0 3.354 3.354 0 0 0-3 0 3.354 3.354 0 0 1-3 0 3.354 3.354 0 0 0-3 0 3.354 3.354 0 0 1-3 0L3 16.5m15-3.379a48.474 48.474 0 0 0-6-.371c-2.032 0-4.034.126-6 .37m12 0c.39.049.777.102 1.163.16 1.07.16 1.837 1.094 1.837 2.175v5.169c0 .621-.504 1.125-1.125 1.125H4.125A1.125 1.125 0 0 1 3 20.625v-5.17c0-1.08.768-2.014 1.837-2.174A47.78 47.78 0 0 1 6 13.12M12.265 3.11a.375.375 0 1 1-.53 0L12 2.845l.265.265Zm-3 0a.375.375 0 1 1-.53 0L9 2.845l.265.265Zm6 0a.375.375 0 1 1-.53 0L15 2.845l.265.265Z" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+						<span id="community-about-created"></span>
+					</div>
+					<div class="flex items-center gap-3">
+						<svg id="community-about-type-icon" class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round"></path></svg>
+						<span id="community-about-type"></span>
+					</div>
+				</div>
+			</div>
+			<!-- BEGIN: Members card (filled by communityLoadMembers; hidden until loaded) -->
+			<div id="community-members-card" class="hidden mt-3 rounded-2xl bg-gray-50 px-5 py-5">
+				<h3 class="text-[13px] font-semibold text-gray-500 tracking-wide uppercase">Members</h3>
+				<div id="community-members-admin-section" class="mt-5 hidden">
+					<p class="text-[13px] font-semibold text-gray-400 mb-2">Admin</p>
+					<div id="community-members-admin" class="flex flex-col gap-1"></div>
+				</div>
+				<div id="community-members-mods-section" class="mt-5 hidden">
+					<p class="text-[13px] font-semibold text-gray-400 mb-2">Moderators</p>
+					<div id="community-members-mods" class="flex flex-col gap-1"></div>
+				</div>
+				<div id="community-members-all-section" class="mt-5 hidden">
+					<p class="text-[13px] font-semibold text-gray-400 mb-2">All</p>
+					<div id="community-members-all" class="flex flex-col gap-1"></div>
+				</div>
+			</div>
+			<!-- END: Members card -->
 		</div>
 		<!-- END: About tab -->
 
