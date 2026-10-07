@@ -1,6 +1,6 @@
 """Communities HTTP layer. Logic lives in app/community_service.py.
 
-GET /api/communities/<slug> and its /posts listing are readable while
+GET /api/communities/<slug>, /members, and /posts are readable while
 logged out (like GET /api/posts); everything else requires a session.
 Mutating routes go through the global csrf_protect() in app/__init__.py.
 """
@@ -154,6 +154,12 @@ def create_community_post(slug):
 
     return _call(communities.create_community_post, slug, session['user_id'],
                  content, audience, files, success_status=201)
+
+
+@bp.route('/api/communities/<slug>/members', methods=['GET'])
+def list_community_members(slug):
+    return _call(communities.list_community_members, slug, session.get('user_id'))
+
 
 @bp.route('/api/communities/<slug>/members', methods=['POST'])
 def add_member(slug):

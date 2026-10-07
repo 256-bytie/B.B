@@ -85,6 +85,11 @@ Register it in `app/__init__.py` next to the other blueprints. Add
   convention in `app/routes/posts.py`.
 - `GET /api/communities/<slug>` — no login required. 404
   `{"error": "Community not found"}` if slug doesn't exist.
+- `GET /api/communities/<slug>/members` — no login required for a visible
+  community. Returns `{"admin": User|null, "moderators": [User], "all": [User]}`;
+  uses the public user shape, puts the creator in `admin`, orders moderators
+  by `joined_at ASC`, and returns up to four distinct users in `all` (member
+  viewer first, otherwise random, followed by the three newest joiners).
 - `POST /api/communities/<slug>/join` — login required, CSRF. Idempotent
   (joining twice is a no-op, not an error). Inserts into
   `community_members` with `role='member'` if not already a member.
@@ -124,7 +129,6 @@ Register it in `app/__init__.py` next to the other blueprints. Add
 ## Not in this pass (frontend already treats these as empty-screen
 placeholders, don't build them yet)
 
-- Members list endpoint (Members tab just says "coming soon" client-side)
 - Events (Events tab is a static placeholder, no schema for it)
 - Banner image upload — communities render a generated gradient +
   topic icon, no `banner_image` column/field

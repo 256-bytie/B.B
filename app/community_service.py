@@ -8,7 +8,7 @@ thin HTTP layer on top.
 import re
 import sqlite3
 
-from app.serializers import serialize_community
+from app.serializers import serialize_community, serialize_user_public
 from app.community_access import viewer_role, can_view, can_join
 from app.upload_utils import delete_if_local
 
@@ -111,6 +111,63 @@ def get_community(conn, slug, viewer_id):
     row = _require_visible_community(cursor, slug, viewer_id)
     icon_bg = topic_style(row[4])[1]
     return serialize_community(row[:9], icon_bg, _role(cursor, row[0], viewer_id), row[9], row[10])
+
+
+def list_community_members(conn, slug, viewer_id):
+    """Return the creator, moderators, and a viewer-aware sample of members."""
+    cursor = conn.cursor()
+    community = _require_visible_community(cursor, slug, viewer_id)
+    community_id = community[0]
+    user_columns = '''
+        SELECT u.id, u.full_name, u.email, u.profile_picture, u.cover_image,
+               u.username, u.bio
+        FROM community_members m
+        JOIN users u ON u.id = m.user_id
+    '''
+
+    cursor.execute(user_columns + '''
+        WHERE m.community_id = ? AND m.role = 'creator'
+        LIMIT 1
+    ''', (community_id,))
+    admin_row = cursor.fetchone()
+
+    cursor.execute(user_columns + '''
+        WHERE m.community_id = ? AND m.role = 'moderator'
+        ORDER BY m.joined_at ASC, m.rowid ASC
+    ''', (community_id,))
+    moderators = [serialize_user_public(row) for row in cursor.fetchall()]
+
+    first_row = None
+    if viewer_id is not None:
+        cursor.execute(user_columns + '''
+            WHERE m.community_id = ? AND m.user_id = ?
+            LIMIT 1
+        ''', (community_id, viewer_id))
+        first_row = cursor.fetchone()
+
+    if first_row is None:
+        cursor.execute(user_columns + '''
+            WHERE m.community_id = ?
+            ORDER BY RANDOM()
+            LIMIT 1
+        ''', (community_id,))
+        first_row = cursor.fetchone()
+
+    all_members = []
+    if first_row is not None:
+        all_members.append(serialize_user_public(first_row))
+        cursor.execute(user_columns + '''
+            WHERE m.community_id = ? AND m.user_id != ?
+            ORDER BY m.joined_at DESC, m.rowid DESC
+            LIMIT 3
+        ''', (community_id, first_row[0]))
+        all_members.extend(serialize_user_public(row) for row in cursor.fetchall())
+
+    return {
+        'admin': serialize_user_public(admin_row) if admin_row else None,
+        'moderators': moderators,
+        'all': all_members,
+    }
 
 
 def update_community_image(conn, slug, user_id, kind, file_storage):

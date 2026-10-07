@@ -93,7 +93,7 @@ re-verified against the current tree.
 | Share sheet (feed card Share button → Repost/Quote sheet; slide-up, swipe-down, tap-outside, Esc) | `templates/partials/share_sheet.html`, `static/js/share-sheet.js`, `.share-sheet*` in `static/css/style.css`. Uses `.is-open` (not `hidden`) so it can animate; Repost/Quote show the standard "Coming soon" toast |
 | Wallet: balance / monthly free credits / history API | `app/routes/wallet.py` (HTTP) → `app/wallet.py` (logic, Flask-free) |
 | Wallet screen (side-nav → `openWalletView()`) | `templates/partials/wallet.html`, `static/js/wallet.js`, `showView('wallet')` hook in `static/js/core.js` |
-| Communities API (create/get/join/leave/mine/browse, per-community posts) | `app/routes/communities.py` (HTTP) → `app/community_service.py` (logic, Flask-free); schema in `migrations/003_communities.sql`; frontend `static/js/community.js` |
+| Communities API (create/get/join/leave/mine/browse/members, per-community posts) | `app/routes/communities.py` (HTTP) → `app/community_service.py` (logic, Flask-free); schema in `migrations/003_communities.sql`; frontend `static/js/community.js` |
 
 ## Key data flow — post images (still true, same shape, new file locations)
 
@@ -230,11 +230,19 @@ one batched `IN (...)` query against `post_images`, not N+1.
 - `icon_emoji` is stored at creation, `icon_bg` is derived at read time;
   both come from `TOPIC_STYLES` in `community_service.py`. Custom topics get
   `👥` / `bg-gray-100`.
-- `GET /api/communities/<slug>` and `GET .../posts` work while logged out.
-  `type` is stored but **not enforced** for existing communities: `public`
-  and `restricted` behave the same, `private` is **excluded from browse/search**
-  (Decision D2 for Phase 2) but readable if you know the slug. Full gating
-  (join restrictions, read restrictions) is deferred.
+- `GET /api/communities/<slug>`, `GET .../members`, and `GET .../posts`
+  work while logged out for visible communities. `_require_visible_community`
+  returns 404 for private communities when the viewer is not a member.
+- `GET /api/communities/<slug>/members` returns
+  `{"admin": User|null, "moderators": [User], "all": [User]}` using
+  `serialize_user_public`. `admin` is the creator; moderators are ordered by
+  `joined_at ASC`. `all` contains up to four distinct users: the logged-in
+  viewer first when they are a member, otherwise a random member, then the
+  three newest members (`joined_at DESC, rowid DESC`) excluding that first user.
+- `type` is stored; `private` communities are excluded from browse/search and
+  hidden from non-members on slug-based reads. `restricted` remains open for
+  reads but restricts joining and interactions as described in the access
+  control tests.
 - **Browse/search directory:** `GET /api/communities` (keyset-paginated by id
   DESC, `?q=`/`?limit=`/`?cursor=`) lists public and restricted communities
   only (private excluded). `?q=` searches name/slug/description (case-insensitive,
@@ -246,9 +254,9 @@ one batched `IN (...)` query against `post_images`, not N+1.
 - Community responses include `icon_image` and `cover_image` URL fields (or
   null). `POST /api/communities/<slug>/icon` and `/cover` accept one
   multipart `image` upload; only creators and moderators may change them.
-- Not built yet: members list, events, edit/settings, and
-  restricted/private gating. Phase 4 (access control) will gate by-post-id
-  endpoints (comments, likes) to enforce restricted/private.
+- Not built yet: events and edit/settings. Community visibility, joining,
+  posting, comments, and likes follow the access rules in
+  `app/community_access.py` and are covered by `tests/test_communities.sh`.
 
 ## Non-obvious decisions worth preserving
 
