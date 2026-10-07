@@ -107,6 +107,15 @@ def leave_community(slug):
     return _call(communities.leave_community, slug, session['user_id'])
 
 
+@bp.route('/api/communities/<slug>/notifications', methods=['PUT'])
+def set_community_notifications(slug):
+    auth_error = _require_login()
+    if auth_error:
+        return auth_error
+    data = request.get_json(silent=True) or {}
+    return _call(communities.set_notification_level, slug, session['user_id'], data.get('level'))
+
+
 @bp.route('/api/communities/<slug>/icon', methods=['POST'])
 def update_community_icon(slug):
     auth_error = _require_login()
@@ -159,6 +168,17 @@ def create_community_post(slug):
 @bp.route('/api/communities/<slug>/members', methods=['GET'])
 def list_community_members(slug):
     return _call(communities.list_community_members, slug, session.get('user_id'))
+
+
+@bp.route('/api/communities/<slug>/members/all', methods=['GET'])
+def list_all_community_members(slug):
+    q = request.args.get('q')
+    limit = _clamp_limit(request.args.get('limit'))
+    try:
+        offset = max(0, int(request.args.get('offset', 0)))
+    except (TypeError, ValueError):
+        offset = 0
+    return _call(communities.list_all_community_members, slug, session.get('user_id'), q, limit, offset)
 
 
 @bp.route('/api/communities/<slug>/members', methods=['POST'])

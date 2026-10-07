@@ -198,7 +198,7 @@ def serialize_monthly_reward(status):
     }
 
 
-def serialize_community(row, icon_bg, viewer_role, icon_image=None, cover_image=None):
+def serialize_community(row, icon_bg, viewer_role, icon_image=None, cover_image=None, notification_level=None):
     """Convert a communities row (+ member count) to the shape
     static/js/community.js expects.
 
@@ -231,5 +231,6 @@ def serialize_community(row, icon_bg, viewer_role, icon_image=None, cover_image=
         'membership': {
             'is_member': viewer_role is not None,
             'role': viewer_role,
+            'notification_level': notification_level if viewer_role is not None else None,
         },
     }

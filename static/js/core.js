@@ -39,7 +39,7 @@ function apiFetch(url, options = {}) {
 // responding to a browser Back/Forward navigation doesn't push a second,
 // redundant history entry on top of the one the browser just navigated to.
 function showView(viewName, { skipUrlSync = false } = {}) {
-    const views = ['login', 'signup', 'feed', 'profile', 'edit-profile', 'user-profile', 'create-post', 'businesses', 'courses', 'gpa-calculator', 'chat', 'library', 'library-contribute', 'search', 'wallet', 'community', 'community-edit', 'community-create', 'community-browse'];
+    const views = ['login', 'signup', 'feed', 'profile', 'edit-profile', 'user-profile', 'create-post', 'businesses', 'courses', 'gpa-calculator', 'chat', 'library', 'library-contribute', 'search', 'wallet', 'community', 'community-members', 'community-edit', 'community-create', 'community-browse'];
     views.forEach(v => {
         const view = document.getElementById(v + '-view');
         if (view) {

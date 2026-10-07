@@ -80,6 +80,21 @@ const communityApi = {
 		return this._request(`/api/communities/${encodeURIComponent(slug)}/members`, {}, 'Could not load members.');
 	},
 
+	// Full paginated list for the Members screen: {admin, moderators, all, has_more}.
+	// admin/moderators come back on the first page (offset 0) only.
+	membersAll(slug, q, offset, limit) {
+		const params = new URLSearchParams();
+		if (q) params.set('q', q);
+		params.set('offset', String(offset || 0));
+		params.set('limit', String(limit || 30));
+		return this._request(`/api/communities/${encodeURIComponent(slug)}/members/all?${params.toString()}`, {}, 'Could not load members.');
+	},
+
+	// level: 'all' | 'popular' | 'off' | 'muted'. Resolves to {notification_level}.
+	setNotificationLevel(slug, level) {
+		return this._request(`/api/communities/${encodeURIComponent(slug)}/notifications`, this._json('PUT', { level }), 'Could not update notifications.');
+	},
+
 	// Directory/search. Resolves to {communities, next_cursor}.
 	async browse(q, cursor, limit) {
 		const params = new URLSearchParams();
@@ -394,6 +409,7 @@ function renderCommunityHeader(community) {
 
 	const role = community.membership ? community.membership.role : null;
 	const isMember = community.membership ? community.membership.is_member : false;
+	communityApplyNotifIcon(community.membership);
 	const actionBtn = document.getElementById('community-action-btn');
 	const ACTION_PILL = 'h-9 rounded-full flex items-center justify-center transition-colors active:scale-[0.98] duration-100 ';
 	if (role === 'creator' || role === 'moderator') {
@@ -528,6 +544,100 @@ async function communityLoadMembers() {
 	}
 }
 
+// ---- Members screen ("View all") ----
+const COMMUNITY_MEMBERS_PAGE_SIZE = 30;
+let communityMembersPageState = { slug: null, q: '', offset: 0, hasMore: false, loading: false, token: 0, searchTimer: null };
+let communityMembersObserver = null;
+
+function communityViewAllMembers() {
+	const slug = communityCurrentSlug;
+	if (!slug) return;
+	const st = communityMembersPageState;
+	st.slug = slug;
+	st.q = '';
+	document.getElementById('community-members-search').value = '';
+	const role = communityCurrentData && communityCurrentData.membership ? communityCurrentData.membership.role : null;
+	document.getElementById('community-members-add-btn').classList.toggle('hidden', role !== 'creator');
+	document.getElementById('community-members-add-btn').classList.toggle('flex', role === 'creator');
+	showView('community-members');
+	window.scrollTo(0, 0);
+	communityMembersLoad(true);
+	communityMembersWatchSentinel();
+}
+
+function communityMembersBack() {
+	showView('community');
+}
+
+function communityMembersOnSearch(value) {
+	const st = communityMembersPageState;
+	clearTimeout(st.searchTimer);
+	st.searchTimer = setTimeout(() => {
+		const q = (value || '').trim();
+		if (q === st.q) return;
+		st.q = q;
+		communityMembersLoad(true);
+	}, 250);
+}
+
+function communityMembersWatchSentinel() {
+	if (communityMembersObserver) return;
+	const sentinel = document.getElementById('community-members-page-sentinel');
+	if (!sentinel || !('IntersectionObserver' in window)) return;
+	communityMembersObserver = new IntersectionObserver((entries) => {
+		if (entries.some(e => e.isIntersecting)) communityMembersLoad(false);
+	}, { rootMargin: '300px' });
+	communityMembersObserver.observe(sentinel);
+}
+
+function communityMembersSetState({ loading = false, empty = false, error = false }) {
+	document.getElementById('community-members-page-loading').classList.toggle('hidden', !loading);
+	document.getElementById('community-members-page-loading').classList.toggle('flex', loading);
+	document.getElementById('community-members-page-empty').classList.toggle('hidden', !empty);
+	document.getElementById('community-members-page-empty').classList.toggle('flex', empty);
+	document.getElementById('community-members-page-error').classList.toggle('hidden', !error);
+	document.getElementById('community-members-page-error').classList.toggle('flex', error);
+}
+
+async function communityMembersLoad(reset) {
+	const st = communityMembersPageState;
+	if (!st.slug) return;
+	if (!reset && (st.loading || !st.hasMore)) return;
+	const token = reset ? ++st.token : st.token;
+	if (reset) {
+		st.offset = 0;
+		st.hasMore = false;
+		communityRenderMemberSection('community-members-page-admin-section', 'community-members-page-admin', []);
+		communityRenderMemberSection('community-members-page-mods-section', 'community-members-page-mods', []);
+		communityRenderMemberSection('community-members-page-all-section', 'community-members-page-all', []);
+	}
+	st.loading = true;
+	communityMembersSetState({ loading: true });
+	try {
+		const data = await communityApi.membersAll(st.slug, st.q, st.offset, COMMUNITY_MEMBERS_PAGE_SIZE);
+		if (token !== st.token) return;
+		if (st.offset === 0) {
+			communityRenderMemberSection('community-members-page-admin-section', 'community-members-page-admin', data.admin ? [data.admin] : []);
+			communityRenderMemberSection('community-members-page-mods-section', 'community-members-page-mods', data.moderators);
+		}
+		const all = data.all || [];
+		const list = document.getElementById('community-members-page-all');
+		if (st.offset === 0) list.innerHTML = '';
+		list.insertAdjacentHTML('beforeend', all.map(communityMemberRowHtml).join(''));
+		st.offset += all.length;
+		st.hasMore = !!data.has_more;
+		document.getElementById('community-members-page-all-section').classList.toggle('hidden', list.children.length === 0);
+		const anything = list.children.length > 0 || !document.getElementById('community-members-page-admin-section').classList.contains('hidden') || !document.getElementById('community-members-page-mods-section').classList.contains('hidden');
+		communityMembersSetState({ empty: !anything });
+	} catch (e) {
+		if (token !== st.token) return;
+		communityMembersSetState({ error: st.offset === 0 });
+		if (st.offset > 0) showToast(e.message || 'Could not load members.');
+	} finally {
+		if (token === st.token) st.loading = false;
+	}
+}
+
 document.addEventListener('click', (ev) => {
 	const row = ev.target.closest('.community-member-row');
 	if (!row) return;
@@ -587,6 +697,91 @@ document.addEventListener('click', function(e) {
 });
 document.addEventListener('keydown', function(e) {
 	if (e.key === 'Escape' && communityIsSortMenuOpen()) communitySetSortMenu(false);
+});
+
+// ---- Notification menu (bell) ----
+const COMMUNITY_NOTIF_BELL = 'M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0';
+const COMMUNITY_NOTIF_ICONS = {
+	all: COMMUNITY_NOTIF_BELL + 'M3.124 7.5A8.969 8.969 0 0 1 5.292 3m13.416 0a8.969 8.969 0 0 1 2.168 4.5',
+	popular: COMMUNITY_NOTIF_BELL,
+	off: 'M9.143 17.082a24.248 24.248 0 0 0 3.844.148m-3.844-.148a23.856 23.856 0 0 1-5.455-1.31 8.964 8.964 0 0 0 2.3-5.542m3.155 6.852a3 3 0 0 0 5.667 1.97m1.965-2.277L21 21m-4.225-4.225a23.81 23.81 0 0 0 3.536-1.003A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6.53 6.53m10.245 10.245L6.53 6.53M3 3l3.53 3.53',
+	muted: 'M17.25 9.75 19.5 12m0 0 2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6 4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.009 9.009 0 0 1 2.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75Z'
+};
+const COMMUNITY_NOTIF_LABELS = { all: 'Notifications: all new posts', popular: 'Notifications: popular posts', off: 'Notifications: off', muted: 'Community muted' };
+let communityNotifDefaultIconHtml = null;
+
+// Bell mirrors the chosen level (same icons as the menu). Non-members keep
+// the original bell, since they have no setting yet.
+function communityApplyNotifIcon(membership) {
+	const btn = document.getElementById('community-notif-btn');
+	if (!btn) return;
+	if (communityNotifDefaultIconHtml === null) communityNotifDefaultIconHtml = btn.innerHTML;
+	if (!membership || !membership.is_member) {
+		btn.innerHTML = communityNotifDefaultIconHtml;
+		btn.setAttribute('aria-label', 'Notifications');
+		return;
+	}
+	const level = membership.notification_level || 'off';
+	btn.innerHTML = '<svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="' + COMMUNITY_NOTIF_ICONS[level] + '"></path></svg>';
+	btn.setAttribute('aria-label', COMMUNITY_NOTIF_LABELS[level]);
+}
+
+function communityIsNotifMenuOpen() {
+	const menu = document.getElementById('community-notif-menu');
+	return !!menu && !menu.classList.contains('hidden');
+}
+
+function communityRenderNotifMenu() {
+	const m = communityCurrentData && communityCurrentData.membership;
+	const level = (m && m.notification_level) || 'off';
+	document.querySelectorAll('#community-notif-menu .community-notif-option').forEach(opt => {
+		const selected = opt.dataset.level === level;
+		opt.setAttribute('aria-checked', String(selected));
+		opt.classList.toggle('bg-gray-100', selected);
+		opt.querySelector('.community-notif-check').classList.toggle('hidden', !selected);
+	});
+}
+
+function communitySetNotifMenu(open) {
+	const menu = document.getElementById('community-notif-menu');
+	const btn = document.getElementById('community-notif-btn');
+	if (!menu || !btn) return;
+	if (open) communityRenderNotifMenu();
+	menu.classList.toggle('hidden', !open);
+	btn.setAttribute('aria-expanded', String(open));
+	btn.classList.toggle('bg-gray-100', open);
+}
+
+function communityToggleNotifMenu(event) {
+	if (event) event.stopPropagation();
+	if (communityIsNotifMenuOpen()) { communitySetNotifMenu(false); return; }
+	const m = communityCurrentData && communityCurrentData.membership;
+	if (!m || !m.is_member) { showToast('Join this community to manage notifications'); return; }
+	communitySetNotifMenu(true);
+}
+
+async function communitySelectNotificationLevel(level) {
+	const data = communityCurrentData;
+	communitySetNotifMenu(false);
+	if (!data || !data.membership) return;
+	const previous = data.membership.notification_level || 'off';
+	if (level === previous) return;
+	data.membership.notification_level = level;
+	communityApplyNotifIcon(data.membership);
+	try {
+		await communityApi.setNotificationLevel(data.slug, level);
+	} catch (e) {
+		data.membership.notification_level = previous;
+		communityApplyNotifIcon(data.membership);
+		showToast(e.message || 'Could not update notifications.');
+	}
+}
+
+document.addEventListener('click', function(e) {
+	if (communityIsNotifMenuOpen() && !e.target.closest('#community-notif-menu')) communitySetNotifMenu(false);
+});
+document.addEventListener('keydown', function(e) {
+	if (e.key === 'Escape' && communityIsNotifMenuOpen()) communitySetNotifMenu(false);
 });
 
 // ---- Edit Community ----

@@ -110,7 +110,13 @@ def get_community(conn, slug, viewer_id):
     cursor = conn.cursor()
     row = _require_visible_community(cursor, slug, viewer_id)
     icon_bg = topic_style(row[4])[1]
-    return serialize_community(row[:9], icon_bg, _role(cursor, row[0], viewer_id), row[9], row[10])
+    role = _role(cursor, row[0], viewer_id)
+    level = None
+    if role is not None:
+        cursor.execute('SELECT notification_level FROM community_members WHERE community_id = ? AND user_id = ?',
+                       (row[0], viewer_id))
+        level = cursor.fetchone()[0]
+    return serialize_community(row[:9], icon_bg, role, row[9], row[10], level)
 
 
 def list_community_members(conn, slug, viewer_id):
@@ -167,6 +173,58 @@ def list_community_members(conn, slug, viewer_id):
         'admin': serialize_user_public(admin_row) if admin_row else None,
         'moderators': moderators,
         'all': all_members,
+    }
+
+
+def list_all_community_members(conn, slug, viewer_id, q=None, limit=30, offset=0):
+    """Full, paginated member list for the Members screen.
+
+    `all` holds every member (admin and moderators included, viewer first, then
+    newest joins). `admin` / `moderators` are only returned on the first page
+    (offset 0). `q` filters all three by name or username.
+    """
+    cursor = conn.cursor()
+    community = _require_visible_community(cursor, slug, viewer_id)
+    community_id = community[0]
+    user_columns = '''
+        SELECT u.id, u.full_name, u.email, u.profile_picture, u.cover_image,
+               u.username, u.bio
+        FROM community_members m
+        JOIN users u ON u.id = m.user_id
+    '''
+
+    search_sql = ''
+    search_params = []
+    term = (q or '').strip().lower()
+    if term:
+        escaped = term.replace('!', '!!').replace('%', '!%').replace('_', '!_')
+        like = '%' + escaped + '%'
+        search_sql = " AND (lower(u.full_name) LIKE ? ESCAPE '!' OR lower(u.username) LIKE ? ESCAPE '!')"
+        search_params = [like, like]
+
+    admin = None
+    moderators = []
+    if offset == 0:
+        cursor.execute(user_columns + "WHERE m.community_id = ? AND m.role = 'creator'" + search_sql + ' LIMIT 1',
+                       [community_id] + search_params)
+        row = cursor.fetchone()
+        admin = serialize_user_public(row) if row else None
+        cursor.execute(user_columns + "WHERE m.community_id = ? AND m.role = 'moderator'" + search_sql +
+                       ' ORDER BY m.joined_at ASC, m.rowid ASC', [community_id] + search_params)
+        moderators = [serialize_user_public(r) for r in cursor.fetchall()]
+
+    cursor.execute(
+        user_columns + 'WHERE m.community_id = ?' + search_sql +
+        ' ORDER BY (m.user_id = ?) DESC, m.joined_at DESC, m.rowid DESC LIMIT ? OFFSET ?',
+        [community_id] + search_params + [viewer_id if viewer_id is not None else -1, limit + 1, offset]
+    )
+    rows = cursor.fetchall()
+    has_more = len(rows) > limit
+    return {
+        'admin': admin,
+        'moderators': moderators,
+        'all': [serialize_user_public(r) for r in rows[:limit]],
+        'has_more': has_more,
     }
 
 
@@ -267,6 +325,25 @@ def leave_community(conn, slug, user_id):
     )
     conn.commit()
     return get_community(conn, slug, user_id)
+
+NOTIFICATION_LEVELS = ('off', 'all', 'popular', 'muted')
+
+
+def set_notification_level(conn, slug, user_id, level):
+    """Set the viewer's notification preference for a community they belong to."""
+    if level not in NOTIFICATION_LEVELS:
+        raise CommunityValidationError('Invalid notification setting')
+    cursor = conn.cursor()
+    row = _require_visible_community(cursor, slug, user_id)
+    if viewer_role(cursor, row[0], user_id) is None:
+        raise CommunityPermissionError('Join this community to manage notifications')
+    cursor.execute(
+        'UPDATE community_members SET notification_level = ? WHERE community_id = ? AND user_id = ?',
+        (level, row[0], user_id)
+    )
+    conn.commit()
+    return {'notification_level': level}
+
 
 def add_member(conn, slug, actor_id, username):
     cursor = conn.cursor(); row = _require_visible_community(cursor, slug, actor_id)

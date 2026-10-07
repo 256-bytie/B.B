@@ -145,6 +145,89 @@ class CommunityMembersApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.get_json(), {'error': 'Community not found'})
 
+    def get_all_members(self, query='', viewer_id=None):
+        client = self.app.test_client()
+        if viewer_id is not None:
+            with client.session_transaction() as flask_session:
+                flask_session['user_id'] = viewer_id
+        return client.get('/api/communities/members-test/members/all' + query)
+
+    def seed_full_roster(self):
+        self.add_members([
+            (1, 'creator', '2026-01-01 00:00:00'),
+            (2, 'member', '2026-01-02 00:00:00'),
+            (3, 'moderator', '2026-01-03 00:00:00'),
+            (4, 'member', '2026-01-04 00:00:00'),
+            (5, 'member', '2026-01-05 00:00:00'),
+        ])
+
+    def test_full_list_returns_everyone_viewer_first_then_newest(self):
+        self.seed_full_roster()
+        data = self.get_all_members(viewer_id=2).get_json()
+        self.assertEqual([u['id'] for u in data['all']], [2, 5, 4, 3, 1])
+        self.assertEqual(data['admin']['id'], 1)
+        self.assertEqual([u['id'] for u in data['moderators']], [3])
+        self.assertFalse(data['has_more'])
+
+    def test_full_list_paginates_and_omits_sections_after_first_page(self):
+        self.seed_full_roster()
+        first = self.get_all_members('?limit=2&offset=0', viewer_id=2).get_json()
+        self.assertEqual([u['id'] for u in first['all']], [2, 5])
+        self.assertTrue(first['has_more'])
+        second = self.get_all_members('?limit=2&offset=2', viewer_id=2).get_json()
+        self.assertEqual([u['id'] for u in second['all']], [4, 3])
+        self.assertTrue(second['has_more'])
+        self.assertIsNone(second['admin'])
+        self.assertEqual(second['moderators'], [])
+        last = self.get_all_members('?limit=2&offset=4', viewer_id=2).get_json()
+        self.assertEqual([u['id'] for u in last['all']], [1])
+        self.assertFalse(last['has_more'])
+
+    def test_full_list_search_filters_by_name_or_username(self):
+        self.seed_full_roster()
+        data = self.get_all_members('?q=USER 4').get_json()
+        self.assertEqual([u['id'] for u in data['all']], [4])
+        self.assertIsNone(data['admin'])
+        self.assertEqual(data['moderators'], [])
+        data = self.get_all_members('?q=user3').get_json()
+        self.assertEqual([u['id'] for u in data['moderators']], [3])
+        self.assertEqual(self.get_all_members('?q=%25').get_json()['all'], [])
+
+    def test_full_list_private_community_hidden_from_nonmember(self):
+        conn = get_db()
+        conn.execute("UPDATE communities SET type = 'private' WHERE id = 1")
+        conn.commit()
+        conn.close()
+        self.assertEqual(self.get_all_members(viewer_id=6).status_code, 404)
+
+    def put_notifications(self, level, viewer_id=None):
+        client = self.app.test_client()
+        with client.session_transaction() as flask_session:
+            flask_session['csrf_token'] = 'test-token'
+            if viewer_id is not None:
+                flask_session['user_id'] = viewer_id
+        return client, client.put('/api/communities/members-test/notifications', json={'level': level},
+                                  headers={'X-CSRF-Token': 'test-token'})
+
+    def test_notification_level_defaults_to_off_and_is_saved_per_member(self):
+        self.add_members([(1, 'creator', '2026-01-01 00:00:00'), (2, 'member', '2026-01-02 00:00:00')])
+        client, res = self.put_notifications('popular', viewer_id=2)
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.get_json()['notification_level'], 'popular')
+        self.assertEqual(client.get('/api/communities/members-test').get_json()['membership']['notification_level'], 'popular')
+        creator = self.app.test_client()
+        with creator.session_transaction() as flask_session:
+            flask_session['user_id'] = 1
+        self.assertEqual(creator.get('/api/communities/members-test').get_json()['membership']['notification_level'], 'off')
+
+    def test_notification_level_rejects_invalid_nonmember_and_logged_out(self):
+        self.add_members([(2, 'member', '2026-01-02 00:00:00')])
+        self.assertEqual(self.put_notifications('loud', viewer_id=2)[1].status_code, 400)
+        self.assertEqual(self.put_notifications('all', viewer_id=6)[1].status_code, 403)
+        self.assertEqual(self.put_notifications('all')[1].status_code, 401)
+        logged_out = self.app.test_client().get('/api/communities/members-test').get_json()
+        self.assertIsNone(logged_out['membership']['notification_level'])
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

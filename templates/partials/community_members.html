@@ -1,0 +1,60 @@
+<!-- BEGIN: Community Members View -->
+<!-- Full member list, opened from "View all" on the community About tab.
+     Populated by communityOpenMembers() in community.js from
+     GET /api/communities/<slug>/members/all (paginated, ?q= search).
+     Rows reuse communityMemberRowHtml(), so tapping one opens that profile. -->
+<div id="community-members-view" class="view-section bg-white min-h-screen flex justify-center">
+<main class="w-full max-w-[640px] bg-white min-h-screen flex flex-col relative">
+
+	<header class="sticky top-0 z-10 bg-white shrink-0">
+		<div class="relative flex items-center justify-between px-4 h-14 border-b border-gray-200">
+			<button type="button" aria-label="Back" onclick="communityMembersBack()" class="w-10 h-10 -ml-2 flex items-center justify-center text-gray-900 active:scale-95 transition-transform duration-100">
+				<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.25" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="m15 18-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+			</button>
+			<h1 class="absolute left-1/2 -translate-x-1/2 text-[18px] font-bold text-gray-900">Members</h1>
+			<button type="button" id="community-members-add-btn" aria-label="Add member" onclick="showToast('Coming soon')" class="hidden w-10 h-10 -mr-2 items-center justify-center text-gray-900 active:scale-95 transition-transform duration-100">
+				<svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="9" cy="8" r="3.75"></circle><path d="M2.5 19.25c0-3.2 2.9-5.25 6.5-5.25 1.2 0 2.3.23 3.25.65a4.75 4.75 0 0 0-1.75 3.6c0 .35.04.7.12 1.03H3.75c-.69 0-1.25-.56-1.25-1.25v-.78Z"></path><path d="M18 13.25v6m-3-3h6" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round"></path><circle cx="16.5" cy="8.5" r="2.75"></circle></svg>
+			</button>
+		</div>
+		<div class="flex items-center gap-3 px-4 py-3">
+			<div class="flex-1 h-11 rounded-full bg-gray-100 px-5 flex items-center">
+				<input id="community-members-search" type="search" inputmode="search" enterkeyhint="search" autocomplete="off" placeholder="Search members" oninput="communityMembersOnSearch(this.value)" class="w-full h-full bg-transparent border-0 p-0 shadow-none outline-none focus:outline-none focus:ring-0 focus:border-0 appearance-none text-[16px] text-gray-900 placeholder-gray-500">
+			</div>
+			<button type="button" aria-label="Search" onclick="document.getElementById('community-members-search').focus()" class="w-10 h-10 flex items-center justify-center text-gray-900 active:scale-95 transition-transform duration-100 shrink-0">
+				<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.75" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="7"></circle><path d="m21 21-4.3-4.3" stroke-linecap="round"></path></svg>
+			</button>
+		</div>
+	</header>
+
+	<div class="flex-1 px-5 pt-2 pb-10">
+		<div id="community-members-page-admin-section" class="hidden pt-3">
+			<p class="text-[15px] font-semibold text-gray-500 mb-2">Admin</p>
+			<div id="community-members-page-admin" class="flex flex-col gap-1"></div>
+		</div>
+		<div id="community-members-page-mods-section" class="hidden pt-5 mt-5 border-t border-gray-100">
+			<p class="text-[15px] font-semibold text-gray-500 mb-2">Moderators</p>
+			<div id="community-members-page-mods" class="flex flex-col gap-1"></div>
+		</div>
+		<div id="community-members-page-all-section" class="hidden pt-5 mt-5 border-t border-gray-100">
+			<p class="text-[15px] font-semibold text-gray-500 mb-2">All</p>
+			<div id="community-members-page-all" class="flex flex-col gap-1"></div>
+		</div>
+
+		<div id="community-members-page-loading" class="hidden justify-center py-8">
+			<svg class="w-6 h-6 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+		</div>
+		<div id="community-members-page-empty" class="hidden flex-col items-center text-center px-8 py-16">
+			<p class="text-[15px] font-semibold text-gray-900">No members found</p>
+			<p class="text-[13px] text-gray-500 mt-1">Try a different name or username.</p>
+		</div>
+		<div id="community-members-page-error" class="hidden flex-col items-center text-center px-8 py-16">
+			<p class="text-[15px] font-semibold text-gray-900">Couldn't load members</p>
+			<p class="text-[13px] text-gray-500 mt-1">Check your connection and try again.</p>
+			<button type="button" onclick="communityMembersLoad(true)" class="h-10 px-5 rounded-full bg-brand-red text-white text-[14px] font-semibold mt-4 active:scale-[0.98] transition-transform duration-100">Try again</button>
+		</div>
+		<div id="community-members-page-sentinel" class="h-px"></div>
+	</div>
+
+</main>
+</div>
+<!-- END: Community Members View -->
