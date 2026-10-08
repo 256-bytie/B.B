@@ -155,14 +155,16 @@ def create_community_post(slug):
         content = request.form.get('content')
         audience = request.form.get('audience', '')  # ignored for community posts
         files = request.files.getlist('images')
+        quoted_post_id = request.form.get('quoted_post_id')
     else:
         data = request.get_json(silent=True) or {}
         content = data.get('content')
         audience = data.get('audience', '')
         files = []
+        quoted_post_id = data.get('quoted_post_id')
 
     return _call(communities.create_community_post, slug, session['user_id'],
-                 content, audience, files, success_status=201)
+                 content, audience, files, quoted_post_id, success_status=201)
 
 
 @bp.route('/api/communities/<slug>/members', methods=['GET'])

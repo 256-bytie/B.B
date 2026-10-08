@@ -30,19 +30,26 @@ def create_post():
         content = request.form.get('content')
         audience = request.form.get('audience', posts.DEFAULT_AUDIENCE)
         files = request.files.getlist('images')
+        quoted_post_id = request.form.get('quoted_post_id')
     else:
         data = request.get_json() or {}
         content = data.get('content')
         audience = data.get('audience', posts.DEFAULT_AUDIENCE)
         files = []
+        quoted_post_id = data.get('quoted_post_id')
 
     try:
         conn = get_db()
-        post = posts.create_post(conn, session['user_id'], content, audience, files)
+        post = posts.create_post(
+            conn, session['user_id'], content, audience, files,
+            quoted_post_id=quoted_post_id,
+        )
         conn.close()
         return jsonify(post), 201
     except posts.PostValidationError as e:
         return jsonify({'error': str(e)}), 400
+    except posts.PostNotFoundError as e:
+        return jsonify({'error': str(e)}), 404
     except posts.PostAccessError as e:
         return jsonify({'error': str(e)}), 403
     except Exception as e:

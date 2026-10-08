@@ -41,6 +41,7 @@ TESTS=(
     "test_wallet.sh"
     "test_communities.sh"
     "test_community_images.sh"
+    "test_quotes.sh"
 )
 
 PASSED=0
@@ -60,8 +61,8 @@ done
 
 # Stop server
 echo "Stopping server..."
-kill $SERVER_PID 2>/dev/null
-wait $SERVER_PID 2>/dev/null
+kill $SERVER_PID 2>/dev/null || true
+wait $SERVER_PID 2>/dev/null || true
 
 echo "=========================================="
 echo "Test Summary: $PASSED passed, $FAILED failed"

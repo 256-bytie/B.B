@@ -55,6 +55,45 @@ class CommentOwnershipError(Exception):
 class PostAccessError(Exception):
     pass
 
+
+def _parse_quoted_post_id(value):
+    """Normalize the quote id accepted by JSON and multipart requests.
+
+    JSON numbers must be actual integers; multipart values arrive as strings.
+    Keeping this validation in the service also protects callers that bypass
+    the HTTP layer.
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise PostValidationError('Invalid quoted_post_id')
+    if isinstance(value, int):
+        quoted_post_id = value
+    elif isinstance(value, str):
+        try:
+            quoted_post_id = int(value.strip())
+        except (TypeError, ValueError):
+            raise PostValidationError('Invalid quoted_post_id')
+    else:
+        raise PostValidationError('Invalid quoted_post_id')
+
+    if quoted_post_id < 1:
+        raise PostValidationError('Invalid quoted_post_id')
+    return quoted_post_id
+
+
+def _validate_quote_target(cursor, quoted_post_id, viewer_id):
+    """Ensure a quote target exists and is visible to the creating viewer.
+
+    Access failures intentionally collapse to PostNotFoundError so a private
+    post cannot be discovered by trying to quote it.
+    """
+    cursor.execute('SELECT id FROM posts WHERE id = ?', (quoted_post_id,))
+    if not cursor.fetchone():
+        raise PostNotFoundError('Post not found')
+    _check_post_access(cursor, quoted_post_id, viewer_id, interact=False)
+
+
 def _check_post_access(cursor, post_id, user_id, *, interact):
     info = post_community(cursor, post_id)
     if info is None:
@@ -95,7 +134,7 @@ def _validate_images(files):
             raise PostValidationError('Each image must be under 5MB.')
 
 
-def create_post(conn, user_id, content, audience, files, community_id=None):
+def create_post(conn, user_id, content, audience, files, community_id=None, quoted_post_id=None):
     """Validate, insert, and save images for a new post.
 
     audience falls back to DEFAULT_AUDIENCE for any value outside
@@ -105,8 +144,10 @@ def create_post(conn, user_id, content, audience, files, community_id=None):
     instead). When community_id is set, the post belongs to that
     community and audience is ignored (the column default fills it).
     Returns the serialized post dict. Raises PostValidationError for
-    empty/oversized content or invalid images.
+    empty/oversized content or invalid images and PostNotFoundError when the
+    requested quote target is missing or not visible to user_id.
     """
+    quoted_post_id = _parse_quoted_post_id(quoted_post_id)
     content = (content or '').strip()
     if not content:
         raise PostValidationError('Content cannot be empty')
@@ -117,37 +158,55 @@ def create_post(conn, user_id, content, audience, files, community_id=None):
     _validate_images(files)
 
     cursor = conn.cursor()
-    if community_id is not None:
-        # Community post: ignore audience, let the column default fill it
-        cursor.execute(
-            'INSERT INTO posts (user_id, content, community_id) VALUES (?, ?, ?)',
-            (user_id, content, community_id)
-        )
-    else:
+    if quoted_post_id is not None:
+        # Do this before the INSERT or any file write. A private target is
+        # deliberately indistinguishable from a missing target.
+        _validate_quote_target(cursor, quoted_post_id, user_id)
+
+    if community_id is None:
         # Main feed post: validate and use audience
         audience = (audience or DEFAULT_AUDIENCE).strip()
         if audience not in VALID_AUDIENCES:
             audience = DEFAULT_AUDIENCE
-        cursor.execute(
-            'INSERT INTO posts (user_id, content, audience) VALUES (?, ?, ?)',
-            (user_id, content, audience)
-        )
-    post_id = cursor.lastrowid
 
-    for position, file_storage in enumerate(files):
-        if file_storage and file_storage.filename:
-            file_ext = os.path.splitext(secure_filename(file_storage.filename))[1]
-            unique_filename = f"{uuid.uuid4()}{file_ext}"
-            file_path = os.path.join(UPLOAD_FOLDER, unique_filename)
-            file_storage.save(file_path)
-
-            image_url = f"/static/uploads/{unique_filename}"
+    saved_file_paths = []
+    try:
+        if community_id is not None:
+            # Community post: ignore audience, let the column default fill it
             cursor.execute(
-                'INSERT INTO post_images (post_id, image_path, position) VALUES (?, ?, ?)',
-                (post_id, image_url, position)
+                '''INSERT INTO posts (user_id, content, community_id, quoted_post_id)
+                   VALUES (?, ?, ?, ?)''',
+                (user_id, content, community_id, quoted_post_id)
             )
+        else:
+            cursor.execute(
+                '''INSERT INTO posts (user_id, content, audience, quoted_post_id)
+                   VALUES (?, ?, ?, ?)''',
+                (user_id, content, audience, quoted_post_id)
+            )
+        post_id = cursor.lastrowid
 
-    conn.commit()
+        for position, file_storage in enumerate(files):
+            if file_storage and file_storage.filename:
+                file_ext = os.path.splitext(secure_filename(file_storage.filename))[1]
+                unique_filename = f"{uuid.uuid4()}{file_ext}"
+                file_path = os.path.join(UPLOAD_FOLDER, unique_filename)
+                saved_file_paths.append(file_path)
+                file_storage.save(file_path)
+
+                image_url = f"/static/uploads/{unique_filename}"
+                cursor.execute(
+                    'INSERT INTO post_images (post_id, image_path, position) VALUES (?, ?, ?)',
+                    (post_id, image_url, position)
+                )
+
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        for file_path in saved_file_paths:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+        raise
 
     cursor.execute('''
         SELECT posts.id, posts.user_id, posts.content, posts.audience,
@@ -167,7 +226,113 @@ def create_post(conn, user_id, content, audience, files, community_id=None):
     ''', (post_id,))
     image_rows = cursor.fetchall()
 
-    return serialize_post(row, image_rows, liked_by_user=False)
+    quoted_by_post = fetch_quoted_posts(conn, [post_id], user_id)
+    return serialize_post(
+        row, image_rows, liked_by_user=False,
+        quoted_post=quoted_by_post.get(post_id),
+    )
+
+
+def fetch_quoted_posts(conn, post_ids, current_user_id):
+    """Build one-level quote payloads for a page of already selected posts.
+
+    The relationship ids, originals/authors, images, and viewer-like state are
+    all fetched in batches. Missing or viewer-inaccessible originals remain an
+    ``{id, unavailable: true}`` stub, preserving the quote relationship.
+    """
+    post_ids = list(dict.fromkeys(post_ids or []))
+    if not post_ids:
+        return {}
+
+    cursor = conn if not hasattr(conn, 'cursor') else conn.cursor()
+    placeholders = ','.join('?' * len(post_ids))
+    cursor.execute(
+        f'SELECT id, quoted_post_id FROM posts WHERE id IN ({placeholders})',
+        post_ids,
+    )
+    quote_target_by_post = {
+        post_id: quoted_id
+        for post_id, quoted_id in cursor.fetchall()
+        if quoted_id is not None
+    }
+    if not quote_target_by_post:
+        return {}
+
+    quote_ids = list(dict.fromkeys(quote_target_by_post.values()))
+    quote_placeholders = ','.join('?' * len(quote_ids))
+    payloads = {
+        post_id: {'id': quoted_id, 'unavailable': True}
+        for post_id, quoted_id in quote_target_by_post.items()
+    }
+
+    # The joined author row and the same denormalized counts used by the feed
+    # are fetched in one query. The community type/member check applies the
+    # viewer's visibility to each original independently.
+    cursor.execute(
+        f'''
+        SELECT p.id, p.user_id, p.content, p.created_at,
+               p.comment_count, p.like_count,
+               u.full_name, u.email, u.profile_picture, u.username,
+               c.type,
+               CASE WHEN c.id IS NOT NULL THEN EXISTS(
+                   SELECT 1 FROM community_members m
+                   WHERE m.community_id = c.id AND m.user_id = ?
+               ) ELSE 0 END AS viewer_is_member,
+               CASE WHEN likes.id IS NOT NULL THEN 1 ELSE 0 END AS liked_by_user
+        FROM posts p
+        JOIN users u ON p.user_id = u.id
+        LEFT JOIN communities c ON c.id = p.community_id
+        LEFT JOIN likes
+               ON likes.target_type = 'post'
+              AND likes.target_id = p.id
+              AND likes.user_id = ?
+        WHERE p.id IN ({quote_placeholders})
+        ''',
+        [current_user_id, current_user_id] + quote_ids,
+    )
+    originals = {}
+    for row in cursor.fetchall():
+        (
+            original_id, original_user_id, content, created_at,
+            comment_count, like_count, full_name, email, profile_picture,
+            username, community_type, viewer_is_member, liked_by_user,
+        ) = row
+        if community_type == 'private' and not viewer_is_member:
+            continue
+        originals[original_id] = {
+            'id': original_id,
+            'user_id': original_user_id,
+            'author_name': full_name,
+            'author_handle': username or email.split('@')[0],
+            'author_avatar': profile_picture,
+            'content': content,
+            'created_at': created_at,
+            'like_count': like_count,
+            'comment_count': comment_count,
+            'liked_by_user': bool(liked_by_user),
+        }
+
+    # Images are a separate batch because post_images is one-to-many.
+    cursor.execute(
+        f'''
+        SELECT post_id, image_path
+        FROM post_images
+        WHERE post_id IN ({quote_placeholders})
+        ORDER BY post_id, position ASC
+        ''',
+        quote_ids,
+    )
+    images_by_post = {}
+    for original_id, image_path in cursor.fetchall():
+        images_by_post.setdefault(original_id, []).append(image_path)
+
+    for parent_id, quoted_id in quote_target_by_post.items():
+        original = originals.get(quoted_id)
+        if original is not None:
+            original['images'] = images_by_post.get(quoted_id, [])
+            payloads[parent_id] = original
+
+    return payloads
 
 
 def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cursor_id, only_community_id=None):
@@ -273,14 +438,18 @@ def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cu
             pid: {'slug': slug, 'name': name, 'is_member': bool(is_member), 'type': ctype}
             for pid, slug, name, ctype, is_member in cursor.fetchall()
         }
+        quoted_by_post = fetch_quoted_posts(conn, post_ids, current_user_id)
     else:
         images_by_post = {}
         community_by_post = {}
+        quoted_by_post = {}
 
     posts = []
     for row in page_rows:
         image_list = [(img,) for img in images_by_post.get(row[0], [])]
-        post = serialize_post(row, image_list, row[13])
+        post = serialize_post(
+            row, image_list, row[13], quoted_post=quoted_by_post.get(row[0])
+        )
         if row[0] in community_by_post:
             post['community'] = community_by_post[row[0]]
         posts.append(post)

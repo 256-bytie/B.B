@@ -1,7 +1,7 @@
 """Shared serialization functions for converting DB rows to JSON dicts."""
 
 
-def serialize_post(row, image_rows=None, liked_by_user=None):
+def serialize_post(row, image_rows=None, liked_by_user=None, quoted_post=None):
     """Convert a posts+users joined row into a JSON-serializable dict.
     The handle is the user's username (falling back to the email
     local-part only if username is somehow unset). author_avatar is
@@ -14,6 +14,7 @@ def serialize_post(row, image_rows=None, liked_by_user=None):
             users.profile_picture, users.username, users.bio)
         image_rows: list of tuples [(image_path,), ...] for this post's images
         liked_by_user: boolean or int (0/1) indicating if current user liked this post
+        quoted_post: one-level quote payload, unavailable stub, or None
     """
     if len(row) == 13:
         # Old format without liked_by_user in row (e.g., from create_post)
@@ -51,7 +52,8 @@ def serialize_post(row, image_rows=None, liked_by_user=None):
         'username': username,
         'bio': bio,
         'liked_by_user': liked,
-        'images': images
+        'images': images,
+        'quoted_post': quoted_post,
     }
 
 

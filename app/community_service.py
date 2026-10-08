@@ -412,7 +412,7 @@ def list_community_posts(conn, slug, viewer_id, limit, cursor_id):
     return posts, next_cursor
 
 
-def create_community_post(conn, slug, user_id, content, audience, files):
+def create_community_post(conn, slug, user_id, content, audience, files, quoted_post_id=None):
     """Create a community post using the real post pipeline. Membership is
     checked here; post_service.create_post handles validation and file save.
     Returns serialize_post shape plus 'community' key. Raises
@@ -432,9 +432,14 @@ def create_community_post(conn, slug, user_id, content, audience, files):
     # Translate PostValidationError to CommunityValidationError so route
     # error mapping stays unchanged (400 for both, just different exception).
     try:
-        post = post_service.create_post(conn, user_id, content, audience, files, community_id=community_id)
+        post = post_service.create_post(
+            conn, user_id, content, audience, files,
+            community_id=community_id, quoted_post_id=quoted_post_id,
+        )
     except post_service.PostValidationError as e:
         raise CommunityValidationError(str(e))
+    except post_service.PostNotFoundError as e:
+        raise CommunityNotFoundError(str(e))
 
     post['community'] = {'slug': community_slug, 'name': community_name, 'type': row[5]}
     return post

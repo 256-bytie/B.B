@@ -19,6 +19,7 @@ FTS5.
 """
 import re
 from app.serializers import serialize_post, serialize_user_public
+from app import post_service
 
 VALID_TYPES = {'all', 'people', 'posts', 'topics'}
 DEFAULT_LIMIT = 20
@@ -160,10 +161,19 @@ def _search_posts(cursor, q, current_user_id, limit, cursor_id):
     else:
         images_by_post = {}
 
+    quoted_by_post = post_service.fetch_quoted_posts(
+        cursor, [row[0] for row in page_rows], current_user_id
+    )
+
     posts = []
     for row in page_rows:
         image_list = [(img,) for img in images_by_post.get(row[0], [])]
-        posts.append(serialize_post(row, image_list, row[13]))
+        posts.append(
+            serialize_post(
+                row, image_list, row[13],
+                quoted_post=quoted_by_post.get(row[0]),
+            )
+        )
     return posts, next_cursor
 
 

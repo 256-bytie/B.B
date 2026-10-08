@@ -34,6 +34,9 @@ re-verified against the current tree.
   with `PRAGMA table_info` checks + `ALTER TABLE`, not a migration
   framework. New schema changes go in `migrations/*.sql` (see
   `migrations/004_comment_images.sql` for adding `comments.image_path`).
+  `posts.quoted_post_id` is added by `migrations/007_post_quotes.sql` as a
+  nullable indexed integer with no foreign key, so deleting an original
+  leaves quote relationships available for an unavailable stub.
 - Frontend: still no build step, no framework — but no longer one file.
   `templates/index.html` assembles the SPA from `templates/partials/*.html`
   via Jinja `{% include %}` (one file per view/overlay/sheet), rendered
@@ -262,6 +265,14 @@ one batched `IN (...)` query against `post_images`, not N+1.
 ## Quote posts (frontend done; backend per `docs/QUOTE_BACKEND_PROMPT.md`)
 
 - **Contract.** Create sends `quoted_post_id` on `POST /api/posts` and `POST /api/communities/<slug>/posts`. Every serialized post carries `quoted_post`: `null`, the quoted post's public fields (+ `like_count`, `comment_count`, `liked_by_user`, `images`), or `{id, unavailable: true}` (deleted / not visible). One level only - a quoted post's own quote is never rendered.
+- **Visibility and batching.** A quote target must be readable by the creator
+  under the normal post/community access rules or creation returns the same
+  `404 Post not found` used for a missing target. On reads, visibility is
+  evaluated for the current viewer (including logged-out community lists), so
+  a deleted or private target becomes `{id, unavailable: true}`. The backend
+  collects page quote ids, then fetches originals/authors, images, counts, and
+  viewer-like state with batched `IN (...)` queries; it does not issue one
+  query per quoted card.
 - **Round trip.** Like images, the quote rides the card's dataset: `data-post-quoted` (JSON, via `escapeHtml`) -> `getPostDataFromCard().quoted_post` -> overlay. No fetch on open.
 - **Do not reuse card hooks inside the quote card.** It is a `div.quote-card`, not `article[data-post-id]`, and its images use `.quote-card-images`, not `.post-card-images` - the delegated like/comment/menu/image-viewer handlers resolve targets through those selectors and would act on the outer post.
 - **Composer quote mode** (`composeState.quote`): the single localStorage draft is never read, written or cleared while quoting (a pending normal draft survives); discard dialog hides "Save as draft"; the card's X drops the quote (and restores the draft if the box is empty); the community-browse detour is held in memory (`composeQuoteStash`, 15 min TTL).
