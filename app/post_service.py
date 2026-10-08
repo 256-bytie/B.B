@@ -226,23 +226,24 @@ def create_post(conn, user_id, content, audience, files, community_id=None, quot
     ''', (post_id,))
     image_rows = cursor.fetchall()
 
-    quoted_by_post = fetch_quoted_posts(conn, [post_id], user_id)
+    quoted_by_post, share_counts = fetch_post_quote_data(conn, [post_id], user_id)
     return serialize_post(
         row, image_rows, liked_by_user=False,
         quoted_post=quoted_by_post.get(post_id),
+        share_count=share_counts.get(post_id, 0),
     )
 
 
-def fetch_quoted_posts(conn, post_ids, current_user_id):
-    """Build one-level quote payloads for a page of already selected posts.
+def fetch_post_quote_data(conn, post_ids, current_user_id):
+    """Build quote payloads and share counts for a page of selected posts.
 
-    The relationship ids, originals/authors, images, and viewer-like state are
-    all fetched in batches. Missing or viewer-inaccessible originals remain an
-    ``{id, unavailable: true}`` stub, preserving the quote relationship.
+    Relationship ids, original post/author rows, images, quote counts, and
+    viewer-like state are fetched in batches. Missing or viewer-inaccessible
+    originals remain an ``{id, unavailable: true}`` stub.
     """
     post_ids = list(dict.fromkeys(post_ids or []))
     if not post_ids:
-        return {}
+        return {}, {}
 
     cursor = conn if not hasattr(conn, 'cursor') else conn.cursor()
     placeholders = ','.join('?' * len(post_ids))
@@ -255,15 +256,27 @@ def fetch_quoted_posts(conn, post_ids, current_user_id):
         for post_id, quoted_id in cursor.fetchall()
         if quoted_id is not None
     }
-    if not quote_target_by_post:
-        return {}
-
     quote_ids = list(dict.fromkeys(quote_target_by_post.values()))
-    quote_placeholders = ','.join('?' * len(quote_ids))
+    count_ids = list(dict.fromkeys(post_ids + quote_ids))
+    count_placeholders = ','.join('?' * len(count_ids))
+    cursor.execute(
+        f'''
+        SELECT quoted_post_id, COUNT(*)
+        FROM posts
+        WHERE quoted_post_id IN ({count_placeholders})
+        GROUP BY quoted_post_id
+        ''',
+        count_ids,
+    )
+    share_counts = {post_id: int(count) for post_id, count in cursor.fetchall()}
     payloads = {
         post_id: {'id': quoted_id, 'unavailable': True}
         for post_id, quoted_id in quote_target_by_post.items()
     }
+    if not quote_ids:
+        return payloads, share_counts
+
+    quote_placeholders = ','.join('?' * len(quote_ids))
 
     # The joined author row and the same denormalized counts used by the feed
     # are fetched in one query. The community type/member check applies the
@@ -309,6 +322,7 @@ def fetch_quoted_posts(conn, post_ids, current_user_id):
             'created_at': created_at,
             'like_count': like_count,
             'comment_count': comment_count,
+            'share_count': share_counts.get(original_id, 0),
             'liked_by_user': bool(liked_by_user),
         }
 
@@ -332,7 +346,7 @@ def fetch_quoted_posts(conn, post_ids, current_user_id):
             original['images'] = images_by_post.get(quoted_id, [])
             payloads[parent_id] = original
 
-    return payloads
+    return payloads, share_counts
 
 
 def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cursor_id, only_community_id=None):
@@ -438,17 +452,23 @@ def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cu
             pid: {'slug': slug, 'name': name, 'is_member': bool(is_member), 'type': ctype}
             for pid, slug, name, ctype, is_member in cursor.fetchall()
         }
-        quoted_by_post = fetch_quoted_posts(conn, post_ids, current_user_id)
+        quoted_by_post, share_counts = fetch_post_quote_data(
+            conn, post_ids, current_user_id
+        )
     else:
         images_by_post = {}
         community_by_post = {}
-        quoted_by_post = {}
+        quoted_by_post, share_counts = {}, {}
 
     posts = []
     for row in page_rows:
         image_list = [(img,) for img in images_by_post.get(row[0], [])]
         post = serialize_post(
-            row, image_list, row[13], quoted_post=quoted_by_post.get(row[0])
+            row,
+            image_list,
+            row[13],
+            quoted_post=quoted_by_post.get(row[0]),
+            share_count=share_counts.get(row[0], 0),
         )
         if row[0] in community_by_post:
             post['community'] = community_by_post[row[0]]

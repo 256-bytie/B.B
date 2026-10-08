@@ -48,18 +48,18 @@ http_code() {
 # Plain post and JSON-number quote creation.
 ORIGINAL=$(post "$JAR_A" "$CSRF_A" '{"content":"quote target surface_marker"}')
 ORIGINAL_ID=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' <<<"$ORIGINAL")
-assert_json "$ORIGINAL" 'd["quoted_post"] is None'
+assert_json "$ORIGINAL" 'd["quoted_post"] is None and d["share_count"] == 0'
 curl -s -b "$JAR_A" -H "X-CSRF-Token: $CSRF_A" -X POST "$BASE_URL/api/posts/$ORIGINAL_ID/like" >/dev/null
 QUOTE=$(post "$JAR_B" "$CSRF_B" "{\"content\":\"json quote surface_marker\",\"quoted_post_id\":$ORIGINAL_ID}")
 QUOTE_ID=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' <<<"$QUOTE")
-assert_json "$QUOTE" 'd["quoted_post"]["id"] == int(sys.argv[3]) and set(("id", "user_id", "author_name", "author_handle", "author_avatar", "content", "created_at", "images", "like_count", "comment_count", "liked_by_user")) <= set(d["quoted_post"])' "$ORIGINAL_ID"
+assert_json "$QUOTE" 'd["quoted_post"]["id"] == int(sys.argv[3]) and d["quoted_post"]["share_count"] == 1 and set(("id", "user_id", "author_name", "author_handle", "author_avatar", "content", "created_at", "images", "like_count", "comment_count", "share_count", "liked_by_user")) <= set(d["quoted_post"])' "$ORIGINAL_ID"
 
 # Multipart quote id string and attached image.
 MULTIPART=$(curl -s -b "$JAR_B" -H "X-CSRF-Token: $CSRF_B" \
     -F 'content=multipart quote surface_marker' -F "quoted_post_id=$ORIGINAL_ID" \
     -F "images=@$PNG;type=image/png" "$BASE_URL/api/posts")
 MULTIPART_ID=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' <<<"$MULTIPART")
-assert_json "$MULTIPART" 'd["quoted_post"]["id"] == int(sys.argv[3]) and len(d["images"]) == 1' "$ORIGINAL_ID"
+assert_json "$MULTIPART" 'd["quoted_post"]["id"] == int(sys.argv[3]) and d["quoted_post"]["share_count"] == 2 and d["share_count"] == 0 and len(d["images"]) == 1' "$ORIGINAL_ID"
 
 # Quote-of-quote is allowed and embeds only one level.
 NESTED=$(post "$JAR_A" "$CSRF_A" "{\"content\":\"quote of quote surface_marker\",\"quoted_post_id\":$QUOTE_ID}")
@@ -80,13 +80,13 @@ assert_json "$(cat "/tmp/quote_error_${RUN_ID}.json")" 'd["error"] == "Post not 
 # Feed and profile/search include the key; the quoted like state follows viewer.
 FEED_A=$(curl -s -b "$JAR_A" "$BASE_URL/api/posts?limit=50")
 FEED_B=$(curl -s -b "$JAR_B" "$BASE_URL/api/posts?limit=50")
-assert_json "$FEED_A" 'all("quoted_post" in p for p in d["posts"]) and next(p for p in d["posts"] if p["id"] == int(sys.argv[3]))["quoted_post"]["liked_by_user"] is True' "$QUOTE_ID"
-assert_json "$FEED_B" 'set(("id", "user_id", "author_name", "author_handle", "author_avatar", "content", "created_at", "images", "like_count", "comment_count", "liked_by_user")) <= set(next(p for p in d["posts"] if p["id"] == int(sys.argv[3]))["quoted_post"]) and next(p for p in d["posts"] if p["id"] == int(sys.argv[3]))["quoted_post"]["liked_by_user"] is False' "$QUOTE_ID"
+assert_json "$FEED_A" 'all("quoted_post" in p and "share_count" in p for p in d["posts"]) and next(p for p in d["posts"] if p["id"] == int(sys.argv[3]))["quoted_post"] is None and next(p for p in d["posts"] if p["id"] == int(sys.argv[3]))["share_count"] == 2 and next(p for p in d["posts"] if p["id"] == int(sys.argv[4]))["quoted_post"]["liked_by_user"] is True' "$ORIGINAL_ID" "$QUOTE_ID"
+assert_json "$FEED_B" 'set(("id", "user_id", "author_name", "author_handle", "author_avatar", "content", "created_at", "images", "like_count", "comment_count", "share_count", "liked_by_user")) <= set(next(p for p in d["posts"] if p["id"] == int(sys.argv[3]))["quoted_post"]) and next(p for p in d["posts"] if p["id"] == int(sys.argv[3]))["quoted_post"]["liked_by_user"] is False' "$QUOTE_ID"
 USER_A_ID=$(curl -s -b "$JAR_A" "$BASE_URL/api/session" | python3 -c 'import json,sys; print(json.load(sys.stdin)["user"]["id"])')
 PROFILE=$(curl -s -b "$JAR_A" "$BASE_URL/api/posts?user_id=$USER_A_ID&limit=50")
-assert_json "$PROFILE" 'all("quoted_post" in p for p in d["posts"]) and any(p["id"] == int(sys.argv[3]) for p in d["posts"])' "$NESTED_ID"
+assert_json "$PROFILE" 'all("quoted_post" in p and "share_count" in p for p in d["posts"]) and any(p["id"] == int(sys.argv[3]) for p in d["posts"])' "$NESTED_ID"
 SEARCH=$(curl -s -b "$JAR_A" "$BASE_URL/api/search?q=surface_marker&type=posts&limit=50")
-assert_json "$SEARCH" 'all("quoted_post" in p for p in d["posts"]) and any(p["id"] == int(sys.argv[3]) for p in d["posts"])' "$QUOTE_ID"
+assert_json "$SEARCH" 'all("quoted_post" in p and "share_count" in p for p in d["posts"]) and any(p["id"] == int(sys.argv[3]) for p in d["posts"])' "$QUOTE_ID"
 
 # Community create and logged-out public community list.
 COMMUNITY=$(curl -s -b "$JAR_A" -H "X-CSRF-Token: $CSRF_A" -H 'Content-Type: application/json' \
@@ -99,7 +99,9 @@ COMMUNITY_QUOTE=$(curl -s -b "$JAR_A" -H "X-CSRF-Token: $CSRF_A" -H 'Content-Typ
 COMMUNITY_QUOTE_ID=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' <<<"$COMMUNITY_QUOTE")
 assert_json "$COMMUNITY_QUOTE" 'd["quoted_post"]["id"] == int(sys.argv[3]) and d["community"]["slug"] == sys.argv[4]' "$ORIGINAL_ID" "$SLUG"
 COMMUNITY_LIST=$(curl -s "$BASE_URL/api/communities/$SLUG/posts?limit=50")
-assert_json "$COMMUNITY_LIST" 'all("quoted_post" in p for p in d["posts"]) and any(p["id"] == int(sys.argv[3]) for p in d["posts"])' "$COMMUNITY_QUOTE_ID"
+assert_json "$COMMUNITY_LIST" 'all("quoted_post" in p and "share_count" in p for p in d["posts"]) and any(p["id"] == int(sys.argv[3]) for p in d["posts"])' "$COMMUNITY_QUOTE_ID"
+FEED_AFTER_COMMUNITY=$(curl -s -b "$JAR_A" "$BASE_URL/api/posts?limit=50")
+assert_json "$FEED_AFTER_COMMUNITY" 'next(p for p in d["posts"] if p["id"] == int(sys.argv[3]))["share_count"] == 3' "$ORIGINAL_ID"
 
 # Private original is indistinguishable from a missing original for outsiders.
 PRIVATE=$(curl -s -b "$JAR_A" -H "X-CSRF-Token: $CSRF_A" -H 'Content-Type: application/json' \
@@ -117,14 +119,28 @@ PRIVATE_QUOTE=$(post "$JAR_A" "$CSRF_A" "{\"content\":\"private quote wrapper\",
 PRIVATE_QUOTE_ID=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' <<<"$PRIVATE_QUOTE")
 OUTSIDER_FEED=$(curl -s -b "$JAR_B" "$BASE_URL/api/posts?limit=50")
 assert_json "$OUTSIDER_FEED" 'next(p for p in d["posts"] if p["id"] == int(sys.argv[3]))["quoted_post"] == {"id": int(sys.argv[4]), "unavailable": True}' "$PRIVATE_QUOTE_ID" "$PRIVATE_ID"
+PUBLIC_COMMUNITY_PRIVATE_QUOTE=$(curl -s -b "$JAR_A" -H "X-CSRF-Token: $CSRF_A" -H 'Content-Type: application/json' \
+    -d "{\"content\":\"public wrapper for private target\",\"quoted_post_id\":$PRIVATE_ID}" \
+    "$BASE_URL/api/communities/$SLUG/posts")
+PUBLIC_COMMUNITY_PRIVATE_QUOTE_ID=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' <<<"$PUBLIC_COMMUNITY_PRIVATE_QUOTE")
+LOGGED_OUT_COMMUNITY=$(curl -s "$BASE_URL/api/communities/$SLUG/posts?limit=50")
+assert_json "$LOGGED_OUT_COMMUNITY" 'next(p for p in d["posts"] if p["id"] == int(sys.argv[3]))["quoted_post"] == {"id": int(sys.argv[4]), "unavailable": True}' "$PUBLIC_COMMUNITY_PRIVATE_QUOTE_ID" "$PRIVATE_ID"
+
+# Removing a quote updates its original's global share count.
+curl -s -b "$JAR_B" -H "X-CSRF-Token: $CSRF_B" -X DELETE "$BASE_URL/api/posts/$MULTIPART_ID" >/dev/null
+AFTER_MULTIPART_DELETE=$(curl -s -b "$JAR_A" "$BASE_URL/api/posts?limit=50")
+assert_json "$AFTER_MULTIPART_DELETE" 'next(p for p in d["posts"] if p["id"] == int(sys.argv[3]))["share_count"] == 2' "$ORIGINAL_ID"
+NESTED_FEED=$(curl -s -b "$JAR_A" "$BASE_URL/api/posts?limit=50")
+assert_json "$NESTED_FEED" 'next(p for p in d["posts"] if p["id"] == int(sys.argv[3]))["share_count"] == 1' "$QUOTE_ID"
 
 # Deleting an original keeps its quote id; deleting a quote only removes itself.
-curl -s -b "$JAR_A" -H "X-CSRF-Token: $CSRF_A" -X DELETE "$BASE_URL/api/posts/$ORIGINAL_ID" >/dev/null
+code=$(http_code -b "$JAR_A" -H "X-CSRF-Token: $CSRF_A" -X DELETE "$BASE_URL/api/posts/$ORIGINAL_ID")
+[[ "$code" == 200 ]]
 DELETED_FEED=$(curl -s -b "$JAR_B" "$BASE_URL/api/posts?limit=50")
 assert_json "$DELETED_FEED" 'next(p for p in d["posts"] if p["id"] == int(sys.argv[3]))["quoted_post"] == {"id": int(sys.argv[4]), "unavailable": True}' "$QUOTE_ID" "$ORIGINAL_ID"
-curl -s -b "$JAR_A" -H "X-CSRF-Token: $CSRF_A" -X DELETE "$BASE_URL/api/posts/$NESTED_ID" >/dev/null
+code=$(http_code -b "$JAR_A" -H "X-CSRF-Token: $CSRF_A" -X DELETE "$BASE_URL/api/posts/$NESTED_ID")
+[[ "$code" == 200 ]]
 AFTER_QUOTE_DELETE=$(curl -s -b "$JAR_A" "$BASE_URL/api/posts?limit=50")
-assert_json "$AFTER_QUOTE_DELETE" 'not any(p["id"] == int(sys.argv[3]) for p in d["posts"]) and any(p["id"] == int(sys.argv[4]) for p in d["posts"])' "$NESTED_ID" "$QUOTE_ID"
-curl -s -b "$JAR_B" -H "X-CSRF-Token: $CSRF_B" -X DELETE "$BASE_URL/api/posts/$MULTIPART_ID" >/dev/null
+assert_json "$AFTER_QUOTE_DELETE" 'not any(p["id"] == int(sys.argv[3]) for p in d["posts"]) and next(p for p in d["posts"] if p["id"] == int(sys.argv[4]))["share_count"] == 0' "$NESTED_ID" "$QUOTE_ID"
 
 echo 'quote posts: PASS'

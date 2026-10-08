@@ -161,8 +161,9 @@ def _search_posts(cursor, q, current_user_id, limit, cursor_id):
     else:
         images_by_post = {}
 
-    quoted_by_post = post_service.fetch_quoted_posts(
-        cursor, [row[0] for row in page_rows], current_user_id
+    post_ids = [row[0] for row in page_rows]
+    quoted_by_post, share_counts = post_service.fetch_post_quote_data(
+        cursor, post_ids, current_user_id
     )
 
     posts = []
@@ -172,6 +173,7 @@ def _search_posts(cursor, q, current_user_id, limit, cursor_id):
             serialize_post(
                 row, image_list, row[13],
                 quoted_post=quoted_by_post.get(row[0]),
+                share_count=share_counts.get(row[0], 0),
             )
         )
     return posts, next_cursor
