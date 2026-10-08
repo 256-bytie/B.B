@@ -242,9 +242,11 @@ function buildPostCardHtml(post) {
     const showSeeLess = wordCount > 100;
     const imagesHtml = buildPostImagesHtml(post.images);
     const quoteHtml = buildQuoteCardHtml(post.quoted_post);
+    // Quotes + reposts combined (repost isn't built, so today this is quotes).
+    const shareCount = Math.max(0, Number(post.share_count) || 0);
 
     return `
-<article class="feed-card" data-post-id="${post.id}" data-post-user-id="${escapeHtml(String(post.user_id))}" data-post-author-name="${authorName}" data-post-author-handle="${authorHandle}" data-post-author-avatar="${escapeHtml(post.author_avatar || '')}" data-post-content="${content}" data-post-created-at="${escapeHtml(post.created_at)}" data-post-like-count="${post.like_count}" data-post-comment-count="${post.comment_count}" data-post-liked="${post.liked_by_user}" data-post-images="${escapeHtml(JSON.stringify(post.images || []))}" data-post-quoted="${escapeHtml(JSON.stringify(post.quoted_post || null))}">
+<article class="feed-card" data-post-id="${post.id}" data-post-user-id="${escapeHtml(String(post.user_id))}" data-post-author-name="${authorName}" data-post-author-handle="${authorHandle}" data-post-author-avatar="${escapeHtml(post.author_avatar || '')}" data-post-content="${content}" data-post-created-at="${escapeHtml(post.created_at)}" data-post-like-count="${post.like_count}" data-post-comment-count="${post.comment_count}" data-post-share-count="${shareCount}" data-post-liked="${post.liked_by_user}" data-post-images="${escapeHtml(JSON.stringify(post.images || []))}" data-post-quoted="${escapeHtml(JSON.stringify(post.quoted_post || null))}">
 <div class="flex gap-3">
 <div class="feed-card-avatar-rail shrink-0 cursor-pointer" onclick="openProfileFromPostCard(this)">
 <img alt="${authorName}" class="w-11 h-11 rounded-full bg-gray-200 border border-gray-100 object-cover" src="${avatarUrl}"/>
@@ -271,6 +273,7 @@ ${quoteHtml}
 <polyline points="15 3 21 3 21 9" stroke-linecap="round" stroke-linejoin="round"></polyline>
 <line x1="10" x2="21" y1="14" y2="3" stroke-linecap="round" stroke-linejoin="round"></line>
 </svg>
+<span class="text-sm share-count${shareCount < 1 ? ' post-count-empty' : ''}">${shareCount}</span>
 </button>
 <button class="comment-btn flex items-center space-x-1.5 hover:text-gray-700 transition-colors">
   <svg class="w-[19px] h-[19px]" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">

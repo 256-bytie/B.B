@@ -100,6 +100,7 @@ function getPostDataFromCard(postCard) {
 		created_at: postCard.dataset.postCreatedAt,
 		like_count: postCard.dataset.postLikeCount,
 		comment_count: postCard.dataset.postCommentCount,
+		share_count: postCard.dataset.postShareCount,
 		liked_by_user: postCard.dataset.postLiked === 'true',
 		images: images,
 		quoted_post: parseQuotedPost(postCard.dataset.postQuoted)
@@ -133,6 +134,7 @@ function quotedPostToPostData(q) {
 		created_at: q.created_at,
 		like_count: q.like_count || 0,
 		comment_count: q.comment_count || 0,
+		share_count: q.share_count || 0,
 		liked_by_user: !!q.liked_by_user,
 		images: q.images || [],
 		quoted_post: null
@@ -433,6 +435,7 @@ function openCommentOverlay(postData) {
 	}
 	document.getElementById('overlay-post-time').textContent = formatPostTime(postData.created_at);
 	setPostCountSpan(document.getElementById('overlay-post-comments'), postData.comment_count);
+	setPostCountSpan(document.getElementById('overlay-post-shares'), postData.share_count);
 
 	// Convert like stat block into a clickable button and set initial state
 	const likesParent = document.getElementById('overlay-post-likes').parentElement;
