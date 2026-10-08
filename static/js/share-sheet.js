@@ -4,8 +4,9 @@
 // from the bottom; dismissed by tapping the dimmed area, dragging down,
 // pressing Escape, or choosing an action.
 //
-// Repost / Quote aren't built yet, so choosing one closes the sheet and
-// shows the app's standard "Coming soon" toast rather than pretending.
+// Quote opens the composer with the tapped post embedded (openQuoteComposer,
+// compose.js). Repost isn't built yet, so it closes the sheet and shows the
+// app's standard "Coming soon" toast rather than pretending.
 //
 // Loaded after comments.js (uses postCardContainerIds) and compose.js
 // (uses showToast).
@@ -99,8 +100,25 @@
 	// ---- Actions ----
 	sheet.addEventListener('click', function (e) {
 		if (suppressClick) return; // the click that ends a drag isn't a tap
-		if (!e.target.closest('.share-sheet-action')) return;
-		closeShareSheet();
+		const action = e.target.closest('.share-sheet-action');
+		if (!action) return;
+
+		// closeShareSheet() nulls lastTrigger, so resolve the post first.
+		const kind = action.dataset.action;
+		const postCard = lastTrigger ? lastTrigger.closest('article[data-post-id]') : null;
+
+		// Opening the composer moves focus there; don't pull it back to the
+		// (now hidden) feed Share button.
+		closeShareSheet({ restoreFocus: kind !== 'quote' });
+
+		if (kind === 'quote') {
+			if (!postCard) {
+				showToast('Could not quote this post');
+				return;
+			}
+			openQuoteComposer(getPostDataFromCard(postCard));
+			return;
+		}
 		showToast('Coming soon');
 	});
 

@@ -101,9 +101,67 @@ function getPostDataFromCard(postCard) {
 		like_count: postCard.dataset.postLikeCount,
 		comment_count: postCard.dataset.postCommentCount,
 		liked_by_user: postCard.dataset.postLiked === 'true',
-		images: images
+		images: images,
+		quoted_post: parseQuotedPost(postCard.dataset.postQuoted)
 	};
 }
+
+// data-post-quoted holds JSON.stringify(post.quoted_post || null) (escaped
+// into the attribute by buildPostCardHtml). Anything unparsable -> null so
+// a corrupt attribute degrades to "no quote" instead of throwing.
+function parseQuotedPost(raw) {
+	if (!raw) return null;
+	try {
+		const parsed = JSON.parse(raw);
+		return parsed && typeof parsed === 'object' ? parsed : null;
+	} catch (e) {
+		return null;
+	}
+}
+
+// Shapes a quoted_post object into the postData openCommentOverlay expects.
+// Counts/liked state come from the server's quoted_post payload; missing
+// values fall back to zero/false.
+function quotedPostToPostData(q) {
+	return {
+		id: q.id,
+		user_id: q.user_id,
+		author_name: q.author_name,
+		author_handle: q.author_handle,
+		author_avatar: q.author_avatar || null,
+		content: q.content,
+		created_at: q.created_at,
+		like_count: q.like_count || 0,
+		comment_count: q.comment_count || 0,
+		liked_by_user: !!q.liked_by_user,
+		images: q.images || [],
+		quoted_post: null
+	};
+}
+
+// Tapping (or Enter/Space on) a quote card opens the QUOTED post's detail
+// view. Unavailable stubs render without data-quote-post-id, so they are
+// inert. Registered before the comment/like handlers' targets matter: the
+// quote card has no buttons of its own, so nothing else claims the tap.
+postCardContainerIds.forEach(function(containerId) {
+	const container = document.getElementById(containerId);
+	if (!container) return;
+	function openQuoted(e) {
+		const card = e.target.closest('.quote-card[data-quote-post-id]');
+		if (!card) return false;
+		const postCard = card.closest('article[data-post-id]');
+		const quoted = postCard ? parseQuotedPost(postCard.dataset.postQuoted) : null;
+		if (!quoted || quoted.unavailable) return false;
+		e.preventDefault();
+		openCommentOverlay(quotedPostToPostData(quoted));
+		return true;
+	}
+	container.addEventListener('click', openQuoted);
+	container.addEventListener('keydown', function(e) {
+		if (e.key !== 'Enter' && e.key !== ' ') return;
+		openQuoted(e);
+	});
+});
 
 // Delegated click listener for comment buttons
 postCardContainerIds.forEach(function(containerId) {
@@ -317,6 +375,26 @@ postCardContainerIds.forEach(function(containerId) {
 	});
 });
 
+// Quoted post of the post currently shown in the overlay (null if none).
+let overlayQuotedPost = null;
+
+// One-time delegated handler on the overlay's quote slot (re-rendered on
+// every open, so listen on the stable container, not the card).
+(function() {
+	const slot = document.getElementById('overlay-post-quote');
+	if (!slot) return;
+	function openQuoted(e) {
+		if (!e.target.closest('.quote-card[data-quote-post-id]')) return;
+		if (!overlayQuotedPost || overlayQuotedPost.unavailable) return;
+		e.preventDefault();
+		openCommentOverlay(quotedPostToPostData(overlayQuotedPost));
+	}
+	slot.addEventListener('click', openQuoted);
+	slot.addEventListener('keydown', function(e) {
+		if (e.key === 'Enter' || e.key === ' ') openQuoted(e);
+	});
+})();
+
 function openCommentOverlay(postData) {
 	currentPostId = postData.id;
 	currentPostAuthorId = postData.user_id;
@@ -340,6 +418,19 @@ function openCommentOverlay(postData) {
 	}
 
 	document.getElementById('overlay-post-content').textContent = postData.content;
+
+	// Quoted post (if any) sits under the text, same card as the feed.
+	overlayQuotedPost = postData.quoted_post || null;
+	const overlayQuote = document.getElementById('overlay-post-quote');
+	if (overlayQuote) {
+		if (overlayQuotedPost) {
+			overlayQuote.innerHTML = buildQuoteCardHtml(overlayQuotedPost);
+			overlayQuote.classList.remove('hidden');
+		} else {
+			overlayQuote.innerHTML = '';
+			overlayQuote.classList.add('hidden');
+		}
+	}
 	document.getElementById('overlay-post-time').textContent = formatPostTime(postData.created_at);
 	setPostCountSpan(document.getElementById('overlay-post-comments'), postData.comment_count);
 

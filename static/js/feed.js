@@ -134,6 +134,73 @@ function buildPostImagesHtml(images) {
     return `<div class="post-card-images grid ${gridClass} gap-0.5 rounded-2xl overflow-hidden mb-3 bg-gray-100 cursor-pointer">${imgEls}</div>`;
 }
 
+// ---- Quote posts ----
+// A post may carry post.quoted_post (see serialize_post): either the quoted
+// post's public fields {id, user_id, author_name, author_handle,
+// author_avatar, content, created_at, images, like_count, comment_count,
+// liked_by_user}, or a stub {id, unavailable: true} when the original was
+// deleted or the viewer can't see it. Only one level is ever embedded - a
+// quoted post's own quote is not rendered.
+//
+// The card is deliberately NOT an <article[data-post-id]> and its images do
+// NOT use .post-card-images: the delegated handlers in comments.js
+// (like/comment/menu/image-viewer) resolve targets via
+// closest('article[data-post-id]') / '.post-card-images img', so reusing
+// either would make taps on the quote act on the outer post.
+
+// Compact media for a quote card: first image alone, or first two side by
+// side with a "+N" badge on the last when more were attached.
+function buildQuoteImagesHtml(images) {
+    if (!images || images.length === 0) return '';
+    const shown = images.slice(0, 2);
+    const extra = images.length - shown.length;
+    const single = shown.length === 1;
+    const cells = shown.map((url, i) => {
+        const badge = (extra > 0 && i === shown.length - 1) ? `<span class="quote-card-more">+${extra}</span>` : '';
+        const cellClass = single ? '' : 'h-[140px]';
+        const imgClass = single ? 'w-full max-h-[220px] object-cover' : 'w-full h-full object-cover';
+        return `<div class="relative overflow-hidden ${cellClass}"><img src="${escapeHtml(url)}" alt="" loading="lazy" onerror="handlePostImageError(this)" class="${imgClass}"/>${badge}</div>`;
+    }).join('');
+    return `<div class="quote-card-images grid ${single ? 'grid-cols-1' : 'grid-cols-2'} gap-0.5 rounded-xl overflow-hidden mt-2 bg-gray-100">${cells}</div>`;
+}
+
+// opts.composer: composer preview - not tappable, shows the remove (X)
+// button and a taller text clamp.
+function buildQuoteCardHtml(quoted, opts) {
+    if (!quoted) return '';
+    const composer = !!(opts && opts.composer);
+
+    if (quoted.unavailable) {
+        return `<div class="quote-card quote-card-unavailable mb-3 px-3 py-3 rounded-2xl text-[14px] text-gray-500">This post is unavailable</div>`;
+    }
+
+    const handleRaw = quoted.author_handle || '';
+    const avatarUrl = quoted.author_avatar || `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(handleRaw)}`;
+    const name = escapeHtml(quoted.author_name);
+    const handle = escapeHtml(handleRaw);
+    const time = escapeHtml(formatPostTime(quoted.created_at));
+    const content = escapeHtml(quoted.content);
+    const interactive = composer
+        ? ''
+        : ` role="link" tabindex="0" data-quote-post-id="${escapeHtml(String(quoted.id))}" aria-label="Quoted post by ${name}"`;
+    const removeBtn = composer ? `
+<button type="button" class="quote-card-remove" aria-label="Remove quoted post" onclick="removeComposeQuote()">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+</button>` : '';
+
+    return `
+<div class="quote-card ${composer ? 'quote-card-composer' : 'mb-3'} relative rounded-2xl px-3 py-3"${interactive}>
+<div class="flex items-center gap-2 min-w-0${composer ? ' pr-9' : ''}">
+<img alt="" class="w-5 h-5 rounded-full bg-gray-200 object-cover shrink-0" src="${escapeHtml(avatarUrl)}"/>
+<span class="font-bold text-gray-900 text-[14px] leading-tight truncate min-w-0">${name}</span>
+<span class="text-gray-400 text-[13px] leading-tight truncate min-w-0">@${handle}</span>
+<span class="text-gray-400 text-[13px] leading-tight shrink-0">· ${time}</span>
+</div>
+<p class="quote-card-text ${composer ? 'quote-card-text-composer' : ''} text-gray-800 text-[15px] leading-relaxed mt-1">${content}</p>
+${buildQuoteImagesHtml(quoted.images)}${removeBtn}
+</div>`;
+}
+
 // Build the markup for a single post row in the flat, full-width timeline
 // (border-b divider between rows, no per-post rounding/shadow/background
 // card treatment) - shared by the main feed, own-profile Posts tab, and
@@ -174,9 +241,10 @@ function buildPostCardHtml(post) {
     const wordCount = isLong ? post.content.trim().split(/\s+/).filter(Boolean).length : 0;
     const showSeeLess = wordCount > 100;
     const imagesHtml = buildPostImagesHtml(post.images);
+    const quoteHtml = buildQuoteCardHtml(post.quoted_post);
 
     return `
-<article class="feed-card" data-post-id="${post.id}" data-post-user-id="${escapeHtml(String(post.user_id))}" data-post-author-name="${authorName}" data-post-author-handle="${authorHandle}" data-post-author-avatar="${escapeHtml(post.author_avatar || '')}" data-post-content="${content}" data-post-created-at="${escapeHtml(post.created_at)}" data-post-like-count="${post.like_count}" data-post-comment-count="${post.comment_count}" data-post-liked="${post.liked_by_user}" data-post-images="${escapeHtml(JSON.stringify(post.images || []))}">
+<article class="feed-card" data-post-id="${post.id}" data-post-user-id="${escapeHtml(String(post.user_id))}" data-post-author-name="${authorName}" data-post-author-handle="${authorHandle}" data-post-author-avatar="${escapeHtml(post.author_avatar || '')}" data-post-content="${content}" data-post-created-at="${escapeHtml(post.created_at)}" data-post-like-count="${post.like_count}" data-post-comment-count="${post.comment_count}" data-post-liked="${post.liked_by_user}" data-post-images="${escapeHtml(JSON.stringify(post.images || []))}" data-post-quoted="${escapeHtml(JSON.stringify(post.quoted_post || null))}">
 <div class="flex gap-3">
 <div class="feed-card-avatar-rail shrink-0 cursor-pointer" onclick="openProfileFromPostCard(this)">
 <img alt="${authorName}" class="w-11 h-11 rounded-full bg-gray-200 border border-gray-100 object-cover" src="${avatarUrl}"/>
@@ -195,6 +263,7 @@ function buildPostCardHtml(post) {
 </div>
 <p class="text-gray-800 text-[15px] mb-3 leading-relaxed post-content"><span class="post-content-text">${previewText}</span>${isLong ? ` <button class="read-more-btn text-gray-400 font-medium" data-preview-text="${escapeHtml(previewRaw)}" data-expanded="false" data-show-see-less="${showSeeLess}">See more&hellip;</button>` : ''}</p>
 ${imagesHtml}
+${quoteHtml}
 <div class="flex items-center justify-between text-gray-500 post-actions-row px-5">
 <button class="share-btn flex items-center space-x-1.5 hover:text-gray-700 transition-colors" aria-label="Share" aria-haspopup="dialog">
 <svg class="w-[19px] h-[19px]" fill="none" stroke="currentColor" stroke-width="1.75" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

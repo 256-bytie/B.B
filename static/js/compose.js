@@ -9,8 +9,99 @@ const COMPOSE_DRAFT_KEY = 'beebo_draft_v1';
 let composeState = {
     images: [],       // [{ dataUrl, name }]
     audience: 'Public',
-    community: null   // { slug, name, icon_emoji, icon_bg } or null = main feed
+    community: null,  // { slug, name, icon_emoji, icon_bg } or null = main feed
+    quote: null       // quoted post {id, user_id, author_name, author_handle,
+                      // author_avatar, content, created_at, images} or null.
+                      // Non-null = "quote mode": see openQuoteComposer.
 };
+
+// ---- Quote mode ----
+// Entered from the share sheet's Quote action (share-sheet.js) via
+// openQuoteComposer(post). Reuses the normal composer view; differences:
+//  - the quoted post is embedded under the text (renderComposeQuote) and
+//    its id is sent as quoted_post_id with the create request
+//  - the single localStorage draft is NEVER read, written or cleared while
+//    quoting, so a pending normal draft survives an unrelated quote
+//  - "Save as draft" is hidden in the discard dialog for the same reason
+//  - the quote's X removes the quote and turns this into a normal post
+let composeQuoteRequest = null;   // set by openQuoteComposer, consumed by initComposeView
+let composeQuoteStash = null;     // in-memory hold across the community-browse detour
+const COMPOSE_QUOTE_STASH_TTL_MS = 15 * 60 * 1000;
+
+function openQuoteComposer(post) {
+    if (typeof session === 'undefined' || !session || !session.user) {
+        showToast('Log in to quote posts');
+        return;
+    }
+    if (!post || post.id == null) return;
+    composeQuoteRequest = {
+        id: post.id,
+        user_id: post.user_id,
+        author_name: post.author_name,
+        author_handle: post.author_handle,
+        author_avatar: post.author_avatar || null,
+        content: post.content,
+        created_at: post.created_at,
+        images: post.images || []
+    };
+    showView('create-post');
+}
+
+// Syncs everything that depends on quote mode: title, placeholder, the
+// embedded card, and the textarea sizing (a short auto-growing box so the
+// card sits right under the text instead of being pushed to the bottom).
+function renderComposeQuote() {
+    const q = composeState.quote;
+    const view = document.getElementById('create-post-view');
+    const title = document.getElementById('compose-title');
+    const slot = document.getElementById('compose-quote-slot');
+    const textarea = document.getElementById('create-post-textarea');
+
+    view.classList.toggle('compose-quote-mode', !!q);
+    title.textContent = q ? 'Quote' : 'Create Post';
+    textarea.placeholder = q ? 'Add a comment\u2026' : (textarea.dataset.defaultPlaceholder || '');
+
+    if (q) {
+        slot.innerHTML = buildQuoteCardHtml(q, { composer: true });
+        slot.classList.remove('hidden');
+    } else {
+        slot.innerHTML = '';
+        slot.classList.add('hidden');
+    }
+    autosizeComposeTextarea();
+}
+
+function autosizeComposeTextarea() {
+    const textarea = document.getElementById('create-post-textarea');
+    if (!composeState.quote) {
+        textarea.style.height = '';
+        return;
+    }
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.max(96, textarea.scrollHeight) + 'px';
+}
+
+// The quote card's X. Back to a plain post; if the box is empty, bring back
+// the saved draft (it was left untouched while quoting).
+function removeComposeQuote() {
+    composeState.quote = null;
+    composeQuoteStash = null;
+    const textarea = document.getElementById('create-post-textarea');
+    const draft = textarea.value.trim() ? null : loadDraft();
+    if (draft) {
+        textarea.value = draft.content || '';
+        composeState.images = draft.images || [];
+        composeState.audience = draft.audience || 'Public';
+        composeState.community = draft.community || null;
+        document.getElementById('audience-label').textContent = composeState.audience;
+        renderMediaGrid();
+        renderCommunityPicker();
+    }
+    renderComposeQuote();
+    updateCharCounter();
+    updatePostButtonState();
+    textarea.focus();
+}
 let composeCommunityList = null;   // cached GET /api/communities/mine result
 let composeCommunityToken = 0;
 let composeAutosaveTimer = null;
@@ -52,24 +143,49 @@ function initComposeView() {
     closeDiscardDialog();
     resetSubmitButtonState();
 
-    const draft = loadDraft();
-    if (draft) {
-        textarea.value = draft.content || '';
-        composeState.images = draft.images || [];
-        composeState.audience = draft.audience || 'Public';
-        composeState.community = draft.community || null;
-    } else {
+    // Three ways in: a pending quote (share sheet), a stash from a
+    // community-browse detour made while quoting, or the normal draft path.
+    let quote = null;
+    let draft = null;
+    if (composeQuoteRequest) {
+        quote = composeQuoteRequest;
+        composeQuoteRequest = null;
+        composeQuoteStash = null;
         textarea.value = '';
         composeState.images = [];
         composeState.audience = 'Public';
         composeState.community = null;
+    } else if (composeQuoteStash && Date.now() - composeQuoteStash.ts < COMPOSE_QUOTE_STASH_TTL_MS) {
+        const stash = composeQuoteStash;
+        composeQuoteStash = null;
+        quote = stash.quote;
+        textarea.value = stash.content || '';
+        composeState.images = stash.images || [];
+        composeState.audience = stash.audience || 'Public';
+        composeState.community = stash.community || null;
+    } else {
+        composeQuoteStash = null;
+        draft = loadDraft();
+        if (draft) {
+            textarea.value = draft.content || '';
+            composeState.images = draft.images || [];
+            composeState.audience = draft.audience || 'Public';
+            composeState.community = draft.community || null;
+        } else {
+            textarea.value = '';
+            composeState.images = [];
+            composeState.audience = 'Public';
+            composeState.community = null;
+        }
     }
+    composeState.quote = quote;
 
     closeCommunityPicker();
     composeCommunityList = null;
     renderCommunityPicker();
     document.getElementById('audience-label').textContent = composeState.audience;
     renderMediaGrid();
+    renderComposeQuote();
     updateCharCounter();
     updatePostButtonState();
 
@@ -82,6 +198,7 @@ function initComposeView() {
     if (!draft) {
         textarea.focus();
     }
+    // (quote mode always lands here with draft === null, so it autofocuses)
 }
 
 // ---- Keyboard-aware bottom toolbar (mobile) ----
@@ -383,7 +500,18 @@ function selectComposeCommunity(slug) {
 
 // Empty-state shortcut: keep the draft, then jump to the directory.
 function communityPickerBrowse() {
-    saveDraft();
+    if (composeState.quote) {
+        composeQuoteStash = {
+            content: document.getElementById('create-post-textarea').value,
+            images: composeState.images,
+            audience: composeState.audience,
+            community: composeState.community,
+            quote: composeState.quote,
+            ts: Date.now()
+        };
+    } else {
+        saveDraft();
+    }
     closeCommunityPicker();
     openCommunityBrowseView();
 }
@@ -433,6 +561,8 @@ function scheduleAutosave() {
 }
 
 function saveDraft() {
+    // Quote composition is never persisted (see "Quote mode" above).
+    if (composeState.quote) return;
     const textarea = document.getElementById('create-post-textarea');
     const content = textarea.value;
 
@@ -480,12 +610,20 @@ function attemptCloseCompose() {
     if (hasUnsavedComposeContent()) {
         openDiscardDialog();
     } else {
-        clearDraft();
+        if (!composeState.quote) clearDraft();
+        composeState.quote = null;
+        composeQuoteStash = null;
         showView('feed');
     }
 }
 
 function openDiscardDialog() {
+    // No draft to save for a quote, so say what discarding actually does.
+    const quoting = !!composeState.quote;
+    document.getElementById('discard-save-draft-btn').classList.toggle('hidden', quoting);
+    document.getElementById('discard-dialog-desc').textContent = quoting
+        ? 'Your comment on this quote will be lost.'
+        : 'Your draft will be saved so you can pick it up later, or you can discard it for good.';
     document.getElementById('discard-backdrop').classList.remove('hidden');
     document.getElementById('discard-dialog').classList.remove('hidden');
 }
@@ -496,10 +634,12 @@ function closeDiscardDialog() {
 }
 
 function confirmDiscardPost() {
-    clearDraft();
+    if (!composeState.quote) clearDraft();
+    composeQuoteStash = null;
     composeState.images = [];
     composeState.audience = 'Public';
     composeState.community = null;
+    composeState.quote = null;
     closeDiscardDialog();
     showView('feed');
 }
@@ -576,6 +716,7 @@ async function handlePostSubmit() {
     try {
         const hasImages = composeState.images.length > 0;
         const community = composeState.community;
+        const quote = composeState.quote;
         // Community posts use their own endpoint; audience is ignored there.
         const postUrl = community
             ? `/api/communities/${encodeURIComponent(community.slug)}/posts`
@@ -588,6 +729,7 @@ async function handlePostSubmit() {
             const formData = new FormData();
             formData.append('content', content);
             if (!community) formData.append('audience', composeState.audience);
+            if (quote) formData.append('quoted_post_id', String(quote.id));
             composeState.images.forEach((img, i) => {
                 formData.append('images', dataUrlToBlob(img.dataUrl), img.name || `photo-${i}.png`);
             });
@@ -599,6 +741,7 @@ async function handlePostSubmit() {
         } else {
             // No images — keep the original JSON path.
             const body = community ? { content } : { content, audience: composeState.audience };
+            if (quote) body.quoted_post_id = Number(quote.id);
             response = await apiFetch(postUrl, {
                 method: 'POST',
                 headers: {
@@ -616,7 +759,10 @@ async function handlePostSubmit() {
             composeState.images = [];
             composeState.audience = 'Public';
             composeState.community = null;
-            clearDraft();
+            // A quote never touched the draft, so leave any pending one alone.
+            if (!quote) clearDraft();
+            composeState.quote = null;
+            composeQuoteStash = null;
             resetSubmitButtonState();
             if (postedTo) {
                 // Community posts never appear in the main feed, so land on
@@ -628,7 +774,9 @@ async function handlePostSubmit() {
             showToast('Post published');
         } else {
             setSubmitButtonLoading(false);
-            errorDiv.textContent = data.error || 'Failed to create post. Please try again.';
+            errorDiv.textContent = (quote && response.status === 404)
+                ? 'The post you\'re quoting is no longer available.'
+                : (data.error || 'Failed to create post. Please try again.');
             errorDiv.classList.remove('hidden');
         }
     } catch (error) {
@@ -644,6 +792,7 @@ async function handlePostSubmit() {
     if (!textarea) return;
 
     textarea.addEventListener('input', () => {
+        autosizeComposeTextarea();
         updateCharCounter();
         updatePostButtonState();
         scheduleAutosave();

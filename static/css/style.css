@@ -1223,3 +1223,85 @@ html.dark .wallet-primary-btn {
         transition-duration: 1ms;
     }
 }
+
+/* ---- Quote posts (static/js/feed.js buildQuoteCardHtml, compose.js quote mode) ----
+   Bordered, rounded card embedded under a quoting post's text (feed, profile,
+   search, community, overlay) and, with the X button, under the composer's
+   text box. Custom hex colors, so dark mode needs its own overrides below. */
+.quote-card {
+    border: 1px solid #e5e7eb;
+    background-color: transparent;
+    overflow: hidden;
+}
+.quote-card[data-quote-post-id] {
+    cursor: pointer;
+    transition: background-color 100ms ease;
+    -webkit-tap-highlight-color: transparent;
+}
+.quote-card[data-quote-post-id]:active {
+    background-color: #f3f4f6;
+}
+.quote-card[data-quote-post-id]:focus-visible {
+    outline: 2px solid #9ca3af;
+    outline-offset: 2px;
+}
+.quote-card-unavailable {
+    background-color: #f9fafb;
+}
+.quote-card-text {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 6;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+}
+.quote-card-text-composer {
+    -webkit-line-clamp: 10;
+}
+/* Remove (X) button in the composer's preview card. */
+.quote-card-remove {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background-color: rgba(15, 20, 25, 0.75);
+    transition: transform 100ms ease, background-color 100ms ease;
+}
+.quote-card-remove:active {
+    transform: scale(0.92);
+    background-color: rgba(15, 20, 25, 0.9);
+}
+/* "+N" badge on the last visible image of a multi-image quote. */
+.quote-card-more {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    padding: 1px 7px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+    background-color: rgba(15, 20, 25, 0.7);
+}
+/* Quote mode: the text box stops stretching (flex-1) so the quoted card sits
+   directly beneath it; JS (autosizeComposeTextarea) grows it with the text. */
+#create-post-view.compose-quote-mode #create-post-textarea {
+    flex: none;
+    min-height: 96px;
+}
+
+html.dark .quote-card {
+    border-color: var(--bb-border-default);
+}
+html.dark .quote-card[data-quote-post-id]:active {
+    background-color: var(--bb-bg-subtle);
+}
+html.dark .quote-card-unavailable {
+    background-color: var(--bb-bg-subtle);
+}
