@@ -348,6 +348,20 @@
             height: 100dvh;
             min-height: 0;
         }
+        /* Chat conversation: same root cause/fix as #create-post-view above
+           (.view-section.active forces display:block). Bounded flex column so
+           the header and composer stay put and #chat-conv-scroll scrolls; dvh
+           so the composer rides above the on-screen keyboard. */
+        #chat-conversation-view.active {
+            display: flex !important;
+            flex-direction: column;
+            height: 100vh;
+            height: 100dvh;
+            min-height: 0;
+        }
+        #chat-conv-scroll {
+            min-height: 0;
+        }
         .input-icon-container {
             position: absolute;
             top: 50%;
@@ -490,8 +504,10 @@
         }
         /* Chat scrolls the document (not an inner container), so reserve
            room for the fixed nav below its last row. */
+        /* Plus the Chats FAB (#chat-fab: 56px tall, 32px above the nav) and 16px of
+           air, so the last row can always scroll clear of it. */
         #chat-view.active {
-            padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px));
+            padding-bottom: calc(var(--bottom-nav-h) + 104px + env(safe-area-inset-bottom, 0px));
         }
         /* Search scrolls its own inner container (#search-body), not the
            document, so - now that the bottom nav stays visible on Search
@@ -1191,18 +1207,21 @@ html.dark .wallet-primary-btn {
    the visibility change is delayed until the slide-out finishes, so the
    closing animation stays visible, and it's removed from tab order/hit-testing
    afterwards. touch-action:none lets JS own the swipe-down gesture. */
-.share-sheet-backdrop {
+.share-sheet-backdrop,
+.chat-sheet-backdrop {
     opacity: 0;
     visibility: hidden;
     touch-action: none;
     transition: opacity 260ms ease, visibility 0s linear 260ms;
 }
-.share-sheet-backdrop.is-open {
+.share-sheet-backdrop.is-open,
+.chat-sheet-backdrop.is-open {
     opacity: 1;
     visibility: visible;
     transition: opacity 260ms ease, visibility 0s;
 }
-.share-sheet {
+.share-sheet,
+.chat-sheet {
     transform: translateY(100%);
     visibility: hidden;
     touch-action: none;
@@ -1210,7 +1229,8 @@ html.dark .wallet-primary-btn {
     padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
     transition: transform 300ms cubic-bezier(0.32, 0.72, 0, 1), visibility 0s linear 300ms;
 }
-.share-sheet.is-open {
+.share-sheet.is-open,
+.chat-sheet.is-open {
     transform: translateY(0);
     visibility: visible;
     transition: transform 300ms cubic-bezier(0.32, 0.72, 0, 1), visibility 0s;
@@ -1219,9 +1239,55 @@ html.dark .wallet-primary-btn {
     .share-sheet,
     .share-sheet.is-open,
     .share-sheet-backdrop,
-    .share-sheet-backdrop.is-open {
+    .share-sheet-backdrop.is-open,
+    .chat-sheet,
+    .chat-sheet.is-open,
+    .chat-sheet-backdrop,
+    .chat-sheet-backdrop.is-open {
         transition-duration: 1ms;
     }
+}
+
+/* ---- Chat message action sheet (templates/partials/chat_message_sheet.html) ----
+   `.chat-sheet*` reuse the share-sheet animation rules above (grouped selectors).
+   Bubbles must not select text / show the iOS callout on long-press. */
+.chat-msg-bubble {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    cursor: pointer;
+}
+.chat-msg-bubble:focus-visible {
+    outline: 2px solid #9ca3af;
+    outline-offset: 2px;
+}
+.chat-sheet-reactions {
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+.chat-sheet-reactions::-webkit-scrollbar { display: none; }
+.chat-sheet-react {
+    flex: 0 0 auto;
+    width: 48px;
+    height: 48px;
+    border-radius: 9999px;
+    font-size: 30px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 120ms ease, background-color 120ms ease;
+}
+.chat-sheet-react:active { transform: scale(0.88); }
+.chat-sheet-react.is-selected { background-color: #f3f4f6; box-shadow: inset 0 0 0 2px #e5e7eb; }
+html.dark .chat-sheet-react.is-selected { background-color: var(--bb-bg-muted); box-shadow: inset 0 0 0 2px var(--bb-border-default); }
+.chat-sheet-scroll {
+    max-height: 50vh;
+    overflow-y: auto;
+    touch-action: pan-y;
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
 }
 
 /* ---- Quote posts (static/js/feed.js buildQuoteCardHtml, compose.js quote mode) ----
@@ -1304,4 +1370,32 @@ html.dark .quote-card[data-quote-post-id]:active {
 }
 html.dark .quote-card-unavailable {
     background-color: var(--bb-bg-subtle);
+}
+
+/* ---- Chats list row menu (templates/partials/chat_row_menu.html) ----
+   Long-press a conversation row -> floating popup. Rows must not select text /
+   show the iOS callout on long-press. `.is-menu-target` marks the pressed row
+   while the popup is open. The popup scales in from the corner nearest the row
+   (transform-origin is set by chat-row-menu.js). */
+.chat-row {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+.chat-row.is-menu-target {
+    background-color: var(--bb-bg-subtle);
+}
+#chat-row-menu-backdrop {
+    touch-action: none;
+}
+.chat-row-menu:not(.hidden) {
+    animation: chat-row-menu-in 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes chat-row-menu-in {
+    from { opacity: 0; transform: scale(0.94); }
+    to   { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .chat-row-menu:not(.hidden) { animation: none; }
 }

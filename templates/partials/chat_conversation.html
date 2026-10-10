@@ -1,0 +1,71 @@
+<!-- BEGIN: Chat Conversation View -->
+<!-- One-to-one thread, opened by tapping a row in the Chat > Messages list
+     (openChatConversation in chat.js). Mock-data-only like the rest of chat:
+     threads are the hardcoded chatMockThreads array, sending appends a bubble
+     client-side only. Full-screen (bottom nav hidden - this view is not in
+     BOTTOM_NAV_ACTIVE_ITEM); header + composer fixed, thread scrolls. -->
+<div id="chat-conversation-view" class="view-section bg-white">
+
+	<!-- Header: back, avatar, name + presence, search, more -->
+	<header class="shrink-0 bg-white border-b border-gray-100 flex items-center px-3 py-3">
+		<button id="chat-conv-back-btn" type="button" class="w-10 h-10 -ml-1 flex items-center justify-center text-gray-700 active:scale-95 transition-transform duration-100 shrink-0" onclick="closeChatConversation()" aria-label="Back">
+			<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M10 19l-7-7m0 0l7-7m-7 7h18" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+		</button>
+		<img id="chat-conv-avatar" src="" alt="" class="w-12 h-12 rounded-full object-cover bg-gray-100 shrink-0 ml-1">
+		<div class="flex-1 min-w-0 ml-3">
+			<h1 id="chat-conv-name" class="text-[18px] font-bold text-gray-900 leading-tight truncate"></h1>
+			<p id="chat-conv-status" class="flex items-center text-[14px] text-gray-500 leading-tight mt-0.5">
+				<span id="chat-conv-dot" class="w-2.5 h-2.5 rounded-full bg-green-500 mr-1.5 shrink-0"></span>
+				<span id="chat-conv-status-text">Online</span>
+			</p>
+		</div>
+		<button id="chat-conv-search-btn" type="button" class="w-10 h-10 flex items-center justify-center text-gray-700 active:scale-95 transition-transform duration-100 shrink-0" onclick="showToast('Coming soon')" aria-label="Search in conversation">
+			<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+		</button>
+		<button id="chat-conv-menu-btn" type="button" class="w-10 h-10 -mr-1 flex items-center justify-center text-gray-700 active:scale-95 transition-transform duration-100 shrink-0" onclick="showToast('Coming soon')" aria-label="More options">
+			<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+		</button>
+	</header>
+
+	<!-- Thread (filled by renderChatConversation) -->
+	<div id="chat-conv-scroll" class="flex-1 overflow-y-auto px-4 pt-5 pb-4">
+		<div class="flex justify-center mb-6">
+			<span class="px-4 py-1.5 rounded-full bg-gray-100 text-[14px] text-gray-500">Today</span>
+		</div>
+		<div id="chat-conv-thread" class="space-y-5"></div>
+	</div>
+
+	<!-- Reply preview (shown by the Reply message action; see renderChatReplyBar) -->
+	<div id="chat-reply-bar" class="hidden shrink-0 bg-white border-t border-gray-100 px-4 pt-3 flex items-center gap-3">
+		<div class="flex-1 min-w-0 border-l-[3px] border-brand-red pl-3">
+			<p id="chat-reply-bar-name" class="text-[14px] font-semibold text-brand-red truncate"></p>
+			<p id="chat-reply-bar-text" class="text-[14px] text-gray-500 truncate"></p>
+		</div>
+		<button id="chat-reply-cancel-btn" type="button" class="w-8 h-8 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center shrink-0 active:scale-95 transition-transform duration-100" onclick="clearChatReplyTarget()" aria-label="Cancel reply">
+			<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+		</button>
+	</div>
+
+	<!-- Composer -->
+	<div class="shrink-0 bg-white border-t border-gray-100 px-3 pt-3 flex items-center gap-3" style="padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));">
+		<div class="flex-1 min-w-0 h-12 rounded-full bg-gray-100 flex items-center pl-4 pr-4">
+			<button id="chat-conv-gif-btn" type="button" class="text-gray-500 shrink-0 mr-2 active:scale-95 transition-transform duration-100" onclick="showToast('Coming soon')" aria-label="GIF">
+				<svg class="w-7 h-6" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 28 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="1.5" y="3.5" width="25" height="17" rx="4.5"></rect><text x="14" y="15.6" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" font-weight="700" fill="currentColor" stroke="none">GIF</text></svg>
+			</button>
+			<input id="chat-conv-input" type="text" enterkeyhint="send" autocomplete="off" placeholder="Type a message..." class="flex-1 min-w-0 h-full bg-transparent border-0 p-0 shadow-none outline-none focus:outline-none focus:ring-0 focus:border-0 appearance-none text-[16px] text-gray-900 placeholder-gray-500" onkeydown="if (event.key === 'Enter') { event.preventDefault(); sendChatMessage(); }">
+			<!-- Trailing actions, in order: add file, camera (all "Coming soon") -->
+			<div class="flex items-center gap-2.5 shrink-0 ml-2 text-gray-500">
+				<button id="chat-conv-attach-btn" type="button" class="shrink-0 active:scale-95 transition-transform duration-100" onclick="showToast('Coming soon')" aria-label="Add file">
+					<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+				</button>
+				<button id="chat-conv-camera-btn" type="button" class="shrink-0 active:scale-95 transition-transform duration-100" onclick="showToast('Coming soon')" aria-label="Camera">
+					<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 8.5A2.5 2.5 0 015.5 6h1.4a1 1 0 00.8-.4l.9-1.2A1 1 0 019.4 4h5.2a1 1 0 01.8.4l.9 1.2a1 1 0 00.8.4h1.4A2.5 2.5 0 0121 8.5v8A2.5 2.5 0 0118.5 19h-13A2.5 2.5 0 013 16.5v-8z" stroke-linecap="round" stroke-linejoin="round"></path><circle cx="12" cy="12.5" r="3.5"></circle></svg>
+				</button>
+			</div>
+		</div>
+		<button id="chat-conv-send-btn" type="button" class="w-12 h-12 rounded-full bg-brand-red text-white flex items-center justify-center shrink-0 active:scale-95 transition-transform duration-100" onclick="sendChatMessage()" aria-label="Send message">
+			<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M21.7 2.3a1 1 0 0 0-1.03-.24L2.7 8.4a1 1 0 0 0-.08 1.87l7.1 2.97 2.97 7.1a1 1 0 0 0 1.87-.08l6.34-17.97a1 1 0 0 0-.2-1Zm-9.36 11.4-3.5-1.47 8.2-2.9-4.7 4.37Z"></path></svg>
+		</button>
+	</div>
+</div>
+<!-- END: Chat Conversation View -->

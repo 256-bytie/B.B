@@ -44,7 +44,7 @@ re-verified against the current tree.
   `lstrip_blocks` are set specifically so this split reproduces the old
   single-file output byte-for-byte — don't remove those flags without
   re-diffing render output. Client JS is split by concern into
-  `static/js/*.js` (16 files, ~6000 lines total — see table below), all
+  `static/js/*.js` (17 files, ~6000 lines total — see table below), all
   loaded as plain `<script>` tags, no bundler.
 - Views are still `<div id="...-view">` blocks toggled by `showView(name)`
   — now in `static/js/core.js:41`, not `beebo.html`.
@@ -82,6 +82,7 @@ re-verified against the current tree.
 | Library file upload/list/download, departments | `app/routes/library.py` |
 | Search, trending, suggestions, search history | `app/routes/search.py` |
 | View-switching (`showView`) | `static/js/core.js:41` |
+| Chat conversation screen (tap a Messages row; hardcoded threads, client-side send; full-screen, bottom nav hidden) | `templates/partials/chat_conversation.html`, "Conversation screen" section + `chatMockThreads` in `static/js/chat.js`, `#chat-conversation-view` in `static/css/style.css`. View id `chat-conversation` is in `showView`'s list (core.js). No backend; list preview/time derive from each thread's last message. Long-press a bubble → message action sheet (react/copy/reply/forward/delete): `templates/partials/chat_message_sheet.html`, `static/js/chat-message-actions.js` (after `chat.js`), reply state in `chat.js`; details in `docs/CHATS_FLOW_DOCUMENTATION.md` §5.5. Long-press a Chats list row → UI-only row menu (mark unread/mute/pin/delete): `templates/partials/chat_row_menu.html`, `static/js/chat-row-menu.js` (after `chat-message-actions.js`; `closeChatRowMenu()` hooked in `showView`), §4.8. Chats list FAB (`#chat-fab`, one instance at the end of `#chat-view`, anchored like the feed FAB) opens the New message screen (`templates/partials/chat_new_message.html`, `static/js/chat-new-message.js`, views `chat-new-message` / `chat-new-group` in `showView`; user search via `/api/search?type=people`; DM + group creation client-side; Cancel restores list state via `chatListRestoreOnce`): §4.9–§4.11. **Message requests** are a separate screen (no tab bar on the Chats list): `templates/partials/chat_requests.html`, `openChatRequests`/`closeChatRequests`/`initChatRequestsView` in `chat.js`, view id `chat-requests` in `showView`'s list + init hook (core.js); entry point is the Chats list ⋮ → Requests; details §4.7 |
 | Bottom nav (Home/Search/Notifications/Chat; shown on feed + chat only; active state + FAB/chat offsets via `--bottom-nav-h`) | `templates/partials/bottom_nav.html`, `updateBottomNav` in `static/js/core.js`, `.bottom-nav*` in `static/css/style.css`. Notifications has no screen yet → "Coming soon" toast |
 | Feed rendering (post cards) | `static/js/feed.js:206` (`renderFeedPosts`) → `buildPostCardHtml` (`static/js/feed.js:114`) |
 | HTML-escaping utility (all dataset/attr values) | `static/js/feed.js:8` (`escapeHtml`) |

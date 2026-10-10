@@ -1,0 +1,84 @@
+<!-- BEGIN: Chat Message Action Sheet + Forward Sheet + Delete Dialog -->
+<!-- Opened by long-pressing (or right-clicking / Enter on) a bubble in the chat
+     conversation (static/js/chat-message-actions.js). Same slide-up pattern as
+     the share sheet: stays in the DOM, shown via `.is-open`; `.chat-sheet*`
+     classes share the share-sheet animation rules in style.css.
+     Content that depends on the pressed message (preview text, selected
+     reaction) is filled in by JS each time the sheet opens. -->
+<div id="chat-message-sheet-backdrop" class="chat-sheet-backdrop fixed inset-0 z-40 bg-black/30" aria-hidden="true"></div>
+<div id="chat-message-sheet" class="chat-sheet fixed left-0 right-0 bottom-0 z-50 bg-white rounded-t-[24px] shadow-[0_-8px_24px_rgba(0,0,0,0.12)] max-w-[430px] mx-auto outline-none" role="dialog" aria-modal="true" aria-label="Message actions" aria-hidden="true" tabindex="-1">
+	<div class="pt-2.5 pb-1.5">
+		<div class="w-12 h-1 bg-gray-200 rounded-full mx-auto"></div>
+	</div>
+
+	<!-- Selected message preview -->
+	<div class="px-4 pt-2">
+		<div class="rounded-2xl bg-gray-100 px-4 py-3">
+			<p id="chat-message-sheet-preview" class="text-[16px] leading-[1.45] text-gray-900 break-words line-clamp-3"></p>
+		</div>
+	</div>
+
+	<!-- React: horizontally scrollable emoji row (data-sheet-no-drag: horizontal
+	     swipes here must scroll the row, not drag the sheet) -->
+	<div class="pt-5">
+		<p class="px-5 text-[16px] font-semibold text-gray-900">React</p>
+		<div id="chat-message-sheet-reactions" class="chat-sheet-reactions flex items-center gap-1 px-4 pt-2 pb-1 overflow-x-auto" data-sheet-no-drag role="group" aria-label="Reactions">
+			<button id="chat-react-fire-btn" type="button" class="chat-sheet-react" data-emoji="🔥" aria-label="React with fire" aria-pressed="false">🔥</button>
+			<button id="chat-react-raised-hands-btn" type="button" class="chat-sheet-react" data-emoji="🙌" aria-label="React with raised hands" aria-pressed="false">🙌</button>
+			<button id="chat-react-crying-btn" type="button" class="chat-sheet-react" data-emoji="😭" aria-label="React with loudly crying" aria-pressed="false">😭</button>
+			<button id="chat-react-see-no-evil-btn" type="button" class="chat-sheet-react" data-emoji="🙈" aria-label="React with see-no-evil monkey" aria-pressed="false">🙈</button>
+			<button id="chat-react-folded-hands-btn" type="button" class="chat-sheet-react" data-emoji="🙏" aria-label="React with folded hands" aria-pressed="false">🙏</button>
+			<button id="chat-react-confounded-btn" type="button" class="chat-sheet-react" data-emoji="😖" aria-label="React with confounded face" aria-pressed="false">😖</button>
+			<button id="chat-react-joy-btn" type="button" class="chat-sheet-react" data-emoji="😂" aria-label="React with tears of joy" aria-pressed="false">😂</button>
+			<button id="chat-react-heart-btn" type="button" class="chat-sheet-react" data-emoji="❤️" aria-label="React with heart" aria-pressed="false">❤️</button>
+			<button id="chat-react-thumbs-up-btn" type="button" class="chat-sheet-react" data-emoji="👍" aria-label="React with thumbs up" aria-pressed="false">👍</button>
+			<button id="chat-react-surprised-btn" type="button" class="chat-sheet-react" data-emoji="😮" aria-label="React with surprised face" aria-pressed="false">😮</button>
+			<button id="chat-react-party-btn" type="button" class="chat-sheet-react" data-emoji="🎉" aria-label="React with party popper" aria-pressed="false">🎉</button>
+		</div>
+	</div>
+
+	<!-- Actions -->
+	<div class="px-5 pt-1">
+		<button id="chat-message-copy-btn" type="button" class="chat-sheet-action group w-full flex items-center justify-between py-4 text-left border-b border-gray-100 active:bg-gray-50" data-action="copy">
+			<span class="text-[16px] font-medium text-gray-900">Copy</span>
+			<svg class="w-6 h-6 text-gray-900 transition-transform duration-150 group-active:scale-90" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg>
+		</button>
+		<button id="chat-message-reply-btn" type="button" class="chat-sheet-action group w-full flex items-center justify-between py-4 text-left border-b border-gray-100 active:bg-gray-50" data-action="reply">
+			<span class="text-[16px] font-medium text-gray-900">Reply</span>
+			<svg class="w-6 h-6 text-gray-900 transition-transform duration-150 group-active:scale-90" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"></path></svg>
+		</button>
+		<button id="chat-message-forward-btn" type="button" class="chat-sheet-action group w-full flex items-center justify-between py-4 text-left border-b border-gray-100 active:bg-gray-50" data-action="forward">
+			<span class="text-[16px] font-medium text-gray-900">Forward</span>
+			<svg class="w-6 h-6 text-gray-900 transition-transform duration-150 group-active:scale-90" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m15 14 5-5-5-5"></path><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13"></path></svg>
+		</button>
+		<button id="chat-message-delete-btn" type="button" class="chat-sheet-action group w-full flex items-center justify-between py-4 text-left active:bg-gray-50" data-action="delete">
+			<span class="text-[16px] font-medium text-gray-900">Delete</span>
+			<svg class="w-6 h-6 text-gray-900 transition-transform duration-150 group-active:scale-90" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><path d="M10 11v6M14 11v6"></path></svg>
+		</button>
+	</div>
+</div>
+
+<!-- Forward picker: opened by the Forward action. One row per conversation;
+     Send forwards the message to that thread and the button flips to "Sent". -->
+<div id="chat-forward-sheet-backdrop" class="chat-sheet-backdrop fixed inset-0 z-40 bg-black/30" aria-hidden="true"></div>
+<div id="chat-forward-sheet" class="chat-sheet fixed left-0 right-0 bottom-0 z-50 bg-white rounded-t-[24px] shadow-[0_-8px_24px_rgba(0,0,0,0.12)] max-w-[430px] mx-auto outline-none" role="dialog" aria-modal="true" aria-label="Forward message" aria-hidden="true" tabindex="-1">
+	<div class="pt-2.5 pb-1.5">
+		<div class="w-12 h-1 bg-gray-200 rounded-full mx-auto"></div>
+	</div>
+	<h2 class="px-5 pt-2 pb-2 text-[16px] font-semibold text-gray-900">Forward to</h2>
+	<div id="chat-forward-list" class="chat-sheet-scroll px-2" data-sheet-no-drag></div>
+</div>
+
+<!-- Delete confirm (same look as the delete-comment dialog) -->
+<div id="chat-delete-backdrop" class="hidden fixed inset-0 z-[70] bg-black/30"></div>
+<div id="chat-delete-dialog" class="hidden fixed inset-0 z-[70] flex items-center justify-center px-8" role="alertdialog" aria-modal="true" aria-labelledby="chat-delete-dialog-title">
+	<div class="bg-white rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.16)] w-full max-w-[320px] p-5 text-center">
+		<h3 id="chat-delete-dialog-title" class="text-[16px] font-semibold text-gray-900 mb-1">Delete message?</h3>
+		<p class="text-sm text-gray-500 mb-5">This can't be undone. The message will be removed from this chat.</p>
+		<div class="flex flex-col gap-2">
+			<button type="button" id="chat-delete-confirm-btn" class="w-full py-3 rounded-xl bg-brand-red text-white font-semibold text-[15px] hover:bg-red-700 transition-colors">Delete</button>
+			<button type="button" id="chat-delete-cancel-btn" class="w-full py-3 text-gray-500 font-medium text-[15px]">Cancel</button>
+		</div>
+	</div>
+</div>
+<!-- END: Chat Message Action Sheet + Forward Sheet + Delete Dialog -->

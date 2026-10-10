@@ -39,7 +39,9 @@ function apiFetch(url, options = {}) {
 // responding to a browser Back/Forward navigation doesn't push a second,
 // redundant history entry on top of the one the browser just navigated to.
 function showView(viewName, { skipUrlSync = false } = {}) {
-    const views = ['login', 'signup', 'feed', 'profile', 'edit-profile', 'user-profile', 'create-post', 'businesses', 'courses', 'gpa-calculator', 'chat', 'library', 'library-contribute', 'search', 'wallet', 'community', 'community-members', 'community-edit', 'community-create', 'community-browse'];
+    if (typeof closeChatMenu === 'function') closeChatMenu(); // never leave the chat ⋮ menu open across screens
+    if (typeof closeChatRowMenu === 'function') closeChatRowMenu(); // ...or the long-press row menu
+    const views = ['login', 'signup', 'feed', 'profile', 'edit-profile', 'user-profile', 'create-post', 'businesses', 'courses', 'gpa-calculator', 'chat', 'chat-conversation', 'chat-requests', 'chat-new-message', 'chat-new-group', 'library', 'library-contribute', 'search', 'wallet', 'community', 'community-members', 'community-edit', 'community-create', 'community-browse'];
     views.forEach(v => {
         const view = document.getElementById(v + '-view');
         if (view) {
@@ -116,6 +118,19 @@ function showView(viewName, { skipUrlSync = false } = {}) {
     // Reset the search field and re-render the mock lists each time chat opens
     if (viewName === 'chat') {
         initChatView();
+    }
+
+    // New message / New group screens: reset (or restore) and load users each time they open
+    if (viewName === 'chat-new-message') {
+        initChatNewMessageView();
+    }
+    if (viewName === 'chat-new-group') {
+        initChatNewGroupView();
+    }
+
+    // Re-render the Message Requests list each time that screen opens
+    if (viewName === 'chat-requests') {
+        initChatRequestsView();
     }
 
     // Refresh the file list + department counts each time Library is shown

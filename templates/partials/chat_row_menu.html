@@ -1,0 +1,26 @@
+<!-- BEGIN: Chats List Row Menu (long-press a conversation) -->
+<!-- Floating popup anchored to the pressed row in the Chats list
+     (static/js/chat-row-menu.js). Not the message action sheet: that one is for
+     bubbles inside an open conversation (chat_message_sheet.html).
+     Hidden via `.hidden`; position (top/left/transform-origin) is set by JS on
+     every open. UI only for now: actions just dismiss the menu. -->
+<div id="chat-row-menu-backdrop" class="hidden fixed inset-0 z-40" aria-hidden="true"></div>
+<div id="chat-row-menu" class="chat-row-menu hidden fixed z-50 w-[272px] max-w-[calc(100vw-24px)] bg-gray-100 rounded-[20px] shadow-[0_8px_24px_rgba(0,0,0,0.16)] py-2 overflow-hidden outline-none" role="menu" aria-label="Conversation actions" tabindex="-1">
+	<button id="chat-row-menu-unread-btn" type="button" class="group w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors duration-100 active:bg-gray-200" role="menuitem" data-action="unread">
+		<svg class="w-6 h-6 text-gray-900 shrink-0 transition-transform duration-150 group-active:scale-90" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 16.1 2 22l5.9-2A9 9 0 0 0 15.5 20.3"></path><path d="M20.3 15.5A9 9 0 1 0 4 16.1"></path><circle cx="18.4" cy="18.4" r="2.6" fill="currentColor" stroke="none"></circle></svg>
+		<span class="text-[16px] font-medium text-gray-900">Mark as unread</span>
+	</button>
+	<button id="chat-row-menu-mute-btn" type="button" class="group w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors duration-100 active:bg-gray-200" role="menuitem" data-action="mute">
+		<svg class="w-6 h-6 text-gray-900 shrink-0 transition-transform duration-150 group-active:scale-90" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5"></path><path d="M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path><path d="m2 2 20 20"></path></svg>
+		<span class="text-[16px] font-medium text-gray-900">Mute conversation</span>
+	</button>
+	<button id="chat-row-menu-pin-btn" type="button" class="group w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors duration-100 active:bg-gray-200" role="menuitem" data-action="pin">
+		<svg class="w-6 h-6 text-gray-900 shrink-0 transition-transform duration-150 group-active:scale-90" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 17v5"></path><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"></path></svg>
+		<span class="text-[16px] font-medium text-gray-900">Pin conversation</span>
+	</button>
+	<button id="chat-row-menu-delete-btn" type="button" class="group w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors duration-100 active:bg-gray-200" role="menuitem" data-action="delete">
+		<svg class="w-6 h-6 text-brand-red shrink-0 transition-transform duration-150 group-active:scale-90" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><path d="M10 11v6M14 11v6"></path></svg>
+		<span class="text-[16px] font-medium text-brand-red">Delete conversation</span>
+	</button>
+</div>
+<!-- END: Chats List Row Menu -->

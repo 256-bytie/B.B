@@ -1,0 +1,39 @@
+<!-- BEGIN: Chat Message Requests View -->
+<!-- Separate screen for first-time senders, opened from the Chats list ⋮ menu
+     (openChatRequests in chat.js). Mock-data-only like the rest of chat: the
+     lists are chatMockRequestsNew / chatMockRequestsEarlier. Full-screen with a
+     back arrow (bottom nav hidden - this view is not in BOTTOM_NAV_ACTIVE_ITEM). -->
+<div id="chat-requests-view" class="view-section bg-white min-h-screen relative">
+	<header class="bg-white sticky top-0 z-10 w-full border-b border-gray-100">
+		<div class="flex items-center gap-2 px-3 py-2.5">
+			<button id="chat-requests-back-btn" type="button" class="w-9 h-9 -ml-1 flex items-center justify-center text-gray-700 active:scale-95 transition-transform duration-100 shrink-0" onclick="closeChatRequests()" aria-label="Back">
+				<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+					<path d="M10 19l-7-7m0 0l7-7m-7 7h18" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+			</button>
+			<h1 class="text-base font-bold text-gray-900">Message requests</h1>
+		</div>
+	</header>
+
+	<main id="chat-requests-body" class="bg-white">
+		<!-- Empty state -->
+		<div id="chat-requests-empty" class="hidden flex-col items-center text-center px-8 pt-20">
+			<div class="w-24 h-24 rounded-full bg-gray-100 flex items-center justify-center relative mb-6">
+				<svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+				<span class="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-brand-red text-white flex items-center justify-center ring-4 ring-white">
+					<svg class="w-4 h-4" fill="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+						<path d="M4.913 2.658c2.075-.27 4.19-.408 6.337-.408 2.147 0 4.262.139 6.337.408 1.922.25 3.291 1.861 3.405 3.727a4.403 4.403 0 00-1.032-.211 50.89 50.89 0 00-8.42 0c-2.358.196-4.04 2.19-4.04 4.434v4.286a4.47 4.47 0 002.433 3.984L7.28 21.53A.75.75 0 016 21v-4.03a48.527 48.527 0 01-1.087-.128C2.905 16.58 1.5 14.833 1.5 12.862V6.638c0-1.97 1.405-3.718 3.413-3.979z"></path>
+					</svg>
+				</span>
+			</div>
+			<h2 class="text-lg font-bold text-gray-900 mb-2">No new requests</h2>
+			<p class="text-sm text-gray-500 leading-relaxed">When someone messages you for the first time, their request will appear here.</p>
+		</div>
+
+		<!-- Populated state -->
+		<div id="chat-requests-list"></div>
+	</main>
+</div>
+<!-- END: Chat Message Requests View -->
