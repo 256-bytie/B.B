@@ -98,6 +98,7 @@ re-verified against the current tree.
 | Quote posts (embedded card in feed/profile/search/community/overlay; composer quote mode) | `buildQuoteCardHtml` / `buildQuoteImagesHtml` in `static/js/feed.js`; `openQuoteComposer`, `renderComposeQuote`, `removeComposeQuote` in `static/js/compose.js`; `parseQuotedPost` / `quotedPostToPostData` / `#overlay-post-quote` in `static/js/comments.js` + `templates/partials/comment_overlay.html`; `.quote-card*` at end of `static/css/style.css`. Backend contract: `docs/QUOTE_BACKEND_PROMPT.md` |
 | Wallet: balance / monthly free credits / history API | `app/routes/wallet.py` (HTTP) → `app/wallet.py` (logic, Flask-free) |
 | Wallet screen (side-nav → `openWalletView()`) | `templates/partials/wallet.html`, `static/js/wallet.js`, `showView('wallet')` hook in `static/js/core.js` |
+| Direct messages (1:1 text) API — conversations, messages, read cursors, long-poll updates | `app/routes/chat.py` (HTTP) → `app/chat_service.py` (logic, Flask-free); schema in `migrations/008_direct_messages.sql`; design record in `docs/DIRECT_MESSAGING.md`. **Frontend not wired yet** — `static/js/chat.js` is still mock/client-side. All updates long-polls hold the request up to 25s on a condition variable (never a DB connection); rate limiter + realtime signalling are in-process (single-process only) |
 | Communities API (create/get/join/leave/mine/browse/members, per-community posts) | `app/routes/communities.py` (HTTP) → `app/community_service.py` (logic, Flask-free); schema in `migrations/003_communities.sql`; frontend `static/js/community.js` |
 
 ## Key data flow — post images (still true, same shape, new file locations)
@@ -403,7 +404,9 @@ DB_PATH=beebo_test.db python app.py &
 ./test_file_cleanup.sh
 ./test_wallet.sh
 ./test_communities.sh
-python3 test_wallet_logic.py   # no server needed; uses its own temp DB
+./tests/test_chat.sh
+python3 tests/test_wallet_logic.py   # no server needed; uses its own temp DB
+python3 tests/test_chat_logic.py     # no server needed; uses its own temp DB
 # or: ./run_all_tests.sh
 
 # 3. Clean up the test db when done (safe to delete - it's not beebo.db)

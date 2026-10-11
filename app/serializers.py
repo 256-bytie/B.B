@@ -139,6 +139,60 @@ def serialize_user_public(row):
     }
 
 
+def serialize_chat_message(row):
+    """Convert a messages row to a JSON dict.
+
+    Args:
+        row: tuple (id, conversation_id, sender_id, body, created_at)
+    """
+    message_id, conversation_id, sender_id, body, created_at = row
+    return {
+        'id': message_id,
+        'conversation_id': conversation_id,
+        'sender_id': sender_id,
+        'body': body,
+        'created_at': created_at,
+    }
+
+
+def serialize_conversation(conv_row, other_user_row, last_message_row,
+                           unread_count, viewer_id):
+    """Shape one conversation-list item.
+
+    Args:
+        conv_row: tuple (id, user_low_id, user_high_id, created_at)
+        other_user_row: the OTHER participant's users row (7-element shape
+            accepted by serialize_user_public)
+        last_message_row: tuple (id, sender_id, body, created_at) or None
+            for a conversation with no messages yet
+        unread_count: messages newer than the viewer's read cursor that
+            the viewer did not send
+        viewer_id: current user; only used to pick which participant is
+            "the other user"
+    """
+    conversation_id = conv_row[0]
+    other = serialize_user_public(other_user_row) if other_user_row else None
+    last_message = None
+    if last_message_row is not None:
+        last_message = {
+            'id': last_message_row[0],
+            'sender_id': last_message_row[1],
+            'body': last_message_row[2],
+            'created_at': last_message_row[3],
+        }
+    return {
+        'id': conversation_id,
+        'user': {
+            'id': other['id'],
+            'full_name': other['full_name'],
+            'handle': other['handle'],
+            'profile_picture': other['profile_picture'],
+        } if other else None,
+        'last_message': last_message,
+        'unread_count': unread_count,
+    }
+
+
 def serialize_library_file(row, uploader_name=None):
     """Convert a library_files row into a JSON-serializable dict.
 

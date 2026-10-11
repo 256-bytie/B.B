@@ -394,14 +394,14 @@ Tabs Media / Links / Docs for the active group's thread (`chatThreadFor`). Links
 
 ## 9. Backend / API relationship
 
-- **[CURRENT]** None. No chat routes in `app/routes/*`, no chat tables in `app/db.py` / migrations.
-- **[FUTURE]** Needed (shapes not defined): list conversations (with unread count, last message, group flag), list requests, accept/decline, fetch thread (paginated), send message, mark read, presence, group data.
+- **[CURRENT]** A real 1:1 direct-messaging backend now exists — `app/routes/chat.py` (HTTP) over `app/chat_service.py` (Flask-free logic), schema in `migrations/008_direct_messages.sql`, design record + contract in `docs/DIRECT_MESSAGING.md`. Endpoints: `GET/POST /api/chat/conversations`, `GET/POST /api/chat/conversations/<id>/messages`, `POST /api/chat/conversations/<id>/read`, `GET /api/chat/updates` (long-poll, `?after=`/`?wait_seconds=`, max 25 s hold). Login required; CSRF on mutations; 1:1 text only (no groups/attachments/reactions/typing/read-receipts). **The frontend (`static/js/chat.js`) is still mock/client-side and is NOT wired to these endpoints yet** — wiring it is a separate frontend task against the contract in `docs/DIRECT_MESSAGING.md` §4.
+- **[FUTURE]** Remaining backend-side (shapes in `docs/DIRECT_MESSAGING.md`): groups, requests/accept/decline flow, presence, attachments, reactions (message ids for reactions now exist server-side), read receipts/delivery ticks (the per-user read cursor exists but is private by design, never exposed to the other party).
 - Rules from `CLAUDE.md`:
   - Backend is written by Claude Code in terminal; frontend work must hand over a self-contained backend prompt rather than editing `app/routes/*.py`.
   - Every mutating call (`POST/PATCH/PUT/DELETE`) requires `X-CSRF-Token`; use the existing fetch wrapper in `core.js`, not raw `fetch()` (raw → 403).
   - Real avatars come from users' `profile_picture`; fallback DiceBear by username.
   - Sessions via Flask server-side session; identity from `session.user`.
-- **[CLARIFY]** realtime transport (polling vs websockets/SSE), message retention, who can message whom (follow-gating decides Messages vs Requests?).
+- **[RESOLVED]** realtime transport: long-polling via `GET /api/chat/updates` (chosen over SSE/Socket.IO; rationale + rejected alternatives in `docs/DIRECT_MESSAGING.md` §2–§3). **[CLARIFY]** message retention (kept forever for now), who can message whom (any known user today; no follow-gating).
 
 ## 10. Constraints to preserve
 
@@ -446,15 +446,15 @@ All of §8 (mock data), message actions being local-only (reactions, forwards, d
 
 1. List ⋮ menu contents (only Requests today); conversation ⋮ menu contents.
 2. Manage actions: the row menu (§4.8) shows Mark as unread / Mute / Pin / Delete as UI only; wire them (state, persistence, indicators, delete confirm). Archive, block, report do not exist.
-3. Start a new conversation: FAB → New message (§4.10) and group creation (§4.11) are done client-side. Remaining: user directory endpoint, real conversation/group persistence, profile "Message" button, group member management.
-4. Group chats: creation, members, sender names, header info, presence replacement.
+3. Start a new conversation: FAB → New message (§4.10) and group creation (§4.11) are done client-side. Remaining: frontend wiring of `POST /api/chat/conversations {"user_id"}` (1:1; user search already exists via `GET /api/search?type=people`), real group persistence, profile "Message" button, group member management.
+4. Group chats: creation, members, sender names, header info, presence replacement (backend has no group support).
 5. Message features: working attachments/images/GIFs/camera (composer buttons are inert), full emoji picker (composer emoji button removed), edit, failed/sending state, jump-to-original for replies, delete-for-everyone vs delete-for-me, message-sheet extras (pin, report, info, multi-select), status advancement, date separators, in-conversation search.
 6. Sorting by recency; preserve filter/search on return from a conversation or the requests screen.
 7. Loading, error, offline, blocked, deleted-user states.
-8. Realtime updates, unread badge on bottom-nav Chat icon and a request-count badge on the ⋮ Requests item.
+8. Frontend wiring of realtime updates (`GET /api/chat/updates` long-poll: resume with the highest message id seen, `wait_seconds` ≤ 25), unread badge on bottom-nav Chat icon and a request-count badge on the ⋮ Requests item. Server-side unread cursor exists (`POST .../read`).
 9. Deep links (`/chats`, `/chats/:id`), side-nav Chat entry.
-10. Backend tables, endpoints (incl. user directory + create-conversation/create-group; directory prompt in `BACKEND_PROMPT_chat_user_directory.md`), and CSRF-compliant frontend wiring. Message actions will need: add/remove reaction, delete message, forward (create message in target thread), reply reference (message id) — all mutating, all via the CSRF fetch wrapper.
-11. Message ids: messages currently have none; reply/forward/reaction persistence needs stable ids.
+10. Backend done for 1:1 (see §9); remaining backend work is groups/requests/presence. **CSRF-compliant frontend wiring is the outstanding frontend task.** Message actions will need: add/remove reaction, delete message, forward (create message in target thread), reply reference (message id) — all mutating, all via the CSRF fetch wrapper (plus new backend endpoints for reactions/deletes).
+11. ~~Message ids~~ **[RESOLVED backend-side]**: server messages have stable integer ids (`message.id`); the mock frontend still addresses messages by index and needs to switch to these ids when wired.
 12. Reaction palette: confirm the final emoji set/order (11 used now) and whether there should be a "+" full picker.
 
 ## 14. Element ID reference
