@@ -20,6 +20,7 @@
 	const SEARCH_DEBOUNCE_MS = 250;
 	const REMOTE_LIMIT = 30;
 	const MIN_GROUP_MEMBERS = 2;
+	const MIN_ADD_MEMBERS = 1;
 
 	// ---- User directory ----
 	// A user is { key, id, name, handle, avatar }. `key` is the lowercase handle and is
@@ -87,12 +88,13 @@
 
 		function render() {
 			byKey.clear();
-			users.forEach(function (u) { byKey.set(u.key, u); });
-			if (users.length === 0) {
+			const visible = cfg.exclude ? users.filter(function (u) { return !cfg.exclude(u); }) : users;
+			visible.forEach(function (u) { byKey.set(u.key, u); });
+			if (visible.length === 0) {
 				cfg.list.innerHTML = '<p class="text-center text-sm text-gray-400 px-6 pt-10">' + escapeHtml(emptyMessage()) + '</p>';
 				return;
 			}
-			cfg.list.innerHTML = users.map(cfg.rowHtml).join('');
+			cfg.list.innerHTML = visible.map(cfg.rowHtml).join('');
 		}
 
 		async function fetchRemote(q, mySeq) {
@@ -214,11 +216,18 @@
 	const ngHint = document.getElementById('chat-new-group-hint');
 	if (!ngName || !ngInput || !ngList || !ngChips || !ngCreate || !ngHint) return;
 
+	const ngTitle = document.getElementById('chat-new-group-title');
 	const selected = new Map(); // key -> user, insertion-ordered
+	// Same screen, two modes: create a group (null) or add people to this existing group.
+	let ngAddTarget = null;
+	function minMembers() { return ngAddTarget ? MIN_ADD_MEMBERS : MIN_GROUP_MEMBERS; }
 
 	const ngPicker = createUserPicker({
 		input: ngInput,
 		list: ngList,
+		exclude: function (u) { // adding to a group: people already in it are not offered
+			return !!ngAddTarget && ngAddTarget.members.some(function (m) { return m.handle.toLowerCase() === u.key; });
+		},
 		rowHtml: function (u) {
 			const on = selected.has(u.key);
 			const box = on
@@ -244,11 +253,12 @@
 				'<svg class="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"></path></svg>' +
 				'</button>';
 		}).join('');
-		const ok = users.length >= MIN_GROUP_MEMBERS;
+		const min = minMembers();
+		const ok = users.length >= min;
 		ngCreate.disabled = !ok;
 		ngHint.textContent = users.length === 0
-			? 'Select at least ' + MIN_GROUP_MEMBERS + ' people.'
-			: users.length + ' selected' + (ok ? '' : ' \u2022 select at least ' + MIN_GROUP_MEMBERS);
+			? (ngAddTarget ? 'Select people to add.' : 'Select at least ' + min + ' people.')
+			: users.length + ' selected' + (ok ? '' : ' \u2022 select at least ' + min);
 	}
 
 	ngChips.addEventListener('click', function (e) {
@@ -260,11 +270,21 @@
 	});
 
 	window.openChatNewGroup = function () {
+		ngAddTarget = null;
+		showView('chat-new-group');
+	};
+
+	// Group info > Add: pick people to add to `conv` (see chat-group-info.js).
+	window.openChatAddMembers = function (conv) {
+		ngAddTarget = conv;
 		showView('chat-new-group');
 	};
 
 	window.initChatNewGroupView = function () {
 		selected.clear();
+		ngTitle.textContent = ngAddTarget ? 'Add people' : 'New group';
+		ngCreate.textContent = ngAddTarget ? 'Add' : 'Create';
+		ngName.classList.toggle('hidden', !!ngAddTarget);
 		ngName.value = '';
 		ngInput.value = '';
 		syncGroupUi();
@@ -272,13 +292,34 @@
 		window.scrollTo(0, 0);
 	};
 
-	// Cancel: back to New message with its search text intact.
+	// Cancel: back to New message with its search text intact (or to Group info when adding).
 	window.closeChatNewGroup = function () {
+		if (ngAddTarget) {
+			ngAddTarget = null;
+			showView('chat-group-info');
+			return;
+		}
 		nmRestoreOnce = true;
 		showView('chat-new-message');
 	};
 
-	window.createChatGroup = function () {
+	window.submitChatNewGroup = function () {
+		if (ngAddTarget) addMembersToGroup();
+		else createGroup();
+	};
+
+	function addMembersToGroup() {
+		const conv = ngAddTarget;
+		const users = Array.from(selected.values());
+		if (!conv || users.length < MIN_ADD_MEMBERS) return;
+		const added = users.map(function (u) { return { id: u.id, name: u.name, handle: u.handle, avatar: u.avatar, role: 'member' }; });
+		chatSetGroupMembers(conv, conv.members.concat(added)); // refreshes a generated name
+		ngAddTarget = null;
+		showToast(users.length === 1 ? 'Added 1 person' : 'Added ' + users.length + ' people');
+		showView('chat-group-info');
+	}
+
+	function createGroup() {
 		const users = Array.from(selected.values());
 		if (users.length < MIN_GROUP_MEMBERS) return;
 		const id = 'g-' + Date.now();
@@ -291,12 +332,14 @@
 			preview: '',
 			time: '',
 			unread: 0,
-			isGroup: true
+			isGroup: true,
+			myRole: 'admin' // the creator
 		};
-		chatSetGroupMembers(conv, users.map(function (u) { return { id: u.id, name: u.name, handle: u.handle }; }));
+		chatSetGroupMembers(conv, users.map(function (u) { return { id: u.id, name: u.name, handle: u.handle, avatar: u.avatar, role: 'member' }; }));
 		if (conv.customName) conv.name = conv.customName;
+		chatEnsureGroupModel(conv);
 		chatMockThreads[id] = [];
 		chatMockMessages.unshift(conv);
 		openChatConversation(id);
-	};
+	}
 })();

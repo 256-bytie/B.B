@@ -16,7 +16,7 @@ Source of truth for the Chats frontend. Read fully before editing any chat code.
 - Chats = 1:1 messaging between campus users, plus message requests from people who messaged first (their own screen, reached from the list's ⋮ menu).
 - **[CURRENT]** Frontend only, mock data, in-memory state. No backend, no persistence. A page reload resets everything.
 - Screen header title: **"Chats"** (view id `chat`).
-- Five screens: **Chats list** (`#chat-view`), **Conversation** (`#chat-conversation-view`), **Message requests** (`#chat-requests-view`, view id `chat-requests`), **New message** (`#chat-new-message-view`) and **New group** (`#chat-new-group-view`). The list no longer has a Messages/Requests tab bar.
+- Seven screens: **Chats list** (`#chat-view`), **Conversation** (`#chat-conversation-view`), **Message requests** (`#chat-requests-view`, view id `chat-requests`), **New message** (`#chat-new-message-view`), **New group** (`#chat-new-group-view`, also the "Add people" picker), **Group info** (`#chat-group-info-view`) and **Media, Links, Docs** (`#chat-group-media-view`). The list no longer has a Messages/Requests tab bar.
 
 ## 2. File map
 
@@ -37,6 +37,8 @@ Source of truth for the Chats frontend. Read fully before editing any chat code.
 | Chats FAB | `templates/partials/chat.html` (`#chat-fab`, end of `#chat-view`; `onclick="openChatNewMessage()"`), bottom-clearance rule `#chat-view.active` in `static/css/style.css` |
 | New message + New group screens markup | `templates/partials/chat_new_message.html` (both views; included after `chat_requests.html` in `templates/index.html`) |
 | New message + New group logic (user directory, live search, open-or-create DM, group creation) | `static/js/chat-new-message.js` (loaded after `chat-row-menu.js` in `_trailer.html`); view ids `chat-new-message` / `chat-new-group` are in `showView`'s list + init hooks in `core.js` |
+| Group info screens markup (info, media/links/docs, shared bottom sheet) | `templates/partials/chat_group_info.html` (included after `chat_new_message.html` in `templates/index.html`) |
+| Group info logic (roles, settings, rename, add people entry, leave, media tabs) | `static/js/chat-group-info.js` (loaded after `chat-new-message.js` in `_trailer.html`); view ids `chat-group-info` / `chat-group-media` are in `showView`'s list + init hooks in `core.js`; group data model helpers (`chatEnsureGroupModel`, `chatGeneratedGroupName`, `chatSetGroupMembers`, `refreshChatConversationHeader`) are in `chat.js` |
 | Row menu CSS | `static/css/style.css`, block "Chats list row menu" at the end of the file (`.chat-row`, `.chat-row.is-menu-target`, `.chat-row-menu` entry animation) |
 | Toast helper | `showToast()` in `static/js/compose.js`; element `#app-toast` in `comment_overlay.html` |
 | HTML escaping | `escapeHtml()` in `static/js/feed.js` |
@@ -54,6 +56,7 @@ Note: `chat.js` header comment references `HANDOVER.md`; that file is not in the
 5. Tap a Messages row → `openChatConversation(id)` → conversation screen (bottom nav hidden); unread count set to 0.
 6. Type + send (Enter or send button) → bubble appended, list preview/time updated.
 6a. Long-press a bubble → message action sheet (§5.5): react, copy, reply, forward, delete.
+6b. Tap the group avatar/name in a group conversation's header → Group info (§5.6); Back returns to the same conversation with scroll, draft and reply state intact. (1:1 chats: the header is inert.)
 7. Back arrow → `closeChatConversation()` → `showView('chat')` → list re-initialised (see §4.1 reset behavior).
 
 ## 4. Chats list screen (`#chat-view`)
@@ -225,7 +228,7 @@ Full-screen flex column (`100dvh`): fixed header, scrolling thread (`#chat-conv-
 | Element | Action |
 |---|---|
 | Back arrow (`#chat-conv-back-btn`) | `closeChatConversation()` → clears active id, `showView('chat')`. |
-| Avatar (`#chat-conv-avatar`, 48px) | **[CURRENT]** Not tappable. **[CLARIFY]** whether it opens the user's profile. |
+| Avatar (`#chat-conv-avatar`, 48px) + name block | Wrapped in `#chat-conv-title-btn` (`role="button"`, Enter works). **Groups [CURRENT]:** opens Group info (§5.6). **1:1 chats:** inert. **[CLARIFY]** whether it should open the user's profile. |
 | Name (`#chat-conv-name`) | Truncated. |
 | Presence (`#chat-conv-status`: dot `#chat-conv-dot` + text `#chat-conv-status-text`) | Driven by mock `online` flag: online → green dot + "Online"; offline → grey dot + "Offline"; group → dot hidden + "Group". **[MOCK]** flag. **[FUTURE]** real presence. **[CLARIFY]** last-seen wording, group header content. |
 | Search icon (`#chat-conv-search-btn`) | Toast "Coming soon". |
@@ -289,6 +292,56 @@ Contextual bottom sheet for one message. Not a generic modal: it exists only in 
 - Dark mode uses the existing `html.dark` utility overrides; only `.chat-sheet-react.is-selected` has its own dark rule. **[CLARIFY]** visual check in dark mode not performed.
 - Not covered: edit, pin, info/seen-by, select-multiple, report, "delete for everyone", reacting from the bubble (tap), emoji picker beyond the 11 listed.
 
+### 5.6 Group info & settings (`#chat-group-info-view`, view id `chat-group-info`) **[CURRENT, client-side]**
+
+Opened by tapping the avatar or name in a **group** conversation's header (`openChatGroupInfo()`); 1:1 conversations never open it. The screen belongs to the active conversation (`chatActiveConversationId`, a group): every value is rendered from that conversation object each time the screen opens, and every change is written to it, so nothing leaks to other chats. The conversation stays active while Group info and its sub-screens are open (they never call `closeChatConversation`).
+
+**Data model (on the conversation, filled by `chatEnsureGroupModel`)**
+
+| Field | Meaning |
+|---|---|
+| `members` | `[{ id, name, handle, avatar, role: 'admin' \| 'member' }]` (excludes the signed-in user) |
+| `myRole` | The signed-in user's role in this group. Groups created via §4.11: `'admin'`. Mock group `m4`: `'member'` (so both roles are exercisable). |
+| `customName` / `name` | Custom vs generated name: empty `customName` = generated from members (`chatGeneratedGroupName`); `name` is what every screen displays. A pre-existing group keeps its name as a custom name. |
+| `muted` | boolean |
+| `disappearing` | `'off' \| '24h' \| '7d' \| '90d'` |
+| `blockScreenshots` | boolean |
+| `inviteLink` | `{ enabled, code }` (link = `<origin>/chat/join/<code>`) |
+| `permissions` | `{ editInfo, addMembers }`, each `'everyone' \| 'admins'` (default `'everyone'`) |
+
+**Header:** back arrow (`#chat-group-info-back-btn`) → `closeChatGroupInfo()`: shows the conversation view without re-initialising it and restores the thread scroll offset saved on open; draft text, reply bar and active conversation are untouched. Pencil (`#chat-group-info-edit-btn`) → the rename sheet (the only group detail editable today; there is no group photo upload). Hidden for users who may not edit info.
+
+**Profile:** two overlapping member avatars (first two `members`, white ring on the front one); a single avatar when fewer than two members. Group name below (`conv.name`), blue **Change Name** link → rename sheet. Hidden unless `can(editInfo)`.
+- **Rename sheet:** input pre-filled with `customName`, placeholder = the generated name, hint "Leave empty to use the automatic name: …". Save with text → `customName` set, replaces the generated name everywhere (conversation header via `refreshChatConversationHeader`, list via `renderChatMessages`, Group info). Save empty → back to the generated name, which keeps tracking membership (§4.11, `chatSetGroupMembers`). A group with no member data (legacy) must keep a typed name ("Enter a group name.").
+
+**Quick actions** (four 64 px circles, labels below)
+
+| Button | ID | Behavior |
+|---|---|---|
+| Add | `#chat-group-info-add-btn` | `onChatGroupAdd()`. Allowed for admins, or members when `permissions.addMembers === 'everyone'` (otherwise dimmed + toast "Only admins can add people"). Opens the New group screen in **add mode** (title "Add people", button "Add", no name field, minimum 1 person, people already in the group are not listed). Add appends `role: 'member'` members via `chatSetGroupMembers` (generated name updates, custom name is kept) and returns to Group info; Cancel returns to Group info. |
+| Video | `#chat-group-info-video-btn` | **[PLACEHOLDER]** toast "Coming soon" (no calling backend). |
+| Mute | `#chat-group-info-mute-btn` | `toggleChatGroupMute()` toggles `conv.muted`; button shows bell-off + "Mute" when unmuted, bell + "Unmute" and `aria-pressed="true"` when muted. No notifications exist yet, so this records the preference only. The list-row menu's Mute (§4.8) is separate and still inert. |
+| More | `#chat-group-info-more-btn` | Sheet with **Leave group** (red) + inline confirm; leaving removes the conversation and its thread, returns to the list. |
+
+**Settings container** (rounded `bg-gray-100`, icons left, chevrons right; value shown where the reference shows one). Each opens the shared bottom sheet (`#chat-group-sheet`, Escape / backdrop closes). Indicators are re-rendered from the conversation every time, so they cannot drift.
+
+| Row | ID | Sheet / screen | Who can change |
+|---|---|---|---|
+| Media, Links, Docs | `#chat-group-info-media-btn` | Full screen `#chat-group-media-view` (§5.7) | n/a |
+| Disappearing messages (value: Off / 24 hours / 7 days / 90 days) | `#chat-group-info-disappearing-btn` | Radio list | Admins |
+| Block screenshots (value: On / Off) | `#chat-group-info-screenshots-btn` | On / Off. Stored preference only: browsers cannot block screenshots. | Admins |
+| Group invite link (value: On / Off) | `#chat-group-info-invite-btn` | On/Off; when On shows the link, **Copy link** (everyone), **Reset link** (admins). **[PLACEHOLDER]** `/chat/join/<code>` is not a real route. | Admins |
+| Permissions | `#chat-group-info-permissions-btn` | Two radio groups: who can edit group info / who can add members (All members / Admins only) | Admins |
+
+Non-admins can open every sheet but its controls are disabled with "Only admins can change this." Disappearing messages only records the setting; no message is deleted yet.
+
+**Participants** (below the settings, not in the reference): "Participants (N)" with "You" first, then members; admins carry an **Admin** tag.
+
+**Roles summary:** admin = everything. Member = rename/add only when permitted by `permissions`; everything else view-only. **[CLARIFY]** promoting/removing members, multiple admins, who may leave as last admin.
+
+### 5.7 Media, Links, Docs (`#chat-group-media-view`, view id `chat-group-media`) **[CURRENT]**
+Tabs Media / Links / Docs for the active group's thread (`chatThreadFor`). Links are URLs found in message text (sender + time shown). Media (`msg.image`) and Docs (`msg.file = { name, size }`) fill in once messages carry attachments; today they show "No … shared in this group yet." Back returns to Group info.
+
 ## 6. Navigation
 
 | From | To | Trigger |
@@ -323,6 +376,9 @@ Contextual bottom sheet for one message. Not a generic modal: it exists only in 
 | New message: no matching users | "No users found." |
 | New message: search request fails | Local contact matches still shown; "Couldn't search right now. Try again." when none |
 | New group with fewer than 2 people | Create disabled |
+| Tap header of a 1:1 conversation | Nothing |
+| Group info: member without edit permission | Pencil and Change Name hidden; Add dimmed with toast |
+| Group info: member opens an admin-only setting | Sheet shows state with disabled controls |
 | Long-press a list row (any conversation, incl. groups) | Row menu (§4.8); same four items for all. Release does not open the conversation. |
 | Long-press on a message in a group | Same sheet; reply label uses the group name (no per-sender names exist yet). |
 | Group conversation opened | **[CURRENT]** Uses the same 1:1 UI: header shows "Group" with no dot, no member count, no sender names on incoming bubbles, single avatar. **[CLARIFY]** group conversation design. |
@@ -334,7 +390,7 @@ Contextual bottom sheet for one message. Not a generic modal: it exists only in 
 - `chatMockRequestsNew`: r1–r3. `chatMockRequestsEarlier`: r4–r5. (Shown on the Message requests screen.)
 - `chatMockThreads`: threads for m1–m3. After seeding, list preview/time are overwritten from each thread's last message.
 - Avatars: DiceBear URL by handle. Presence: mock `online` flag. Message `status`: hard-coded (m1 last outgoing = `read`, m2 = `delivered`, m3 last outgoing = `read`). "Today" label: hard-coded.
-- Conversation shape: `{ id, name, handle, avatar, preview, time, unread, online?, isGroup?, members? }` (`members` and `customName` only on groups created via §4.11 (`customName` empty = generated name); conversations created via New message have `id: 'u-…'`, an empty thread and blank preview/time). Message shape: `{ from: 'me'|'them', text, time, status?: 'sent'|'delivered'|'read', replyTo?: { from, text }, forwarded?: true, reactions?: { me?: emoji, them?: emoji } }`. No message ids; messages are addressed by object identity / thread index. No mock data seeds `reactions.them`, `replyTo` or `forwarded`. List ticks derive from the thread's last message (`chatLastMessage`); conversations with no thread (accepted requests) show none. Request shape: `{ id, name, handle, avatar, preview, time }`.
+- Conversation shape: `{ id, name, handle, avatar, preview, time, unread, online?, isGroup?, members? }` (group fields (`members`, `customName`, `myRole`, `muted`, `disappearing`, `blockScreenshots`, `inviteLink`, `permissions`) are described in §5.6 and are filled by `chatEnsureGroupModel`; mock group `m4` has a custom name, `myRole: 'member'` and three members; conversations created via New message have `id: 'u-…'`, an empty thread and blank preview/time). Message shape: `{ from: 'me'|'them', text, time, status?: 'sent'|'delivered'|'read', replyTo?: { from, text }, forwarded?: true, reactions?: { me?: emoji, them?: emoji } }`. No message ids; messages are addressed by object identity / thread index. No mock data seeds `reactions.them`, `replyTo` or `forwarded`. List ticks derive from the thread's last message (`chatLastMessage`); conversations with no thread (accepted requests) show none. Request shape: `{ id, name, handle, avatar, preview, time }`.
 
 ## 9. Backend / API relationship
 
@@ -355,6 +411,7 @@ Contextual bottom sheet for one message. Not a generic modal: it exists only in 
 - Conversation view needs `#chat-conversation-view.active { display:flex !important; height:100dvh }` so the composer rides above the keyboard; `#chat-conv-scroll` needs `min-height:0`. Do not move scrolling to the document.
 - Chats list scrolls the document; keep `#chat-view.active` bottom padding for the fixed bottom nav.
 - Escape all dynamic text with `escapeHtml()` before `innerHTML` (includes reply text, reaction emoji, forward-list names).
+- Group info: keep view ids `'chat-group-info'` / `'chat-group-media'` in `showView`'s list with init hooks (`initChatGroupInfoView`, `initChatGroupMediaView`) and the `closeChatGroupSheet()` call in `showView`. Group info must only read/write the active conversation object (never module-level settings), must not call `closeChatConversation()`, and Back must go through `closeChatGroupInfo()` so conversation state is preserved. Group name display always reads `conv.name`; change names only via the rename sheet or `chatSetGroupMembers`. New group screen has two modes (create / add people) driven by `ngAddTarget` in `chat-new-message.js`; `openChatNewGroup()` must reset it to `null`.
 - New message / New group: keep view ids `'chat-new-message'` and `'chat-new-group'` in `showView`'s list with their init hooks (`initChatNewMessageView`, `initChatNewGroupView`); keep `chat-new-message.js` after `chat.js` (uses `chatMockMessages`, `chatMockThreads`, `chatAvatarUrl`, `openChatConversation`, `chatListRestoreOnce`, `chatListScrollY`). Cancel-to-list must go through `closeChatNewMessage()` so state is restored; do not call `showView('chat')` directly from these screens.
 - Keep `#chat-fab` as a single element outside `#chat-messages-list` (never render it inside the list or per filter) and keep its bottom offset on `--bottom-nav-h`; keep the `#chat-view.active` bottom padding in step with the FAB size.
 - List rows must keep class `chat-row` and `data-chat-row-id`; the row-menu handler depends on both. Keep `chat-row-menu.js` after `chat.js` in `_trailer.html` (uses `chatMockMessages`). Do not add click handlers to rows that would fire after a long-press (the menu swallows the release click in the capture phase on `#chat-messages-list`).
@@ -383,7 +440,7 @@ Contextual bottom sheet for one message. Not a generic modal: it exists only in 
 
 ## 12. Temporary (frontend still in design)
 
-All of §8 (mock data), message actions being local-only (reactions, forwards, deletes lost on reload; no "them" reactions), static "Today" divider, mock presence flag and message status values, "Coming soon" toasts (conversation search, ⋮, GIF, add file, camera), list ⋮ menu having only the Requests item, row-menu items (§4.8) being inert (they only dismiss), New message / New group conversations being in-memory only and the empty-query user list being existing contacts (§4.10), group conversations reusing the 1:1 UI, unsorted list, state reset on every list open.
+All of §8 (mock data), message actions being local-only (reactions, forwards, deletes lost on reload; no "them" reactions), static "Today" divider, mock presence flag and message status values, "Coming soon" toasts (conversation search, ⋮, GIF, add file, camera), list ⋮ menu having only the Requests item, row-menu items (§4.8) being inert (they only dismiss), Group info settings (mute, disappearing, screenshots, invite link, permissions), Video (toast) and Media/Docs (no attachments yet) being stored/placeholder only, New message / New group conversations being in-memory only and the empty-query user list being existing contacts (§4.10), group conversations reusing the 1:1 UI, unsorted list, state reset on every list open.
 
 ## 13. Open items (requires owner decision or implementation)
 
@@ -444,12 +501,38 @@ Exact `id` of every control and container. `<…>` = dynamic part. "Selector" = 
 | `#chat-new-message-list` | User list | click on `[data-user-key]` → `openDirectConversation` |
 | `#chat-new-group-view` | New group screen root | `showView('chat-new-group')` → `initChatNewGroupView()` |
 | `#chat-new-group-cancel-btn` | Cancel | `closeChatNewGroup()` |
-| `#chat-new-group-create-btn` | Create | `createChatGroup()` |
+| `#chat-new-group-create-btn` | Create ("Add" in add mode) | `submitChatNewGroup()` |
 | `#chat-new-group-name` | Group name field | — |
 | `#chat-new-group-chips` | Selected participant chips | click on `[data-chip-key]` removes |
 | `#chat-new-group-search` | Participant search | live filter |
 | `#chat-new-group-hint` | Selection hint | — |
 | `#chat-new-group-list` | Selectable user list | click on `[data-user-key]` toggles |
+
+**Group info (`chat_group_info.html`)**
+
+| ID | Element | Handler |
+|---|---|---|
+| `#chat-group-info-view` | Group info root | `showView('chat-group-info')` → `initChatGroupInfoView()` |
+| `#chat-group-info-back-btn` | Back | `closeChatGroupInfo()` |
+| `#chat-group-info-edit-btn` | Pencil | `openChatGroupSheet('rename')` |
+| `#chat-group-info-avatar` / `#chat-group-info-name` | Picture / name | rendered by JS |
+| `#chat-group-info-change-name-btn` | Change Name | `openChatGroupSheet('rename')` |
+| `#chat-group-info-add-btn` | Add | `onChatGroupAdd()` |
+| `#chat-group-info-video-btn` | Video | toast |
+| `#chat-group-info-mute-btn` (`-mute-icon`, `-mute-label`) | Mute / Unmute | `toggleChatGroupMute()` |
+| `#chat-group-info-more-btn` | More | `openChatGroupSheet('more')` |
+| `#chat-group-info-media-btn` | Media, Links, Docs | `openChatGroupMedia()` |
+| `#chat-group-info-disappearing-btn` / `-value` | Disappearing messages | `openChatGroupSheet('disappearing')` |
+| `#chat-group-info-screenshots-btn` / `-value` | Block screenshots | `openChatGroupSheet('screenshots')` |
+| `#chat-group-info-invite-btn` / `-value` | Group invite link | `openChatGroupSheet('invite')` |
+| `#chat-group-info-permissions-btn` | Permissions | `openChatGroupSheet('permissions')` |
+| `#chat-group-info-participants-title` / `-participants` | Participants | rendered by JS |
+| `#chat-group-sheet-backdrop` / `#chat-group-sheet` / `-title` / `-body` | Shared sheet | `closeChatGroupSheet()`; actions via `data-act` |
+| `#chat-group-rename-input` / `-save-btn` / `-cancel-btn` / `-error` | Rename sheet | `saveName` |
+| `#chat-group-leave-btn` / `-leave-confirm-btn` / `-leave-cancel-btn` | Leave group (More sheet) | removes the group |
+| `#chat-group-invite-copy-btn` / `-reset-btn` | Invite link actions | copy / reset |
+| `#chat-group-media-view` / `-back-btn` / `-tab-media` / `-tab-links` / `-tab-docs` / `-content` | Media, Links, Docs | `closeChatGroupMedia()` |
+| `#chat-new-group-title` | New group / Add people title | set by `initChatNewGroupView` |
 
 **Message requests (`chat_requests.html`)**
 
@@ -469,6 +552,7 @@ Exact `id` of every control and container. `<…>` = dynamic part. "Selector" = 
 |---|---|---|
 | `#chat-conversation-view` | Screen root | `showView('chat-conversation')` |
 | `#chat-conv-back-btn` | Back arrow | `closeChatConversation()` |
+| `#chat-conv-title-btn` | Header avatar + name wrapper | `openChatGroupInfo()` (groups only) |
 | `#chat-conv-avatar` / `#chat-conv-name` | Header avatar / name | — |
 | `#chat-conv-status` / `#chat-conv-dot` / `#chat-conv-status-text` | Presence container / dot / text | — |
 | `#chat-conv-search-btn` | Header search icon | Toast "Coming soon" |

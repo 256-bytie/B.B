@@ -7,7 +7,13 @@ let chatMockMessages = [
 	{ id: 'm1', name: 'Persistence Tester', handle: 'persistence-tester', avatar: null, preview: 'Hey! How are you doing?', time: '23:15', unread: 2, online: true },
 	{ id: 'm2', name: 'Test User', handle: 'test-user', avatar: null, preview: "Sure, let's meet tomorrow.", time: '20:10', unread: 1, online: false },
 	{ id: 'm3', name: 'Not Lvke', handle: 'not-lvke', avatar: null, preview: 'Alright, thanks!', time: '18:45', unread: 0, online: true },
-	{ id: 'm4', name: 'Design Hackathon 2026', handle: 'design-hackathon-2026', avatar: null, preview: 'Olivia sent a photo', time: '17:20', unread: 3, isGroup: true },
+	{ id: 'm4', name: 'Design Hackathon 2026', handle: 'design-hackathon-2026', avatar: null, preview: 'Olivia sent a photo', time: '17:20', unread: 3, isGroup: true,
+		customName: 'Design Hackathon 2026', myRole: 'member',
+		members: [
+			{ id: null, name: 'Olivia', handle: 'olivia', avatar: null, role: 'admin' },
+			{ id: null, name: 'Test User', handle: 'test-user', avatar: null, role: 'member' },
+			{ id: null, name: 'Not Lvke', handle: 'not-lvke', avatar: null, role: 'member' }
+		] },
 ];
 
 // Active Messages filter: 'all' | 'unread' | 'groups'.
@@ -75,6 +81,30 @@ function chatGeneratedGroupName(members) {
 function chatSetGroupMembers(conv, members) {
 	conv.members = members;
 	if (!conv.customName) conv.name = chatGeneratedGroupName(members);
+}
+
+// Fills in every per-group field (roles, settings) a group may be missing, so
+// the Group info screen can rely on them. Idempotent. A group that predates the
+// custom/generated split keeps its current name as a custom name.
+// myRole: 'admin' | 'member' (the signed-in user's role in THIS group).
+function chatEnsureGroupModel(conv) {
+	if (!conv || !conv.isGroup) return conv;
+	if (conv.customName === undefined) conv.customName = conv.name;
+	conv.members = conv.members || [];
+	conv.myRole = conv.myRole || 'member';
+	conv.muted = !!conv.muted;
+	conv.disappearing = conv.disappearing || 'off'; // 'off' | '24h' | '7d' | '90d'
+	conv.blockScreenshots = !!conv.blockScreenshots;
+	conv.inviteLink = conv.inviteLink || { enabled: false, code: '' };
+	conv.permissions = Object.assign({ editInfo: 'everyone', addMembers: 'everyone' }, conv.permissions); // 'everyone' | 'admins'
+	return conv;
+}
+
+// Conversation header (avatar + name) for a conversation; also called after a rename.
+function refreshChatConversationHeader(conv) {
+	document.getElementById('chat-conv-avatar').src = chatAvatarUrl(conv.handle, conv.avatar);
+	document.getElementById('chat-conv-avatar').alt = conv.name;
+	document.getElementById('chat-conv-name').textContent = conv.name;
 }
 
 function chatAvatarUrl(handle, avatar) {
@@ -349,9 +379,7 @@ function openChatConversation(id) {
 	clearChatReplyTarget(); // a pending reply never carries into another thread
 	conv.unread = 0; // opening a thread reads it
 
-	document.getElementById('chat-conv-avatar').src = chatAvatarUrl(conv.handle, conv.avatar);
-	document.getElementById('chat-conv-avatar').alt = conv.name;
-	document.getElementById('chat-conv-name').textContent = conv.name;
+	refreshChatConversationHeader(conv);
 	// Presence comes from the mock `online` flag (groups show no presence).
 	const online = !!conv.online && !conv.isGroup;
 	document.getElementById('chat-conv-status-text').textContent = conv.isGroup ? 'Group' : (online ? 'Online' : 'Offline');

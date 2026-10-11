@@ -11,6 +11,8 @@
 		<button id="chat-conv-back-btn" type="button" class="w-10 h-10 -ml-1 flex items-center justify-center text-gray-700 active:scale-95 transition-transform duration-100 shrink-0" onclick="closeChatConversation()" aria-label="Back">
 			<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M10 19l-7-7m0 0l7-7m-7 7h18" stroke-linecap="round" stroke-linejoin="round"></path></svg>
 		</button>
+		<!-- Avatar + name: for groups this opens Group info (chat-group-info.js); inert for 1:1 chats. -->
+		<div id="chat-conv-title-btn" class="flex items-center flex-1 min-w-0 cursor-pointer" role="button" tabindex="0" onclick="openChatGroupInfo()" onkeydown="if (event.key === 'Enter') openChatGroupInfo()">
 		<img id="chat-conv-avatar" src="" alt="" class="w-12 h-12 rounded-full object-cover bg-gray-100 shrink-0 ml-1">
 		<div class="flex-1 min-w-0 ml-3">
 			<h1 id="chat-conv-name" class="text-[18px] font-bold text-gray-900 leading-tight truncate"></h1>
@@ -18,6 +20,7 @@
 				<span id="chat-conv-dot" class="w-2.5 h-2.5 rounded-full bg-green-500 mr-1.5 shrink-0"></span>
 				<span id="chat-conv-status-text">Online</span>
 			</p>
+		</div>
 		</div>
 		<button id="chat-conv-search-btn" type="button" class="w-10 h-10 flex items-center justify-center text-gray-700 active:scale-95 transition-transform duration-100 shrink-0" onclick="showToast('Coming soon')" aria-label="Search in conversation">
 			<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" stroke-linecap="round" stroke-linejoin="round"></path></svg>

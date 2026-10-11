@@ -41,7 +41,8 @@ function apiFetch(url, options = {}) {
 function showView(viewName, { skipUrlSync = false } = {}) {
     if (typeof closeChatMenu === 'function') closeChatMenu(); // never leave the chat ⋮ menu open across screens
     if (typeof closeChatRowMenu === 'function') closeChatRowMenu(); // ...or the long-press row menu
-    const views = ['login', 'signup', 'feed', 'profile', 'edit-profile', 'user-profile', 'create-post', 'businesses', 'courses', 'gpa-calculator', 'chat', 'chat-conversation', 'chat-requests', 'chat-new-message', 'chat-new-group', 'library', 'library-contribute', 'search', 'wallet', 'community', 'community-members', 'community-edit', 'community-create', 'community-browse'];
+    if (typeof closeChatGroupSheet === 'function') closeChatGroupSheet(); // ...or a Group info sheet
+    const views = ['login', 'signup', 'feed', 'profile', 'edit-profile', 'user-profile', 'create-post', 'businesses', 'courses', 'gpa-calculator', 'chat', 'chat-conversation', 'chat-requests', 'chat-new-message', 'chat-new-group', 'chat-group-info', 'chat-group-media', 'library', 'library-contribute', 'search', 'wallet', 'community', 'community-members', 'community-edit', 'community-create', 'community-browse'];
     views.forEach(v => {
         const view = document.getElementById(v + '-view');
         if (view) {
@@ -126,6 +127,12 @@ function showView(viewName, { skipUrlSync = false } = {}) {
     }
     if (viewName === 'chat-new-group') {
         initChatNewGroupView();
+    }
+    if (viewName === 'chat-group-info') {
+        initChatGroupInfoView();
+    }
+    if (viewName === 'chat-group-media') {
+        initChatGroupMediaView();
     }
 
     // Re-render the Message Requests list each time that screen opens

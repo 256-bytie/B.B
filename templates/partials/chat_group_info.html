@@ -1,0 +1,121 @@
+<!-- BEGIN: Chat Group Info + Media/Links/Docs Views + Group Sheet -->
+<!-- Opened by tapping the group avatar/name in the conversation header
+     (#chat-conv-title-btn -> openChatGroupInfo in chat-group-info.js). Everything
+     here belongs to ONE group: the conversation that is active
+     (chatActiveConversationId); all values are rendered from that conversation's
+     data each time the screen opens. Full-screen views (bottom nav hidden).
+       #chat-group-info-view   picture, name, quick actions, settings, participants
+       #chat-group-media-view  Media / Links / Docs tabs for this group's thread
+       #chat-group-sheet       one bottom sheet reused for rename, More,
+                               disappearing messages, screenshots, invite link, permissions -->
+<div id="chat-group-info-view" class="view-section bg-white min-h-screen">
+	<header class="sticky top-0 z-10 bg-white flex items-center justify-between px-3 py-3">
+		<button id="chat-group-info-back-btn" type="button" class="w-10 h-10 -ml-1 flex items-center justify-center text-gray-900 active:scale-95 transition-transform duration-100" onclick="closeChatGroupInfo()" aria-label="Back">
+			<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M10 19l-7-7m0 0l7-7m-7 7h18" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+		</button>
+		<button id="chat-group-info-edit-btn" type="button" class="w-10 h-10 -mr-1 flex items-center justify-center text-gray-900 active:scale-95 transition-transform duration-100" onclick="openChatGroupSheet('rename')" aria-label="Edit group">
+			<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z"></path></svg>
+		</button>
+	</header>
+
+	<main class="pb-12">
+		<!-- Profile -->
+		<section class="flex flex-col items-center px-6 pt-4 text-center">
+			<div id="chat-group-info-avatar" class="relative w-[116px] h-[104px]"></div>
+			<h1 id="chat-group-info-name" class="mt-6 text-[22px] font-bold text-gray-900 leading-tight break-words max-w-full"></h1>
+			<button id="chat-group-info-change-name-btn" type="button" class="mt-1 text-[16px] text-[#1d9bf0] active:opacity-60" onclick="openChatGroupSheet('rename')">Change Name</button>
+		</section>
+
+		<!-- Quick actions -->
+		<section class="flex justify-around px-3 mt-8">
+			<div class="flex flex-col items-center w-20">
+				<button id="chat-group-info-add-btn" type="button" class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center text-gray-900 active:bg-gray-200 transition-colors" onclick="onChatGroupAdd()" aria-label="Add people">
+					<svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M19 8v6"></path><path d="M22 11h-6"></path></svg>
+				</button>
+				<span class="mt-2 text-[15px] text-gray-900">Add</span>
+			</div>
+			<div class="flex flex-col items-center w-20">
+				<button id="chat-group-info-video-btn" type="button" class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center text-gray-900 active:bg-gray-200 transition-colors" onclick="showToast('Coming soon')" aria-label="Video call">
+					<svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"></path><rect x="2" y="6" width="14" height="12" rx="2"></rect></svg>
+				</button>
+				<span class="mt-2 text-[15px] text-gray-900">Video</span>
+			</div>
+			<div class="flex flex-col items-center w-20">
+				<button id="chat-group-info-mute-btn" type="button" class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center text-gray-900 active:bg-gray-200 transition-colors" onclick="toggleChatGroupMute()" aria-pressed="false" aria-label="Mute group">
+					<svg id="chat-group-info-mute-icon" class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"></svg>
+				</button>
+				<span id="chat-group-info-mute-label" class="mt-2 text-[15px] text-gray-900">Mute</span>
+			</div>
+			<div class="flex flex-col items-center w-20">
+				<button id="chat-group-info-more-btn" type="button" class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center text-gray-900 active:bg-gray-200 transition-colors" onclick="openChatGroupSheet('more')" aria-label="More">
+					<svg class="w-7 h-7" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="5.5" cy="12" r="1.75"></circle><circle cx="12" cy="12" r="1.75"></circle><circle cx="18.5" cy="12" r="1.75"></circle></svg>
+				</button>
+				<span class="mt-2 text-[15px] text-gray-900">More</span>
+			</div>
+		</section>
+
+		<!-- Settings -->
+		<section class="mx-4 mt-8 bg-gray-100 rounded-[20px] px-4">
+			<button id="chat-group-info-media-btn" type="button" class="w-full flex items-center py-[18px] text-left border-b border-gray-200 active:opacity-60" onclick="openChatGroupMedia()">
+				<svg class="w-6 h-6 text-gray-900 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M18 22H4a2 2 0 0 1-2-2V6"></path><path d="m22 13-1.296-1.296a2.41 2.41 0 0 0-3.408 0L11 18"></path><circle cx="12" cy="8" r="2"></circle><rect x="6" y="2" width="16" height="16" rx="2"></rect></svg>
+				<span class="flex-1 ml-4 text-[17px] text-gray-900">Media, Links, Docs</span>
+				<svg class="w-5 h-5 text-gray-500 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+			</button>
+			<button id="chat-group-info-disappearing-btn" type="button" class="w-full flex items-center py-[18px] text-left border-b border-gray-200 active:opacity-60" onclick="openChatGroupSheet('disappearing')">
+				<svg class="w-6 h-6 text-gray-900 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+				<span class="flex-1 ml-4 text-[17px] text-gray-900">Disappearing messages</span>
+				<span id="chat-group-info-disappearing-value" class="text-[17px] text-gray-500 mr-2"></span>
+				<svg class="w-5 h-5 text-gray-500 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+			</button>
+			<button id="chat-group-info-screenshots-btn" type="button" class="w-full flex items-center py-[18px] text-left border-b border-gray-200 active:opacity-60" onclick="openChatGroupSheet('screenshots')">
+				<svg class="w-6 h-6 text-gray-900 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><circle cx="12" cy="12" r="3"></circle></svg>
+				<span class="flex-1 ml-4 text-[17px] text-gray-900">Block screenshots</span>
+				<span id="chat-group-info-screenshots-value" class="text-[17px] text-gray-500 mr-2"></span>
+				<svg class="w-5 h-5 text-gray-500 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+			</button>
+			<button id="chat-group-info-invite-btn" type="button" class="w-full flex items-center py-[18px] text-left border-b border-gray-200 active:opacity-60" onclick="openChatGroupSheet('invite')">
+				<svg class="w-6 h-6 text-gray-900 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M9 17H7A5 5 0 0 1 7 7h2"></path><path d="M15 7h2a5 5 0 1 1 0 10h-2"></path><path d="M8 12h8"></path></svg>
+				<span class="flex-1 ml-4 text-[17px] text-gray-900">Group invite link</span>
+				<span id="chat-group-info-invite-value" class="text-[17px] text-gray-500 mr-2"></span>
+				<svg class="w-5 h-5 text-gray-500 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+			</button>
+			<button id="chat-group-info-permissions-btn" type="button" class="w-full flex items-center py-[18px] text-left active:opacity-60" onclick="openChatGroupSheet('permissions')">
+				<svg class="w-6 h-6 text-gray-900 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><circle cx="12" cy="10" r="2"></circle><path d="M8.5 16a3.5 3.5 0 0 1 7 0"></path></svg>
+				<span class="flex-1 ml-4 text-[17px] text-gray-900">Permissions</span>
+				<svg class="w-5 h-5 text-gray-500 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+			</button>
+		</section>
+
+		<!-- Participants (rendered from the group's members + the signed-in user's role) -->
+		<section class="mt-8 px-4">
+			<h2 id="chat-group-info-participants-title" class="text-[17px] font-bold text-gray-900 mb-1"></h2>
+			<div id="chat-group-info-participants"></div>
+		</section>
+	</main>
+</div>
+
+<div id="chat-group-media-view" class="view-section bg-white min-h-screen">
+	<header class="sticky top-0 z-10 bg-white border-b border-gray-100">
+		<div class="relative flex items-center justify-center px-3 py-3">
+			<button id="chat-group-media-back-btn" type="button" class="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 -ml-1 flex items-center justify-center text-gray-900 active:scale-95 transition-transform duration-100" onclick="closeChatGroupMedia()" aria-label="Back">
+				<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M10 19l-7-7m0 0l7-7m-7 7h18" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+			</button>
+			<h1 class="text-base font-bold text-gray-900">Media, Links, Docs</h1>
+		</div>
+		<div class="flex" role="tablist">
+			<button id="chat-group-media-tab-media" type="button" class="flex-1 py-3 text-[15px] font-semibold" role="tab" data-tab="media">Media</button>
+			<button id="chat-group-media-tab-links" type="button" class="flex-1 py-3 text-[15px] font-semibold" role="tab" data-tab="links">Links</button>
+			<button id="chat-group-media-tab-docs" type="button" class="flex-1 py-3 text-[15px] font-semibold" role="tab" data-tab="docs">Docs</button>
+		</div>
+	</header>
+	<main id="chat-group-media-content" class="bg-white"></main>
+</div>
+
+<!-- One bottom sheet, filled by JS per kind (see openChatGroupSheet) -->
+<div id="chat-group-sheet-backdrop" class="hidden fixed inset-0 z-40 bg-black/30" aria-hidden="true"></div>
+<div id="chat-group-sheet" class="hidden fixed left-0 right-0 bottom-0 z-50 bg-white rounded-t-[24px] shadow-[0_-8px_24px_rgba(0,0,0,0.12)] max-w-[430px] mx-auto outline-none" role="dialog" aria-modal="true" aria-labelledby="chat-group-sheet-title" tabindex="-1">
+	<div class="pt-2.5 pb-1.5"><div class="w-12 h-1 bg-gray-200 rounded-full mx-auto"></div></div>
+	<h2 id="chat-group-sheet-title" class="px-5 pt-2 pb-1 text-[18px] font-bold text-gray-900"></h2>
+	<div id="chat-group-sheet-body" class="px-2 pb-[calc(1rem+env(safe-area-inset-bottom,0px))]"></div>
+</div>
+<!-- END: Chat Group Info + Media/Links/Docs Views + Group Sheet -->

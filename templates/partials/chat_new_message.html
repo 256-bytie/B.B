@@ -36,8 +36,8 @@
 	<header class="bg-white sticky top-0 z-10 w-full border-b border-gray-100">
 		<div class="relative flex items-center justify-center px-4 py-3">
 			<button id="chat-new-group-cancel-btn" type="button" class="absolute left-4 top-1/2 -translate-y-1/2 text-[15px] text-gray-900 active:opacity-60" onclick="closeChatNewGroup()">Cancel</button>
-			<h1 class="text-base font-bold text-gray-900">New group</h1>
-			<button id="chat-new-group-create-btn" type="button" class="absolute right-4 top-1/2 -translate-y-1/2 text-[15px] font-semibold text-brand-red disabled:text-gray-400 disabled:cursor-not-allowed active:opacity-60" onclick="createChatGroup()" disabled>Create</button>
+			<h1 id="chat-new-group-title" class="text-base font-bold text-gray-900">New group</h1>
+			<button id="chat-new-group-create-btn" type="button" class="absolute right-4 top-1/2 -translate-y-1/2 text-[15px] font-semibold text-brand-red disabled:text-gray-400 disabled:cursor-not-allowed active:opacity-60" onclick="submitChatNewGroup()" disabled>Create</button>
 		</div>
 		<div class="px-4 pb-2 space-y-2">
 			<input id="chat-new-group-name" type="text" maxlength="50" class="w-full bg-gray-100 rounded-full px-4 py-2.5 text-[15px] text-gray-800 placeholder:text-gray-500 border-none outline-none focus:ring-0" placeholder="Group name (optional)" autocomplete="off" aria-label="Group name">
