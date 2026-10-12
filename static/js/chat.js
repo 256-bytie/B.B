@@ -1,67 +1,25 @@
-// Chat view + conversation screen - mock-data-only for this pass (see HANDOVER.md §3/§5).
-// No backend calls here: two lists (Messages on the Chats screen, Message
-// Requests on their own screen) are seeded from inline mock arrays and mutated
-// client-side only. State resets on reload.
+// Chat view + conversation screen.
+//
+// Direct (1:1) conversations are REAL: loaded from /api/chat/* and kept live by
+// long-polling (chat-sync.js). Their conversation objects carry `remote: true`
+// (id 'd<serverId>', `serverId`, `userId`); their threads hold server messages.
+// Groups and the other UI-only features (group info, row menu actions, message
+// requests) are still client-side only: they start EMPTY, nothing is seeded, and
+// they are lost on reload. See docs/CHATS_FLOW_DOCUMENTATION.md.
 
-let chatMockMessages = [
-	{ id: 'm1', name: 'Persistence Tester', handle: 'persistence-tester', avatar: null, preview: 'Hey! How are you doing?', time: '23:15', unread: 2, online: true },
-	{ id: 'm2', name: 'Test User', handle: 'test-user', avatar: null, preview: "Sure, let's meet tomorrow.", time: '20:10', unread: 1, online: false },
-	{ id: 'm3', name: 'Not Lvke', handle: 'not-lvke', avatar: null, preview: 'Alright, thanks!', time: '18:45', unread: 0, online: true },
-	{ id: 'm4', name: 'Design Hackathon 2026', handle: 'design-hackathon-2026', avatar: null, preview: 'Olivia sent a photo', time: '17:20', unread: 3, isGroup: true,
-		customName: 'Design Hackathon 2026', myRole: 'member',
-		members: [
-			{ id: null, name: 'Olivia', handle: 'olivia', avatar: null, role: 'admin' },
-			{ id: null, name: 'Test User', handle: 'test-user', avatar: null, role: 'member' },
-			{ id: null, name: 'Not Lvke', handle: 'not-lvke', avatar: null, role: 'member' }
-		] },
-];
+let chatConversations = [];
 
 // Active Messages filter: 'all' | 'unread' | 'groups'.
 let chatActiveFilter = 'all';
 
-let chatMockRequestsNew = [
-	{ id: 'r1', name: 'Emma Johnson', handle: 'emma-johnson', avatar: null, preview: 'Hi! I came across your profile and wanted to say hello.', time: '22:30' },
-	{ id: 'r2', name: 'Daniel Lee', handle: 'daniel-lee', avatar: null, preview: "Hey, I'd like to connect with you.", time: '21:15' },
-	{ id: 'r3', name: 'Sophia Brown', handle: 'sophia-brown', avatar: null, preview: 'Hello! Can we chat?', time: '19:45' },
-];
+// Message requests have no backend yet: the screen shows its empty state.
+let chatRequestsNew = [];
+let chatRequestsEarlier = [];
 
-let chatMockRequestsEarlier = [
-	{ id: 'r4', name: 'Liam Wilson', handle: 'liam-wilson', avatar: null, preview: 'Sent you a message', time: 'Yesterday' },
-	{ id: 'r5', name: 'Olivia Martinez', handle: 'olivia-martinez', avatar: null, preview: 'Sent you a message', time: '2d ago' },
-];
-
-// Hardcoded threads, keyed by chatMockMessages id. from: 'them' | 'me'.
-// A conversation with no entry here (e.g. an accepted request) falls back to
-// a single incoming message built from its preview (chatThreadFor). The list
-// row's preview/time are derived from the thread's last message at seed time.
-const chatMockThreads = {
-	m1: [
-		{ from: 'them', text: 'Hey! How are you doing?', time: '23:15' },
-		{ from: 'me', text: "I'm doing well, thanks! How about you?", time: '23:16' },
-		{ from: 'them', text: "I'm good too. Just working on a project right now.", time: '23:17' },
-		{ from: 'me', text: "That's great! What kind of project is it?", time: '23:18' },
-		{ from: 'them', text: "It's a mobile app. Almost done with the first version.", time: '23:19' },
-		{ from: 'me', text: "Nice! Can't wait to see it.", time: '23:20', status: 'read' },
-	],
-	m2: [
-		{ from: 'them', text: 'Are you free tomorrow?', time: '20:08' },
-		{ from: 'me', text: 'I think so. What time works for you?', time: '20:09', status: 'delivered' },
-		{ from: 'them', text: "Sure, let's meet tomorrow.", time: '20:10' },
-	],
-	m3: [
-		{ from: 'me', text: 'Just sent over the notes.', time: '18:43', status: 'read' },
-		{ from: 'them', text: 'Alright, thanks!', time: '18:45' },
-	],
-};
-
-// Keep the Messages list consistent with each thread's last message.
-chatMockMessages.forEach(m => {
-	const thread = chatMockThreads[m.id];
-	if (thread && thread.length) {
-		m.preview = thread[thread.length - 1].text;
-		m.time = thread[thread.length - 1].time;
-	}
-});
+// Threads keyed by conversation id. from: 'them' | 'me'.
+// Remote DM message: { id, from, text, time, createdAt, clientId, state }
+// where state is 'sent' | 'sending' | 'failed' (id is null until the server confirms).
+const chatThreads = {};
 
 // ---- Group names ----
 // A group is either user-named (`customName` set: always kept) or system-named
@@ -125,7 +83,7 @@ function chatStatusIconHtml(status, sizeClass) {
 // Last message of a conversation's thread, or null if it has no thread yet
 // (e.g. an accepted request: its preview is an incoming message).
 function chatLastMessage(conv) {
-	const thread = chatMockThreads[conv.id];
+	const thread = chatThreads[conv.id];
 	return thread && thread.length ? thread[thread.length - 1] : null;
 }
 
@@ -143,6 +101,7 @@ function initChatView() {
 		chatListRestoreOnce = false;
 		updateChatFilterUi();
 		renderChatMessages(); // reads the still-intact search field + active filter
+		chatSyncInit();
 		return;
 	}
 	document.getElementById('chat-search-row').classList.add('hidden');
@@ -151,6 +110,7 @@ function initChatView() {
 	chatActiveFilter = 'all';
 	updateChatFilterUi();
 	renderChatMessages();
+	chatSyncInit(); // load real conversations + start live updates
 }
 
 // ---- Header "more options" menu (⋮) ----
@@ -229,22 +189,29 @@ function renderChatMessages(query) {
 		query = input ? input.value : '';
 	}
 	const q = (query || '').trim().toLowerCase();
-	let rows = chatMockMessages;
+	// Most recent activity first (remote: last message time; local groups: creation time).
+	let rows = chatConversations.slice().sort((a, b) => (b.activity || 0) - (a.activity || 0));
 	if (chatActiveFilter === 'unread') rows = rows.filter(m => m.unread > 0);
 	else if (chatActiveFilter === 'groups') rows = rows.filter(m => m.isGroup);
 	if (q) rows = rows.filter(m => m.name.toLowerCase().includes(q) || m.preview.toLowerCase().includes(q));
 
 	if (rows.length === 0) {
-		const msg = q ? 'No messages found.'
-			: chatActiveFilter === 'unread' ? 'No unread messages.'
-			: chatActiveFilter === 'groups' ? 'No group chats yet.'
-			: 'No messages found.';
-		container.innerHTML = `<p class="text-center text-sm text-gray-400 pt-16">${msg}</p>`;
+		if (chatListStatus === 'loading' && chatConversations.length === 0) {
+			container.innerHTML = '<p id="chat-list-loading" class="text-center text-sm text-gray-400 pt-16">Loading conversations\u2026</p>';
+		} else if (chatListStatus === 'error' && chatConversations.length === 0) {
+			container.innerHTML = '<div id="chat-list-error" class="text-center pt-16 px-6"><p class="text-sm text-gray-500">Couldn\u2019t load your conversations.</p><button id="chat-list-retry-btn" type="button" class="mt-3 px-4 py-2 rounded-full bg-gray-100 text-sm font-semibold text-gray-900 active:bg-gray-200" onclick="chatReloadConversations()">Try again</button></div>';
+		} else {
+			const msg = q ? 'No messages found.'
+				: chatActiveFilter === 'unread' ? 'No unread messages.'
+				: chatActiveFilter === 'groups' ? 'No group chats yet.'
+				: 'No conversations yet. Tap the chat button to start one.';
+			container.innerHTML = `<p class="text-center text-sm text-gray-400 px-6 pt-16">${msg}</p>`;
+		}
 		return;
 	}
 
 	container.innerHTML = rows.map(m => {
-		const last = chatLastMessage(m);
+		const last = m.remote ? null : chatLastMessage(m); // real DMs show no delivery ticks
 		const statusIcon = last && last.from === 'me' ? chatStatusIconHtml(last.status, 'w-4 h-4 mr-1') : '';
 		return `
 		<div id="chat-row-${m.id}" data-chat-row-id="${m.id}" class="chat-row flex items-center px-4 py-3 border-b border-gray-100 cursor-pointer active:bg-gray-50" role="button" tabindex="0" onclick="openChatConversation('${m.id}')" onkeydown="if (event.key === 'Enter') openChatConversation('${m.id}')">
@@ -281,7 +248,7 @@ function initChatRequestsView() {
 function renderChatRequests() {
 	const emptyState = document.getElementById('chat-requests-empty');
 	const list = document.getElementById('chat-requests-list');
-	const hasRequests = chatMockRequestsNew.length > 0 || chatMockRequestsEarlier.length > 0;
+	const hasRequests = chatRequestsNew.length > 0 || chatRequestsEarlier.length > 0;
 
 	if (!hasRequests) {
 		emptyState.classList.remove('hidden');
@@ -300,7 +267,7 @@ function renderChatRequests() {
 		`;
 	};
 
-	list.innerHTML = section('New requests', chatMockRequestsNew) + section('Earlier', chatMockRequestsEarlier);
+	list.innerHTML = section('New requests', chatRequestsNew) + section('Earlier', chatRequestsEarlier);
 }
 
 function chatRequestRow(r) {
@@ -331,18 +298,18 @@ function chatRequestRow(r) {
 }
 
 function findChatRequest(id) {
-	return chatMockRequestsNew.find(r => r.id === id) || chatMockRequestsEarlier.find(r => r.id === id);
+	return chatRequestsNew.find(r => r.id === id) || chatRequestsEarlier.find(r => r.id === id);
 }
 
 function removeChatRequest(id) {
-	chatMockRequestsNew = chatMockRequestsNew.filter(r => r.id !== id);
-	chatMockRequestsEarlier = chatMockRequestsEarlier.filter(r => r.id !== id);
+	chatRequestsNew = chatRequestsNew.filter(r => r.id !== id);
+	chatRequestsEarlier = chatRequestsEarlier.filter(r => r.id !== id);
 }
 
 function acceptChatRequest(id) {
 	const request = findChatRequest(id);
 	if (request) {
-		chatMockMessages.unshift({
+		chatConversations.unshift({
 			id: `m-${request.id}`,
 			name: request.name,
 			handle: request.handle,
@@ -366,32 +333,33 @@ function declineChatRequest(id) {
 let chatActiveConversationId = null;
 
 function chatThreadFor(conv) {
-	if (!chatMockThreads[conv.id]) {
-		chatMockThreads[conv.id] = [{ from: 'them', text: conv.preview, time: conv.time }];
+	if (!chatThreads[conv.id]) {
+		// Real DMs start empty and are filled from the server. A local conversation
+		// with a preview (e.g. an accepted request) gets that preview as its message.
+		chatThreads[conv.id] = (!conv.remote && conv.preview) ? [{ from: 'them', text: conv.preview, time: conv.time }] : [];
 	}
-	return chatMockThreads[conv.id];
+	return chatThreads[conv.id];
 }
 
 function openChatConversation(id) {
-	const conv = chatMockMessages.find(m => m.id === id);
+	const conv = chatConversations.find(m => m.id === id);
 	if (!conv) return;
 	chatActiveConversationId = id;
 	clearChatReplyTarget(); // a pending reply never carries into another thread
 	conv.unread = 0; // opening a thread reads it
 
 	refreshChatConversationHeader(conv);
-	// Presence comes from the mock `online` flag (groups show no presence).
-	const online = !!conv.online && !conv.isGroup;
-	document.getElementById('chat-conv-status-text').textContent = conv.isGroup ? 'Group' : (online ? 'Online' : 'Offline');
-	const dot = document.getElementById('chat-conv-dot');
-	dot.classList.toggle('bg-green-500', online);
-	dot.classList.toggle('bg-gray-400', !online);
-	dot.classList.toggle('hidden', !!conv.isGroup);
+	// There is no presence backend: real DMs show no status line, groups show "Group".
+	const statusEl = document.getElementById('chat-conv-status');
+	statusEl.classList.toggle('hidden', !!conv.remote);
+	document.getElementById('chat-conv-status-text').textContent = 'Group';
+	document.getElementById('chat-conv-dot').classList.add('hidden');
 	document.getElementById('chat-conv-input').value = '';
 
 	renderChatConversation();
 	showView('chat-conversation');
 	scrollChatConversationToBottom();
+	if (conv.remote) chatSyncOpenConversation(conv); // fetch history, mark read
 }
 
 function closeChatConversation() {
@@ -444,7 +412,7 @@ function chatBubbleHtml(msg, conv, index) {
 		<div class="flex flex-col items-end">
 			<div class="chat-msg-bubble max-w-[78%] bg-brand-red text-white text-[16px] leading-[1.45] rounded-[22px] px-4 py-3 break-words" ${attrs}>${lead}${text}</div>
 			${chip}
-			<div class="flex items-center gap-1.5 mt-1.5 text-[13px] text-gray-500"><span>${time}</span>${chatStatusIconHtml(msg.status, 'w-[18px] h-[18px]')}</div>
+			${conv.remote ? chatRemoteMetaHtml(msg, time) : `<div class="flex items-center gap-1.5 mt-1.5 text-[13px] text-gray-500"><span>${time}</span>${chatStatusIconHtml(msg.status, 'w-[18px] h-[18px]')}</div>`}
 		</div>`;
 	}
 	return `
@@ -459,10 +427,13 @@ function chatBubbleHtml(msg, conv, index) {
 }
 
 function renderChatConversation() {
-	const conv = chatMockMessages.find(m => m.id === chatActiveConversationId);
+	const conv = chatConversations.find(m => m.id === chatActiveConversationId);
 	if (!conv) return;
+	const thread = chatThreadFor(conv);
+	chatRenderDayLabel(conv, thread);
 	document.getElementById('chat-conv-thread').innerHTML =
-		chatThreadFor(conv).map((msg, i) => chatBubbleHtml(msg, conv, i)).join('');
+		(conv.remote ? chatRemoteThreadPrefixHtml(conv, thread.length > 0) : '') +
+		thread.map((msg, i) => chatBubbleHtml(msg, conv, i)).join('');
 }
 
 function scrollChatConversationToBottom() {
@@ -493,7 +464,7 @@ function renderChatReplyBar() {
 		bar.classList.add('hidden');
 		return;
 	}
-	const conv = chatMockMessages.find(m => m.id === chatActiveConversationId);
+	const conv = chatConversations.find(m => m.id === chatActiveConversationId);
 	document.getElementById('chat-reply-bar-name').textContent = conv ? chatReplyLabel(chatReplyTarget.from, conv) : '';
 	document.getElementById('chat-reply-bar-text').textContent = chatReplyTarget.text;
 	bar.classList.remove('hidden');
@@ -507,13 +478,21 @@ function chatSyncListRowToThread(conv) {
 	conv.time = last ? last.time : '';
 }
 
-// Client-side only, like accept/decline: appends to the in-memory thread and
-// updates the list row; nothing is persisted and a reload resets it.
+// Real DMs go through chatSendRemote (chat-sync.js). Groups stay client-side only:
+// appends to the in-memory thread and updates the list row; nothing is persisted.
 function sendChatMessage() {
 	const input = document.getElementById('chat-conv-input');
 	const text = input.value.trim();
-	const conv = chatMockMessages.find(m => m.id === chatActiveConversationId);
+	const conv = chatConversations.find(m => m.id === chatActiveConversationId);
 	if (!text || !conv) return;
+
+	if (conv.remote) { // real DM: server-backed, optimistic with failure/retry (chat-sync.js)
+		input.value = '';
+		clearChatReplyTarget();
+		chatSendRemote(conv, text);
+		input.focus();
+		return;
+	}
 
 	const time = new Date().toTimeString().slice(0, 5);
 	const msg = { from: 'me', text, time, status: 'sent' };

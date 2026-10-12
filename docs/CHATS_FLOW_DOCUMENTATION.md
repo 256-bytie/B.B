@@ -14,7 +14,7 @@ Source of truth for the Chats frontend. Read fully before editing any chat code.
 ## 1. Overview
 
 - Chats = 1:1 messaging between campus users, plus message requests from people who messaged first (their own screen, reached from the list's ⋮ menu).
-- **[CURRENT]** Frontend only, mock data, in-memory state. No backend, no persistence. A page reload resets everything.
+- **[CURRENT]** Direct (1:1) conversations are **real**: loaded from and sent through `/api/chat/*`, persisted server-side, live via long-polling (§5.8). Everything else in chat (groups and group info, message requests, row-menu actions, reactions/reply/forward/delete) is still client-side only and lost on reload. **No data is seeded anywhere**: a new account sees an empty Chats list.
 - Screen header title: **"Chats"** (view id `chat`).
 - Seven screens: **Chats list** (`#chat-view`), **Conversation** (`#chat-conversation-view`), **Message requests** (`#chat-requests-view`, view id `chat-requests`), **New message** (`#chat-new-message-view`), **New group** (`#chat-new-group-view`, also the "Add people" picker), **Group info** (`#chat-group-info-view`) and **Media, Links, Docs** (`#chat-group-media-view`). The list no longer has a Messages/Requests tab bar.
 
@@ -25,7 +25,8 @@ Source of truth for the Chats frontend. Read fully before editing any chat code.
 | List screen markup | `templates/partials/chat.html` |
 | Conversation markup | `templates/partials/chat_conversation.html` |
 | Message requests screen markup | `templates/partials/chat_requests.html` (included after `chat_conversation.html` in `templates/index.html`) |
-| All chat logic + mock data | `static/js/chat.js` |
+| Chat state, list/conversation rendering | `static/js/chat.js` |
+| Real DM client: API calls, live updates (long-poll), send/retry, history, read cursor | `static/js/chat-sync.js` (loaded after `chat.js`) |
 | Message action sheet markup (actions, forward picker, delete confirm) | `templates/partials/chat_message_sheet.html` |
 | Message action logic (long-press, sheet drag/dismiss, react/copy/reply/forward/delete) | `static/js/chat-message-actions.js` (loaded after `chat.js` in `_trailer.html`) |
 | Chats list row menu markup (long-press a conversation: Mark as unread / Mute / Pin / Delete) | `templates/partials/chat_row_menu.html` (included after `chat_message_sheet.html` in `templates/index.html`) |
@@ -142,7 +143,7 @@ Separate full-screen view (`templates/partials/chat_requests.html`), **not** a t
 - Row itself is not tappable (no request preview/detail screen).
 - Empty state (`#chat-requests-empty`): person icon + red chat badge, title "No new requests", text "When someone messages you for the first time, their request will appear here." Shown when both lists are empty (e.g. after handling every request); the header/back arrow stay.
 - **[CURRENT]** Request rows now `escapeHtml` name, preview, time and avatar URL (previously unescaped).
-- Request data is the same hardcoded mock arrays as before (`chatMockRequestsNew`, `chatMockRequestsEarlier`); in-memory, resets on reload. Not deep-linked.
+- Requests have no backend: `chatRequestsNew` / `chatRequestsEarlier` start empty, so the screen shows its empty state. Accept/decline code remains but is unreachable until requests exist. Not deep-linked.
 - **[CLARIFY]** block/report, "request sent" outgoing state, what the sender sees on decline, whether decline hides sender permanently, whether to add a request-count badge on the ⋮ menu item / Chat nav icon.
 
 ### 4.8 Conversation row menu (long-press) **[CURRENT, UI only]**
@@ -172,7 +173,7 @@ Contextual popup for one conversation in the Chats list. It targets list rows on
 
 **Implementation notes**
 - Everything lives in `chat-row-menu.js` (IIFE; only global is `window.closeChatRowMenu`). Listeners are delegated on `#chat-messages-list`, which survives `renderChatMessages()` re-renders (only its `innerHTML` is replaced).
-- The pressed conversation is held as `target = { conv, rowEl }`, where `conv` is the live object from `chatMockMessages` (not an index). The item click handler is the single place to wire behavior; it currently only calls `close()`. Wire against `target.conv` so the action always applies to the pressed conversation.
+- The pressed conversation is held as `target = { conv, rowEl }`, where `conv` is the live object from `chatConversations` (not an index). The item click handler is the single place to wire behavior; it currently only calls `close()`. Wire against `target.conv` so the action always applies to the pressed conversation.
 - No toast, no state change, no persistence. Unread count, preview, order and mute/pin state are untouched.
 - Items are `role="menuitem"` inside `role="menu"`; ArrowUp/ArrowDown move focus between items.
 - **[CLARIFY]** when wired: Mark as unread vs. an already-unread conversation (label flip to "Mark as read"?), Mute duration/choices and muted indicator on the row, Pin limit + pinned ordering/indicator, Delete confirmation dialog (reuse `#chat-delete-dialog` style) and whether delete is for-me only. Groups currently get the same four items. Menu labels are static.
@@ -196,11 +197,11 @@ Full-screen (bottom nav hidden; not in `BOTTOM_NAV_ACTIVE_ITEM`). Opened only fr
 - **Search** (`#chat-new-message-search`): rounded pill (`rounded-full`, grey fill), search icon, placeholder "Search". Filters as you type, no submit. A leading `@` is ignored; matching is case-insensitive on **name or username**.
 - **Create a group** (`#chat-new-message-group-btn`): 44 px grey circle with a group icon, bold label, right chevron → `openChatNewGroup()` (§4.11).
 - **User list** (`#chat-new-message-list`): rendered by JS, never hardcoded. Row = button with 44 px circular avatar (`chatAvatarUrl`, DiceBear fallback), bold display name, `@username` in lighter grey. Rows carry `data-user-key` (lowercase handle). Empty states: "Search for people by name or username." (nothing typed and no contacts), "Searching…", "No users found.", "Couldn't search right now. Try again." (request failed; local matches still show).
-- **Tap a person** → `openDirectConversation(user)`: finds an existing non-group conversation with the same handle in `chatMockMessages` and opens it; otherwise creates `{ id: 'u-<userId|handle>', name, handle, avatar, preview: '', time: '', unread: 0 }`, sets `chatMockThreads[id] = []` (empty thread, so no phantom incoming message), `unshift`s it to the top of the list, then `openChatConversation(id)`. The conversation therefore appears in the Chats list (blank preview/time) even before a message is sent. Tapping the same person again reuses it.
+- **Tap a person** → `openDirectConversation(user)` → `chatOpenDirectWith(user.id)` (`chat-sync.js`): `POST /api/chat/conversations {user_id}` (get-or-create; the server guarantees one conversation per pair, from either side), merges the returned item into `chatConversations` and opens it. Failures show a toast and nothing is opened; a double tap is ignored while the request is in flight. A person without an id cannot be opened.
 - **User directory** (single swap point, `chat-new-message.js`):
   - *Typed query:* local contacts match instantly, then `GET /api/search?type=people&limit=30&q=…` (existing endpoint) is merged in (debounced 250 ms; responses for superseded queries are dropped; de-duplicated by handle). The server also matches `bio`; those hits are filtered out client-side so only name/username matches show. The server already excludes the signed-in user.
   - *Empty query:* **[CURRENT]** people from existing direct conversations (`chatDirectoryLocal`). No "list all users" endpoint exists. **[FUTURE]** replace with a directory/suggestions endpoint (backend prompt: `BACKEND_PROMPT_chat_user_directory.md`).
-  - Contacts from the mock conversations (`persistence-tester`, …) are not real accounts; only the search endpoint returns real users.
+  - The empty-query list is people you already have a real conversation with (`chatDirectoryLocal`), so it is empty until you have one; use search to find anyone else.
 - **State:** the screen resets (empty search, top of page) on each open from the FAB. Returning from New group restores the search text (`nmRestoreOnce`).
 - **[CLARIFY]** follow-gating (can you DM anyone, or only followers/mutuals → Requests flow), blocked users, whether a conversation should only join the list after the first message, pagination of the directory, verified badges (not in user data today).
 
@@ -212,7 +213,7 @@ The group creation flow behind "Create a group". Full-screen, bottom nav hidden.
 - **Group name** (`#chat-new-group-name`, optional, max 50). Empty → **system-generated name** from the members' display names (`chatGeneratedGroupName`): "A", "A and B", or "A, B and N others" ("1 other" when N = 1). A typed name is stored as `customName` and always kept. `chatSetGroupMembers(conv, members)` is the single entry point for membership changes and re-derives `name` when `customName` is empty (no UI changes membership yet). The same `conv.name` feeds the Chats list, conversation header and forward picker.
 - **Participants:** search (`#chat-new-group-search`, same live search + directory as §4.10) and a checkbox list (`#chat-new-group-list`; row `role="checkbox"`, red check when selected). Selected people appear as removable chips (`#chat-new-group-chips`, tap to remove) and stay selected across searches. Hint line (`#chat-new-group-hint`) shows the count.
 - **Validation:** at least **2** participants (`MIN_GROUP_MEMBERS`, plus you). Create is disabled below that.
-- **Create** → `createChatGroup()`: adds `{ id: 'g-<timestamp>', name, handle: <id>, avatar: null, preview: '', time: '', unread: 0, isGroup: true, customName, members: [{ id, name, handle }] }` to the top of `chatMockMessages`, empty thread, then opens it. Appears under the Groups filter. The conversation screen is still the 1:1 UI (header "Group", no member list, §7).
+- **Create** → `createChatGroup()`: adds `{ id: 'g-<timestamp>', name, handle: <id>, avatar: null, preview: '', time: '', unread: 0, isGroup: true, customName, members: [{ id, name, handle }] }` to the top of `chatConversations`, empty thread, then opens it. Appears under the Groups filter. The conversation screen is still the 1:1 UI (header "Group", no member list, §7).
 - State resets (selection, name, search) every time the screen opens. **[CLARIFY]** group avatar/photo, member management after creation, admin roles, member limit, whether participants must follow you.
 
 ## 5. Conversation screen (`#chat-conversation-view`)
@@ -220,7 +221,7 @@ The group creation flow behind "Create a group". Full-screen, bottom nav hidden.
 Full-screen flex column (`100dvh`): fixed header, scrolling thread (`#chat-conv-scroll`), fixed composer. Bottom nav hidden (view is not in `BOTTOM_NAV_ACTIVE_ITEM`). Side nav not available here.
 
 ### 5.1 Open — `openChatConversation(id)`
-- Finds conversation in `chatMockMessages`; returns silently if not found.
+- Finds conversation in `chatConversations`; returns silently if not found.
 - Sets `chatActiveConversationId`, `unread = 0`, fills avatar/name, status text "Online", clears input, renders thread, `showView('chat-conversation')`, scrolls to bottom.
 
 ### 5.2 Header
@@ -230,18 +231,18 @@ Full-screen flex column (`100dvh`): fixed header, scrolling thread (`#chat-conv-
 | Back arrow (`#chat-conv-back-btn`) | `closeChatConversation()` → clears active id, `showView('chat')`. |
 | Avatar (`#chat-conv-avatar`, 48px) + name block | Wrapped in `#chat-conv-title-btn` (`role="button"`, Enter works). **Groups [CURRENT]:** opens Group info (§5.6). **1:1 chats:** inert. **[CLARIFY]** whether it should open the user's profile. |
 | Name (`#chat-conv-name`) | Truncated. |
-| Presence (`#chat-conv-status`: dot `#chat-conv-dot` + text `#chat-conv-status-text`) | Driven by mock `online` flag: online → green dot + "Online"; offline → grey dot + "Offline"; group → dot hidden + "Group". **[MOCK]** flag. **[FUTURE]** real presence. **[CLARIFY]** last-seen wording, group header content. |
+| Presence (`#chat-conv-status`: dot `#chat-conv-dot` + text `#chat-conv-status-text`) | There is no presence backend: for real DMs the whole status line is hidden; groups show "Group" (dot hidden). **[FUTURE]** real presence. |
 | Search icon (`#chat-conv-search-btn`) | Toast "Coming soon". |
 | ⋮ More options (`#chat-conv-menu-btn`) | Toast "Coming soon". **[CLARIFY]** intended menu (mute, delete, block, etc.). |
 
 ### 5.3 Thread
-- Static "Today" pill at top. **[MOCK]** Not computed from message dates. **[FUTURE]** date separators per day.
+- Day pill at the top (`#chat-conv-day`): real DMs show the day of the first loaded message (Today / Yesterday / date), hidden while empty; groups show "Today". **[FUTURE]** a separator per day.
 - Bubbles, `space-y-5`:
   - **Incoming (`from: 'them'`):** left, 40px avatar, grey bubble, time below.
   - **Outgoing (`from: 'me'`):** right, red bubble (`brand-red`), time + check icon below.
-- Outgoing bubbles show a status icon via `chatStatusIconHtml(status)`: `sent` (single grey), `delivered` (double grey), `read` (double green). Missing status defaults to `sent`. New messages sent in-app get `sent` and never advance (**[MOCK]**; no server). **[FUTURE]** real transitions. **[CLARIFY]** failed/sending state and icons.
+- Real DMs show **no delivery ticks** (no receipts feature): under my own bubble: the time, "Sending…", or a red "Not sent"/error text with a **Retry** button (`data-chat-retry`). Groups (client-side) keep the `chatStatusIconHtml` ticks. **[FUTURE]** delivery/read receipts.
 - Text only. All message text, time, reply text and reaction emoji are `escapeHtml`'d. Max bubble width 78%.
-- Thread source: `chatMockThreads[id]`; if none, `chatThreadFor()` creates one incoming message from the list preview.
+- Thread source: `chatThreads[id]`: real DMs are filled from `GET …/messages` when the conversation opens (§5.8); a local conversation with a preview and no thread gets that preview as its first message; otherwise empty.
 - Bubbles may carry a **Forwarded** tag, a quoted **reply block**, and a **reaction chip** (see §5.5). Each bubble has `data-chat-msg-index` (position in its thread), `tabindex="0"`, class `chat-msg-bubble` (no text selection / iOS callout).
 - No pagination/infinite scroll, typing indicator, edit, sent attachments/images/GIFs (composer buttons exist, inert), voice, read receipts.
 
@@ -258,7 +259,9 @@ Full-screen flex column (`100dvh`): fixed header, scrolling thread (`#chat-conv-
 - Attachment (file), camera, and GIF buttons exist as UI only (see above); no voice button. **[CLARIFY]** behavior when implemented: file types/size limits, camera capture vs gallery, GIF provider, whether the three hide while text is typed, and whether the Send button should swap with a voice control on empty input.
 - **[CONSTRAINT]** Narrow screens (~360px): the pill holds 3 icons plus the input; the input is ~130px wide at that size and the "Type a message..." placeholder may truncate. Do not add more pill icons without moving the existing ones.
 
-### 5.5 Message actions sheet (long-press) **[CURRENT, mock]**
+### 5.5 Message actions sheet (long-press) **[CURRENT; real DMs: Copy only]**
+
+For real DMs (`conv.remote`) the sheet offers **Copy** only: the reactions row, Reply, Forward and Delete are hidden because they have no backend (they would only change local state). Real DMs are also not offered as Forward destinations from groups. The rest of this section describes the behavior in groups (client-side).
 
 Contextual bottom sheet for one message. Not a generic modal: it exists only in the conversation screen and acts on the pressed bubble.
 
@@ -287,7 +290,7 @@ Contextual bottom sheet for one message. Not a generic modal: it exists only in 
 
 **Implementation notes**
 - `chat-message-actions.js` contains its own `createSheet()` (open/close/drag-dismiss) instead of editing `share-sheet.js`; behavior mirrors it. Reused CSS rules: `.chat-sheet*` are grouped with `.share-sheet*` in `style.css` (z-40 backdrop, z-50 sheet, `max-w-[430px]`).
-- The pressed message is held as the live object from `chatMockThreads[id]` (not an index), so later re-renders cannot misdirect an action.
+- The pressed message is held as the live object from `chatThreads[id]` (not an index), so later re-renders cannot misdirect an action.
 - Reply state and `chatSyncListRowToThread` live in `chat.js`; `chat-message-actions.js` calls them. Keep `chat-message-actions.js` after `chat.js` and `compose.js` in `_trailer.html`.
 - Dark mode uses the existing `html.dark` utility overrides; only `.chat-sheet-react.is-selected` has its own dark rule. **[CLARIFY]** visual check in dark mode not performed.
 - Not covered: edit, pin, info/seen-by, select-multiple, report, "delete for everyone", reacting from the bubble (tap), emoji picker beyond the 11 listed.
@@ -301,7 +304,7 @@ Opened by tapping the avatar or name in a **group** conversation's header (`open
 | Field | Meaning |
 |---|---|
 | `members` | `[{ id, name, handle, avatar, role: 'admin' \| 'member' }]` (excludes the signed-in user) |
-| `myRole` | The signed-in user's role in this group. Groups created via §4.11: `'admin'`. Mock group `m4`: `'member'` (so both roles are exercisable). |
+| `myRole` | The signed-in user's role in this group. Groups created via §4.11: `'admin'` (the only way a group exists today; a `'member'` role can only occur once groups come from a server). |
 | `customName` / `name` | Custom vs generated name: empty `customName` = generated from members (`chatGeneratedGroupName`); `name` is what every screen displays. A pre-existing group keeps its name as a custom name. |
 | `muted` | boolean |
 | `disappearing` | `'off' \| '24h' \| '7d' \| '90d'` |
@@ -341,6 +344,18 @@ Non-admins can open every sheet but its controls are disabled with "Only admins 
 
 ### 5.7 Media, Links, Docs (`#chat-group-media-view`, view id `chat-group-media`) **[CURRENT]**
 Tabs Media / Links / Docs for the active group's thread (`chatThreadFor`). Links are URLs found in message text (sender + time shown). Media (`msg.image`) and Docs (`msg.file = { name, size }`) fill in once messages carry attachments; today they show "No … shared in this group yet." Back returns to Group info.
+
+### 5.8 Real direct messaging (frontend) — `static/js/chat-sync.js` **[CURRENT]**
+
+Backend: §9 and `docs/DIRECT_MESSAGING.md`. Real DM conversation objects have `remote: true`, `id: 'd<serverId>'`, `serverId`, `userId`, `name/handle/avatar` from the other user, `preview/time/lastMessageId/unread` from the server, plus client state (`threadState` idle/loading/ready/error, `threadLoaded`, `hasMore`, `activity` for ordering). Thread entries: `{ id (null until confirmed), from, text, time, createdAt, clientId, state: 'sent'|'sending'|'failed', error? }`.
+
+- **List:** `initChatView()` → `chatSyncInit()` → `GET /api/chat/conversations`. States: "Loading conversations…", error + **Try again** (`#chat-list-retry-btn`), empty "No conversations yet. Tap the chat button to start one.". Sorted by latest activity. Previews and times come from the server's last message (today → clock, yesterday → "Yesterday", else "Oct 9"); unread counts from the server.
+- **Open:** `openChatConversation` → `chatSyncOpenConversation`: `GET …/messages?limit=50` (ascending), states "Loading messages…" / error + **Try again** / "No messages yet. Say hi!". **Load earlier messages** pages back with `before=` and keeps the scroll anchor. Each open re-fetches history (cached thread shows instantly meanwhile). Then `POST …/read {up_to}` moves the private unread cursor; the list badge clears.
+- **Send:** `chatSendRemote`: whitespace-only is ignored; otherwise an optimistic bubble (`state: 'sending'`) and `POST …/messages {body, client_id}`. Success settles it with the server id/time; a failure (offline, 4xx/5xx, 429) leaves it visible as **Not sent + Retry**, never as sent. Retry reuses the same `client_id`, so the server returns the stored message instead of inserting a duplicate. If the live poll echoes the message before the POST returns, the pending bubble is settled by id (never doubled).
+- **Live updates:** `chatPollLoop` long-polls `GET /api/chat/updates?after=<highest id>&wait_seconds=25`, merges conversations first then messages, re-renders the list, and re-renders + auto-scrolls (when near the bottom) the open thread, marking it read. Resumes from the highest id seen. On errors it backs off (1 s → 10 s) and shows the **Connection lost. Reconnecting…** banner (`#chat-list-offline-banner`, `#chat-conv-offline-banner`); the next success hides it.
+- **Polling lifetime:** runs only while a chat screen is open (`chatOnViewChange`, called from `showView`; chat views = chat, chat-conversation, chat-requests, chat-new-message, chat-new-group, chat-group-info, chat-group-media), because each held poll occupies a server thread. 401 → state reset, polling stopped.
+- **Account switch / logout:** `chatSyncInit` compares the signed-in user (`session.user.id`) with the one the state belongs to and resets conversations, threads and cursor when it changed.
+- **Not implemented (out of scope):** groups on the server, attachments, reactions/edit/delete/forward/reply on real messages, typing, receipts, push notifications, presence, search inside a conversation.
 
 ## 6. Navigation
 
@@ -384,13 +399,12 @@ Tabs Media / Links / Docs for the active group's thread (`chatThreadFor`). Links
 | Group conversation opened | **[CURRENT]** Uses the same 1:1 UI: header shows "Group" with no dot, no member count, no sender names on incoming bubbles, single avatar. **[CLARIFY]** group conversation design. |
 | Unread update while viewing list | Not applicable (no live updates). **[FUTURE]** realtime/polling. |
 
-## 8. Mock data (all in `static/js/chat.js`) — **[MOCK]**
+## 8. Data sources
 
-- `chatMockMessages`: m1 Persistence Tester (2 unread, online), m2 Test User (1, offline), m3 Not Lvke (0, online), m4 "Design Hackathon 2026" (`isGroup: true`, 3 unread; added for the Groups filter, no thread so preview becomes its only message).
-- `chatMockRequestsNew`: r1–r3. `chatMockRequestsEarlier`: r4–r5. (Shown on the Message requests screen.)
-- `chatMockThreads`: threads for m1–m3. After seeding, list preview/time are overwritten from each thread's last message.
-- Avatars: DiceBear URL by handle. Presence: mock `online` flag. Message `status`: hard-coded (m1 last outgoing = `read`, m2 = `delivered`, m3 last outgoing = `read`). "Today" label: hard-coded.
-- Conversation shape: `{ id, name, handle, avatar, preview, time, unread, online?, isGroup?, members? }` (group fields (`members`, `customName`, `myRole`, `muted`, `disappearing`, `blockScreenshots`, `inviteLink`, `permissions`) are described in §5.6 and are filled by `chatEnsureGroupModel`; mock group `m4` has a custom name, `myRole: 'member'` and three members; conversations created via New message have `id: 'u-…'`, an empty thread and blank preview/time). Message shape: `{ from: 'me'|'them', text, time, status?: 'sent'|'delivered'|'read', replyTo?: { from, text }, forwarded?: true, reactions?: { me?: emoji, them?: emoji } }`. No message ids; messages are addressed by object identity / thread index. No mock data seeds `reactions.them`, `replyTo` or `forwarded`. List ticks derive from the thread's last message (`chatLastMessage`); conversations with no thread (accepted requests) show none. Request shape: `{ id, name, handle, avatar, preview, time }`.
+- **Real (server):** direct conversations, their messages, previews, times, unread counts (§5.8). Nothing is hardcoded or seeded; `chatConversations`, `chatThreads`, `chatRequestsNew`, `chatRequestsEarlier` all start empty.
+- **Client-side only (lost on reload):** groups (created via New group, §4.11; including their messages and all Group info settings, §5.6) and everything those screens mutate. Group conversation fields are described in §5.6 and filled by `chatEnsureGroupModel`; `activity` (ms) orders the list.
+- Avatars: the user's `profile_picture`, else DiceBear by handle (external URL). Presence: none. Delivery ticks: none for real DMs.
+- Conversation shape (real DM): see §5.8. Group/local shape: `{ id, name, handle, avatar, preview, time, unread, isGroup, activity, members, customName, myRole, ... }`; message shape (group/local): `{ from: 'me'|'them', text, time, status?, reactions?, replyTo?, forwarded? }`.
 
 ## 9. Backend / API relationship
 
@@ -412,9 +426,9 @@ Tabs Media / Links / Docs for the active group's thread (`chatThreadFor`). Links
 - Chats list scrolls the document; keep `#chat-view.active` bottom padding for the fixed bottom nav.
 - Escape all dynamic text with `escapeHtml()` before `innerHTML` (includes reply text, reaction emoji, forward-list names).
 - Group info: keep view ids `'chat-group-info'` / `'chat-group-media'` in `showView`'s list with init hooks (`initChatGroupInfoView`, `initChatGroupMediaView`) and the `closeChatGroupSheet()` call in `showView`. Group info must only read/write the active conversation object (never module-level settings), must not call `closeChatConversation()`, and Back must go through `closeChatGroupInfo()` so conversation state is preserved. Group name display always reads `conv.name`; change names only via the rename sheet or `chatSetGroupMembers`. New group screen has two modes (create / add people) driven by `ngAddTarget` in `chat-new-message.js`; `openChatNewGroup()` must reset it to `null`.
-- New message / New group: keep view ids `'chat-new-message'` and `'chat-new-group'` in `showView`'s list with their init hooks (`initChatNewMessageView`, `initChatNewGroupView`); keep `chat-new-message.js` after `chat.js` (uses `chatMockMessages`, `chatMockThreads`, `chatAvatarUrl`, `openChatConversation`, `chatListRestoreOnce`, `chatListScrollY`). Cancel-to-list must go through `closeChatNewMessage()` so state is restored; do not call `showView('chat')` directly from these screens.
+- New message / New group: keep view ids `'chat-new-message'` and `'chat-new-group'` in `showView`'s list with their init hooks (`initChatNewMessageView`, `initChatNewGroupView`); keep `chat-new-message.js` after `chat.js` (uses `chatConversations`, `chatThreads`, `chatAvatarUrl`, `openChatConversation`, `chatListRestoreOnce`, `chatListScrollY`). Cancel-to-list must go through `closeChatNewMessage()` so state is restored; do not call `showView('chat')` directly from these screens.
 - Keep `#chat-fab` as a single element outside `#chat-messages-list` (never render it inside the list or per filter) and keep its bottom offset on `--bottom-nav-h`; keep the `#chat-view.active` bottom padding in step with the FAB size.
-- List rows must keep class `chat-row` and `data-chat-row-id`; the row-menu handler depends on both. Keep `chat-row-menu.js` after `chat.js` in `_trailer.html` (uses `chatMockMessages`). Do not add click handlers to rows that would fire after a long-press (the menu swallows the release click in the capture phase on `#chat-messages-list`).
+- List rows must keep class `chat-row` and `data-chat-row-id`; the row-menu handler depends on both. Keep `chat-row-menu.js` after `chat.js` in `_trailer.html` (uses `chatConversations`). Do not add click handlers to rows that would fire after a long-press (the menu swallows the release click in the capture phase on `#chat-messages-list`).
 - Bubbles must keep class `chat-msg-bubble` and `data-chat-msg-index`; the long-press handler depends on both. Do not add click handlers to bubbles that would fire after a long-press.
 - The message sheets use `touch-action: none` (drag-to-dismiss); scrollable regions inside must keep `data-sheet-no-drag` + their own `touch-action`.
 - Use `showToast()` for "Coming soon" placeholders.
@@ -440,7 +454,7 @@ Tabs Media / Links / Docs for the active group's thread (`chatThreadFor`). Links
 
 ## 12. Temporary (frontend still in design)
 
-All of §8 (mock data), message actions being local-only (reactions, forwards, deletes lost on reload; no "them" reactions), static "Today" divider, mock presence flag and message status values, "Coming soon" toasts (conversation search, ⋮, GIF, add file, camera), list ⋮ menu having only the Requests item, row-menu items (§4.8) being inert (they only dismiss), Group info settings (mute, disappearing, screenshots, invite link, permissions), Video (toast) and Media/Docs (no attachments yet) being stored/placeholder only, New message / New group conversations being in-memory only and the empty-query user list being existing contacts (§4.10), group conversations reusing the 1:1 UI, unsorted list, state reset on every list open.
+Groups, group info, row-menu actions, message requests and all reactions/reply/forward/delete being client-side only (§8), conversation search / ⋮ / GIF / add file / camera "Coming soon" toasts, list ⋮ menu having only the Requests item, row-menu items (§4.8) being inert (they only dismiss), Group info settings (mute, disappearing, screenshots, invite link, permissions), Video (toast) and Media/Docs (no attachments yet) being stored/placeholder only.
 
 ## 13. Open items (requires owner decision or implementation)
 
@@ -454,7 +468,7 @@ All of §8 (mock data), message actions being local-only (reactions, forwards, d
 8. Frontend wiring of realtime updates (`GET /api/chat/updates` long-poll: resume with the highest message id seen, `wait_seconds` ≤ 25), unread badge on bottom-nav Chat icon and a request-count badge on the ⋮ Requests item. Server-side unread cursor exists (`POST .../read`).
 9. Deep links (`/chats`, `/chats/:id`), side-nav Chat entry.
 10. Backend done for 1:1 (see §9); remaining backend work is groups/requests/presence. **CSRF-compliant frontend wiring is the outstanding frontend task.** Message actions will need: add/remove reaction, delete message, forward (create message in target thread), reply reference (message id) — all mutating, all via the CSRF fetch wrapper (plus new backend endpoints for reactions/deletes).
-11. ~~Message ids~~ **[RESOLVED backend-side]**: server messages have stable integer ids (`message.id`); the mock frontend still addresses messages by index and needs to switch to these ids when wired.
+11. Message ids: real DM messages carry stable server ids (`entry.id`); the actions sheet still addresses bubbles by index, which is safe because real DMs only offer Copy. Switch to ids before enabling reactions/delete/reply on real DMs.
 12. Reaction palette: confirm the final emoji set/order (11 used now) and whether there should be a "+" full picker.
 
 ## 14. Element ID reference

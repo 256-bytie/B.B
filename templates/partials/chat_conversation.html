@@ -1,8 +1,7 @@
 <!-- BEGIN: Chat Conversation View -->
-<!-- One-to-one thread, opened by tapping a row in the Chat > Messages list
-     (openChatConversation in chat.js). Mock-data-only like the rest of chat:
-     threads are the hardcoded chatMockThreads array, sending appends a bubble
-     client-side only. Full-screen (bottom nav hidden - this view is not in
+<!-- Thread, opened by tapping a row in the Chat > Messages list
+     (openChatConversation in chat.js). Real 1:1 DMs are loaded/sent through
+     /api/chat/* (chat-sync.js); groups are still client-side only. Full-screen (bottom nav hidden - this view is not in
      BOTTOM_NAV_ACTIVE_ITEM); header + composer fixed, thread scrolls. -->
 <div id="chat-conversation-view" class="view-section bg-white">
 
@@ -29,11 +28,13 @@
 			<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" stroke-linecap="round" stroke-linejoin="round"></path></svg>
 		</button>
 	</header>
+	<div id="chat-conv-offline-banner" class="hidden shrink-0 px-4 py-1.5 text-center text-[13px] text-gray-600 bg-gray-100" role="status">Connection lost. Reconnecting…</div>
 
 	<!-- Thread (filled by renderChatConversation) -->
 	<div id="chat-conv-scroll" class="flex-1 overflow-y-auto px-4 pt-5 pb-4">
-		<div class="flex justify-center mb-6">
-			<span class="px-4 py-1.5 rounded-full bg-gray-100 text-[14px] text-gray-500">Today</span>
+		<!-- Day of the first loaded message (set by renderChatConversation); hidden when empty. -->
+		<div id="chat-conv-day" class="flex justify-center mb-6">
+			<span id="chat-conv-day-label" class="px-4 py-1.5 rounded-full bg-gray-100 text-[14px] text-gray-500">Today</span>
 		</div>
 		<div id="chat-conv-thread" class="space-y-5"></div>
 	</div>

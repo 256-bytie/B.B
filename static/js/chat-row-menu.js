@@ -11,10 +11,10 @@
 // leaving the Chats screen (core.js showView calls closeChatRowMenu()).
 //
 // UI only for now: picking an action just closes the menu. `target.conv` is the
-// live object from chatMockMessages for the pressed row, so when behaviour is
+// live object from chatConversations for the pressed row, so when behaviour is
 // wired up each action applies to exactly that conversation.
 //
-// Loaded after chat.js (uses chatMockMessages).
+// Loaded after chat.js (uses chatConversations).
 (function () {
 	const list = document.getElementById('chat-messages-list');
 	const menu = document.getElementById('chat-row-menu');
@@ -45,7 +45,7 @@
 
 	function conversationFor(rowEl) {
 		const id = rowEl.dataset.chatRowId;
-		return chatMockMessages.find(function (m) { return m.id === id; }) || null;
+		return chatConversations.find(function (m) { return m.id === id; }) || null;
 	}
 
 	function place(rowEl) {

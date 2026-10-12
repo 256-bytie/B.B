@@ -6,10 +6,12 @@
 // long-press `contextmenu`, and Enter on a focused bubble.
 // Dismiss: tap the dimmed area, drag the sheet down, Escape, browser Back.
 //
-// Mock-data-only, like the rest of chat: reactions/forwards/deletes mutate
-// the in-memory thread arrays in chat.js and are lost on reload.
+// Real 1:1 DMs (conv.remote) only offer Copy: reactions, reply, forward and delete
+// have no backend yet, so they are hidden there instead of pretending to work.
+// In groups (client-side only) they mutate the in-memory thread arrays in chat.js
+// and are lost on reload.
 //
-// Loaded after chat.js (uses chatMockMessages, chatThreadFor,
+// Loaded after chat.js (uses chatConversations, chatThreadFor,
 // renderChatConversation, setChatReplyTarget, ...) and compose.js (showToast).
 (function () {
 	const actionSheetEl = document.getElementById('chat-message-sheet');
@@ -133,12 +135,12 @@
 	}
 
 	// ---- State for the message the sheet is acting on ----
-	// `msg` is the live object inside chatMockThreads[convId], so reactions and
+	// `msg` is the live object inside chatThreads[convId], so reactions and
 	// deletes act on exactly what was pressed even if indexes shift later.
 	let target = null; // { conv, msg, bubbleEl }
 
 	function activeConversation() {
-		return chatMockMessages.find(function (m) { return m.id === chatActiveConversationId; }) || null;
+		return chatConversations.find(function (m) { return m.id === chatActiveConversationId; }) || null;
 	}
 
 	const scrollEl = document.getElementById('chat-conv-scroll');
@@ -192,6 +194,11 @@
 		if (!msg) return;
 
 		target = { conv: conv, msg: msg, bubbleEl: bubbleEl };
+
+		['chat-message-sheet-reactions', 'chat-message-reply-btn', 'chat-message-forward-btn', 'chat-message-delete-btn'].forEach(function (id) {
+			const el = document.getElementById(id);
+			if (el) el.classList.toggle('hidden', !!conv.remote);
+		});
 
 		// The software keyboard would fight the sheet for the bottom of the screen.
 		if (document.activeElement && document.activeElement !== bubbleEl && document.activeElement.blur) {
@@ -347,7 +354,8 @@
 
 	function renderForwardList() {
 		const list = document.getElementById('chat-forward-list');
-		list.innerHTML = chatMockMessages.map(function (c) {
+		// Real DMs are never forward destinations: a forward there would only exist locally.
+		list.innerHTML = chatConversations.filter(function (c) { return !c.remote; }).map(function (c) {
 			return `
 			<div class="flex items-center px-3 py-2.5" data-forward-conv="${escapeHtml(c.id)}">
 				<img src="${escapeHtml(chatAvatarUrl(c.handle, c.avatar))}" alt="" class="w-11 h-11 rounded-full object-cover bg-gray-100 shrink-0">
@@ -359,7 +367,7 @@
 
 	function forwardTo(convId, btn) {
 		if (!target || btn.disabled) return;
-		const dest = chatMockMessages.find(function (c) { return c.id === convId; });
+		const dest = chatConversations.find(function (c) { return c.id === convId && !c.remote; });
 		if (!dest) return;
 		const time = new Date().toTimeString().slice(0, 5);
 		chatThreadFor(dest).push({ from: 'me', text: target.msg.text, time: time, status: 'sent', forwarded: true });

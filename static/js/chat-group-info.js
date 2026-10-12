@@ -1,7 +1,7 @@
 // ---- Group info & settings (templates/partials/chat_group_info.html) ----
 // Tap a group's avatar/name in the conversation header -> Group info for THAT group.
 // Every read and write goes through the active conversation object
-// (chatMockMessages entry for chatActiveConversationId), never global state, so
+// (chatConversations entry for chatActiveConversationId), never global state, so
 // settings only ever affect the group they were changed in. The conversation stays
 // the active one the whole time (these screens never call closeChatConversation),
 // and Back restores its scroll position; the thread, draft and reply state are untouched.
@@ -45,7 +45,7 @@
 	let confirmingLeave = false;
 
 	function activeGroup() {
-		const conv = chatMockMessages.find(function (m) { return m.id === chatActiveConversationId; });
+		const conv = chatConversations.find(function (m) { return m.id === chatActiveConversationId; });
 		return conv && conv.isGroup ? chatEnsureGroupModel(conv) : null;
 	}
 
@@ -279,9 +279,9 @@
 	function leaveGroup() {
 		const conv = activeGroup();
 		if (!conv) return;
-		const i = chatMockMessages.indexOf(conv);
-		if (i !== -1) chatMockMessages.splice(i, 1);
-		delete chatMockThreads[conv.id];
+		const i = chatConversations.indexOf(conv);
+		if (i !== -1) chatConversations.splice(i, 1);
+		delete chatThreads[conv.id];
 		closeSheet();
 		chatActiveConversationId = null;
 		showView('chat'); // list re-initialises without the group

@@ -4,17 +4,18 @@
 // the existing direct conversation with them or starts a new one. "New group" lets
 // you pick participants + an optional name and creates a group conversation.
 //
-// Conversations are client-side only, like the rest of chat (chatMockMessages /
-// chatMockThreads in chat.js): nothing is persisted and a reload resets them.
+// Direct conversations are real (get-or-create via POST /api/chat/conversations,
+// chat-sync.js). Groups are still client-side only (chatConversations / chatThreads
+// in chat.js): nothing is persisted for them and a reload resets them.
 //
 // User data (see "User directory" below):
 //  - typed query: GET /api/search?type=people (existing endpoint, matches
 //    name/username/bio; results are narrowed here to name + username)
-//  - empty query: people from the existing direct conversations in chatMockMessages.
+//  - empty query: people you already have a real direct conversation with.
 //    There is no "list all users" endpoint yet (backend is written separately), so
 //    chatDirectoryLocal() is the single place to swap once one exists.
 //
-// Loaded after chat.js (uses chatMockMessages, chatMockThreads, chatAvatarUrl,
+// Loaded after chat.js (uses chatConversations, chatThreads, chatAvatarUrl,
 // openChatConversation, chatListRestoreOnce / chatListScrollY) and feed.js (escapeHtml).
 (function () {
 	const SEARCH_DEBOUNCE_MS = 250;
@@ -33,12 +34,12 @@
 		return user.name.toLowerCase().includes(q) || user.handle.toLowerCase().includes(q);
 	}
 
-	// Direct-message contacts already in the Chats list (groups excluded).
+	// People you already have a real direct conversation with (groups excluded).
 	function chatDirectoryLocal(q) {
-		return chatMockMessages
-			.filter(function (m) { return !m.isGroup && m.handle; })
+		return chatConversations
+			.filter(function (m) { return m.remote && !m.isGroup && m.handle; })
 			.map(function (m) {
-				return { key: m.handle.toLowerCase(), id: null, name: m.name, handle: m.handle, avatar: m.avatar || null };
+				return { key: m.handle.toLowerCase(), id: m.userId, name: m.name, handle: m.handle, avatar: m.avatar || null };
 			})
 			.filter(function (u) { return !q || matches(u, q); });
 	}
@@ -188,23 +189,21 @@
 		window.scrollTo(0, chatListScrollY);
 	};
 
-	// Existing direct conversation with this person, else start a new one.
-	function openDirectConversation(user) {
-		let conv = chatMockMessages.find(function (m) { return !m.isGroup && m.handle && m.handle.toLowerCase() === user.key; });
-		if (!conv) {
-			conv = {
-				id: 'u-' + (user.id != null ? user.id : user.key),
-				name: user.name,
-				handle: user.handle,
-				avatar: user.avatar,
-				preview: '',
-				time: '',
-				unread: 0
-			};
-			chatMockThreads[conv.id] = []; // empty thread: no phantom incoming message
-			chatMockMessages.unshift(conv);
+	// Get-or-create the real conversation on the server, then open it. The server
+	// guarantees one conversation per pair, so tapping the same person twice (or
+	// from either side) always lands in the same thread.
+	let openingDirect = false;
+	async function openDirectConversation(user) {
+		if (openingDirect) return;
+		if (user.id == null) { showToast('Couldn\u2019t start this conversation'); return; }
+		openingDirect = true;
+		try {
+			await chatOpenDirectWith(user.id);
+		} catch (err) {
+			showToast(err && err.message ? err.message : 'Couldn\u2019t start this conversation');
+		} finally {
+			openingDirect = false;
 		}
-		openChatConversation(conv.id);
 	}
 
 	// ---- New group screen ----
@@ -333,13 +332,14 @@
 			time: '',
 			unread: 0,
 			isGroup: true,
+			activity: Date.now(), // list ordering
 			myRole: 'admin' // the creator
 		};
 		chatSetGroupMembers(conv, users.map(function (u) { return { id: u.id, name: u.name, handle: u.handle, avatar: u.avatar, role: 'member' }; }));
 		if (conv.customName) conv.name = conv.customName;
 		chatEnsureGroupModel(conv);
-		chatMockThreads[id] = [];
-		chatMockMessages.unshift(conv);
+		chatThreads[id] = [];
+		chatConversations.unshift(conv);
 		openChatConversation(id);
 	}
 })();

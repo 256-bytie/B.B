@@ -42,6 +42,7 @@ function showView(viewName, { skipUrlSync = false } = {}) {
     if (typeof closeChatMenu === 'function') closeChatMenu(); // never leave the chat ⋮ menu open across screens
     if (typeof closeChatRowMenu === 'function') closeChatRowMenu(); // ...or the long-press row menu
     if (typeof closeChatGroupSheet === 'function') closeChatGroupSheet(); // ...or a Group info sheet
+    if (typeof chatOnViewChange === 'function') chatOnViewChange(viewName); // stop live chat polling outside chat screens
     const views = ['login', 'signup', 'feed', 'profile', 'edit-profile', 'user-profile', 'create-post', 'businesses', 'courses', 'gpa-calculator', 'chat', 'chat-conversation', 'chat-requests', 'chat-new-message', 'chat-new-group', 'chat-group-info', 'chat-group-media', 'library', 'library-contribute', 'search', 'wallet', 'community', 'community-members', 'community-edit', 'community-create', 'community-browse'];
     views.forEach(v => {
         const view = document.getElementById(v + '-view');
