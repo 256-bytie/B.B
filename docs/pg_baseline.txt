@@ -1,0 +1,129 @@
+=== Beebo PG Migration — Baseline Snapshot ===
+Source: backups/beebo_pre_pg_20261013-1015.db (sqlite3 .backup copy of beebo.db)
+Taken: 2026-10-13T10:16:20Z
+SHA256 (copy): 770569fbe147fd14a095ac0a0b5a787669d5fc1f069f60d6ee051921b3bd8154
+
+=== Row counts per table ===
+comments: 46
+communities: 2
+community_members: 4
+conversation_reads: 4
+conversation_state: 2
+conversations: 2
+credit_transactions: 1
+dislikes: 0
+follows: 10
+highlights: 2
+library_files: 3
+likes: 56
+messages: 10
+post_images: 6
+posts: 37
+schema_migrations: 8
+search_history: 3
+users: 27
+
+=== sqlite_sequence (full contents) ===
+comments|50
+communities|2
+conversations|2
+credit_transactions|1
+follows|30
+highlights|4
+library_files|3
+likes|393
+messages|10
+post_images|19
+posts|64
+search_history|7
+users|104
+
+=== PRAGMA foreign_key_check ===
+likes|128|users|0
+likes|132|users|0
+likes|136|users|0
+likes|139|users|0
+comments|1|users|0
+comments|2|users|0
+comments|3|users|0
+comments|10|users|0
+comments|11|users|0
+comments|12|users|0
+comments|13|users|0
+comments|14|users|0
+highlights|2|users|0
+highlights|3|users|0
+posts|1|users|0
+posts|3|users|0
+posts|4|users|0
+posts|13|users|0
+posts|14|users|0
+posts|15|users|0
+posts|19|users|0
+posts|23|users|0
+posts|24|users|0
+posts|29|users|0
+posts|30|users|0
+(end of foreign_key_check — empty output means no violations)
+
+=== PRAGMA integrity_check ===
+ok
+
+=== Baseline test results (SQLite) ===
+Run: 2026-10-13, against DB_PATH=beebo_test.db per CLAUDE.md Safe test workflow.
+Python unit tests run from repo root with PYTHONPATH=. (they import `app.*`;
+needed because the scripts assume cwd-repo-root imports).
+
+Shell tests (tests/test_*.sh, run against a shared DB_PATH=beebo_test.db server):
+  test_chat.sh                  PASS
+  test_comment_changes.sh       PASS
+  test_comment_delete.sh        FAIL — stale test: hits /api/register (403 under CSRF
+                                 middleware; app exposes /api/signup) and starts its own
+                                 server without DB_PATH (port-conflict risk). Pre-existing
+                                 failure on SQLite, unrelated to migration.
+  test_comment_images.sh        PASS
+  test_comments.sh              PASS
+  test_comments2.sh             PASS
+  test_communities.sh           PASS
+  test_community_images.sh      PASS
+  test_csrf_and_ratelimit.sh    PASS
+  test_file_cleanup.sh          PASS
+  test_follows.sh               PASS
+  test_highlights.sh            PASS
+  test_highlights_video.sh      PASS
+  test_likes_race.sh            PASS
+  test_pagination.sh            FAIL — stale test: its POST /api/posts calls send no
+                                 X-CSRF-Token, so post creation 403s and later steps see
+                                 null ids. Pre-existing failure on SQLite, unrelated to
+                                 migration.
+  test_quotes.sh                PASS
+  test_session_migration.sh     PASS
+  test_spa_routes.sh            PASS
+  test_wallet.sh                PASS
+
+Python unit tests (own temp DBs, no server):
+  test_wallet_logic.py          PASS  (14 tests)
+  test_chat_logic.py            PASS  (32 tests)
+  test_community_members.py     PASS  (11 tests)
+
+Summary: 19 shell + 3 python = 22 files; 20 PASS, 2 FAIL (both stale tests
+failing for pre-existing reasons on SQLite — documented above, not migration
+regressions).
+
+INCIDENT DURING BASELINE RUN (documented, resolved):
+  tests/test_csrf_and_ratelimit.sh line 37 unconditionally runs
+  `sqlite3 beebo.db "DELETE FROM users WHERE email IN ('csrftest@...',
+  'csrftest2@...', 'ratetest@...', 'different@example.com')"` — it hardcodes
+  beebo.db (ignores DB_PATH) for cleanup. This deleted 4 stale test users
+  from beebo.db during the run. No other table was affected (verified by
+  full per-table diff). beebo.db was restored byte-identical from git HEAD
+  (tree was clean at session start): sha256 317bac69...3496e matches
+  `git show HEAD:beebo.db`; users=27, integrity_check=ok after restore.
+  Open risk: that test script remains a live landmine against beebo.db —
+  fix (make it use DB_PATH) is deferred to the test-fixing phase to keep
+  this phase docs-only.
+
+beebo.db verification before/after test run:
+  Before: users=27, posts=37, comments=46, likes=56
+  After (post-restore): users=27, posts=37, comments=46, likes=56,
+  PRAGMA integrity_check=ok, sha256 identical to git HEAD blob.
