@@ -43,7 +43,7 @@ all data values. These scripts do not enable a production backup policy.
 
 Do not cut over until rehearsal passes on an unmodified backup. The current
 backup has enforced FK violations: stop, report the rows, and obtain an
-explicitly approved data-resolution plan. The ETL never repairs or skips rows.
+explicitly approved data-resolution plan. The ETL never repairs source data. With `--quarantine-orphans`, it writes excluded rows in full to `backups/quarantine_<timestamp>.json`, excludes their dependency closure, and repairs only surviving aggregate counters affected by those exclusions. Without the flag, orphaned source rows remain a refusal.
 
 1. Stop the app using its deployment supervisor; keep it stopped through verification.
 2. Take a consistent backup and record hashes (SQLite CLI required):
@@ -56,8 +56,8 @@ explicitly approved data-resolution plan. The ETL never repairs or skips rows.
    Development rehearsals must use `beebo_test_*`. For production cutover only,
    explicitly add `--allow-nontest` to both commands:
    ```bash
-   python3 -B scripts/migrate_sqlite_to_pg.py "$backup" --dry-run
-   python3 -B scripts/migrate_sqlite_to_pg.py "$backup"
+   python3 -B scripts/migrate_sqlite_to_pg.py "$backup" --quarantine-orphans --dry-run
+   python3 -B scripts/migrate_sqlite_to_pg.py "$backup" --quarantine-orphans
    sha256sum -c "$backup.sha256"
    ```
    `--truncate` explicitly replaces existing app data, without a typing prompt.

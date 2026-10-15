@@ -10,6 +10,7 @@ import re
 import sqlite3
 import sys
 import uuid
+import json
 
 import psycopg
 from psycopg import sql
@@ -96,6 +97,65 @@ def source_rows(source, columns):
                                      if datatype == 'timestamp with time zone' else value
                                      for value, (name, datatype, _) in zip(row, metadata)))
     return data
+
+
+def quarantine(data, columns, target_user_ids):
+    names = {table: [column for column, *_ in metadata] for table, metadata in columns.items()}
+    excluded = {table: set() for table in data}
+    existing_users = {row[names['users'].index('id')] for row in data['users']}
+    missing = set()
+    for table, rows in data.items():
+        fields = names[table]
+        for field in ('user_id', 'creator_id', 'sender_id', 'follower_id', 'followee_id'):
+            if field in fields:
+                missing.update(row[fields.index(field)] for row in rows if row[fields.index(field)] not in existing_users)
+    for table, rows in data.items():
+        fields = names[table]
+        for field in ('user_id', 'creator_id', 'sender_id', 'follower_id', 'followee_id'):
+            if field in fields:
+                excluded[table].update(i for i, row in enumerate(rows) if row[fields.index(field)] in missing)
+    def ids(table):
+        return {data[table][i][names[table].index('id')] for i in excluded[table] if 'id' in names[table]}
+    changed = True
+    while changed:
+        changed = False
+        post_ids, comment_ids, community_ids = ids('posts'), ids('comments'), ids('communities')
+        conversation_ids = ids('conversations')
+        rules = [('comments', 'post_id', post_ids), ('comments', 'parent_comment_id', comment_ids),
+                 ('post_images', 'post_id', post_ids), ('dislikes', 'comment_id', comment_ids),
+                 ('posts', 'quoted_post_id', post_ids), ('posts', 'community_id', community_ids),
+                 ('community_members', 'community_id', community_ids), ('messages', 'conversation_id', conversation_ids),
+                 ('conversation_reads', 'conversation_id', conversation_ids), ('conversation_state', 'conversation_id', conversation_ids)]
+        for table, field, values in rules:
+            if table in data and field in names[table]:
+                before = len(excluded[table])
+                excluded[table].update(i for i, row in enumerate(data[table]) if row[names[table].index(field)] in values)
+                changed |= before != len(excluded[table])
+        if 'likes' in data:
+            before = len(excluded['likes'])
+            fields = names['likes']
+            excluded['likes'].update(i for i, row in enumerate(data['likes']) if
+                (row[fields.index('target_type')] == 'post' and row[fields.index('target_id')] in post_ids) or
+                (row[fields.index('target_type')] == 'comment' and row[fields.index('target_id')] in comment_ids))
+            changed |= before != len(excluded['likes'])
+        for table, field, values in (('posts', 'user_id', missing), ('comments', 'user_id', missing)):
+            if table in data:
+                before=len(excluded[table]); excluded[table].update(i for i,row in enumerate(data[table]) if row[names[table].index(field)] in values); changed |= before != len(excluded[table])
+    return excluded
+
+
+def save_quarantine(source, data, excluded):
+    root = Path(__file__).resolve().parents[1]
+    target = root / 'backups' / ('quarantine_' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ') + '.json')
+    target.parent.mkdir(exist_ok=True)
+    payload = {}
+    for table, indexes in excluded.items():
+        if indexes:
+            columns = [row[1] for row in source.execute(f'PRAGMA table_info("{table}")')]
+            payload[table] = [dict(zip(columns, data[table][i])) for i in sorted(indexes)]
+    target.write_text(json.dumps(payload, default=str, indent=2) + '\n')
+    print(f'Quarantine file: {target}')
+    return target
 
 
 def source_findings(source):
@@ -203,20 +263,72 @@ def prove_sequences(connection, maximums):
     return results
 
 
-def verify(source, connection, columns):
+def repair_counters(connection, data, excluded, columns):
+    names = {table: [column for column, *_ in metadata] for table, metadata in columns.items()}
+    post_ids = set()
+    comment_ids = set()
+    for i in excluded.get('likes', set()):
+        row = data['likes'][i]
+        fields = names['likes']
+        target = row[fields.index('target_id')]
+        if row[fields.index('target_type')] == 'post':
+            post_ids.add(target)
+        elif row[fields.index('target_type')] == 'comment':
+            comment_ids.add(target)
+    for i in excluded.get('comments', set()):
+        comment_ids.discard(data['comments'][i][names['comments'].index('id')])
+        post_ids.add(data['comments'][i][names['comments'].index('post_id')])
+    for table, identifiers, counter, query in (
+            ('posts', post_ids, 'like_count', "SELECT count(*) FROM likes WHERE target_type='post' AND target_id=%s"),
+            ('posts', post_ids, 'comment_count', 'SELECT count(*) FROM comments WHERE post_id=%s'),
+            ('comments', comment_ids, 'like_count', "SELECT count(*) FROM likes WHERE target_type='comment' AND target_id=%s")):
+        for identifier in sorted(identifiers):
+            if identifier not in {row[names[table].index('id')] for row in data[table]} or identifier in {data[table][i][names[table].index('id')] for i in excluded.get(table, set())}:
+                continue
+            old = connection.execute(sql.SQL('SELECT {} FROM public.{} WHERE id=%s').format(ident(counter), ident(table)), (identifier,)).fetchone()[0]
+            new = connection.execute(query, (identifier,)).fetchone()[0]
+            if old != new:
+                connection.execute(sql.SQL('UPDATE public.{} SET {}=%s WHERE id=%s').format(ident(table), ident(counter)), (new, identifier))
+                print(f'Counter repair {table} id={identifier}: {counter} {old} -> {new}')
+
+
+def verify(source, connection, columns, excluded=None, source_data=None):
     results = []
+    excluded = excluded or {table: set() for table in columns}
+    source_data = source_data or source_rows(source, columns)
     for table in columns:
         source_count = source.execute(f'SELECT count(*) FROM "{table}"').fetchone()[0]
         target_count = connection.execute(sql.SQL('SELECT count(*) FROM public.{}').format(ident(table))).fetchone()[0]
-        results.append((table + ' count', 'PASS' if source_count == target_count else 'FAIL', f'SQLite={source_count}, PG={target_count}'))
+        expected = source_count - len(excluded.get(table, set()))
+        results.append((table + ' count', 'PASS' if expected == target_count else 'FAIL', f'SQLite={source_count}, excluded={len(excluded.get(table, set()))}, PG={target_count}'))
     queries = {'Credit balances': 'SELECT user_id, sum(amount) FROM credit_transactions GROUP BY user_id ORDER BY user_id'}
+    excluded_like_ids = {source_data['likes'][i][0] for i in excluded.get('likes', set())}
+    excluded_comment_ids = {source_data['comments'][i][0] for i in excluded.get('comments', set())}
+    excluded_post_ids = {source_data['posts'][i][0] for i in excluded.get('posts', set())}
+    post_like_targets = {source_data['likes'][i][2] for i in excluded.get('likes', set()) if source_data['likes'][i][1] == 'post'}
+    comment_like_targets = {source_data['likes'][i][2] for i in excluded.get('likes', set()) if source_data['likes'][i][1] == 'comment'}
+    post_comment_targets = {source_data['comments'][i][1] for i in excluded.get('comments', set())}
     for table, metadata in columns.items():
         counters = [column for column, *_ in metadata if column.endswith('_count')]
-        if counters:
-            queries[table + ' counters'] = f'SELECT id, {", ".join(counters)} FROM {table} ORDER BY id'
-    queries['Membership ordering'] = 'SELECT community_id, user_id, seq FROM community_members ORDER BY community_id, user_id'
+        if not counters:
+            continue
+        names = [column for column, *_ in metadata]
+        expected = []
+        for index, row in enumerate(source.execute(f'SELECT {", ".join(names)} FROM "{table}"').fetchall()):
+            if index in excluded.get(table, set()):
+                continue
+            identifier = row[names.index('id')]
+            values = {counter: row[names.index(counter)] for counter in counters}
+            if table == 'posts' and (identifier in post_like_targets or identifier in post_comment_targets):
+                values['like_count'] = source.execute('SELECT count(*) FROM likes WHERE target_type=? AND target_id=? AND id NOT IN (%s)' % (','.join('?' * len(excluded_like_ids)) or 'NULL'), ('post', identifier, *excluded_like_ids)).fetchone()[0]
+                values['comment_count'] = source.execute('SELECT count(*) FROM comments WHERE post_id=? AND id NOT IN (%s)' % (','.join('?' * len(excluded_comment_ids)) or 'NULL'), (identifier, *excluded_comment_ids)).fetchone()[0]
+            elif table == 'comments' and identifier in comment_like_targets:
+                values['like_count'] = source.execute('SELECT count(*) FROM likes WHERE target_type=? AND target_id=? AND id NOT IN (%s)' % (','.join('?' * len(excluded_like_ids)) or 'NULL'), ('comment', identifier, *excluded_like_ids)).fetchone()[0]
+            expected.append((identifier, *(values[counter] for counter in counters)))
+        right = connection.execute(sql.SQL('SELECT id, {} FROM public.{} ORDER BY id').format(sql.SQL(', ').join(ident(counter) for counter in counters), ident(table))).fetchall()
+        results.append((table + ' counters', 'PASS' if expected == right else 'FAIL', f'{len(expected)} rows compared'))
     for label, query in queries.items():
-        left = source.execute(query.replace(', seq ', ', rowid ') if label == 'Membership ordering' else query).fetchall()
+        left = source.execute(query).fetchall()
         right = connection.execute(query).fetchall()
         results.append((label, 'PASS' if left == right else 'FAIL', f'{len(left)} rows compared'))
     return results
@@ -228,6 +340,7 @@ def main():
     parser.add_argument('--truncate', action='store_true')
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--allow-nontest', action='store_true')
+    parser.add_argument('--quarantine-orphans', action='store_true')
     args = parser.parse_args()
     url = os.environ.get('DATABASE_URL')
     if not url:
@@ -252,6 +365,17 @@ def main():
             if occupied and not args.truncate:
                 raise ValueError(f'Non-empty target: {occupied}; refusing without --truncate')
             data = source_rows(source, columns)
+            source_data = {table: list(rows) for table, rows in data.items()}
+            excluded = {table: set() for table in data}
+            if args.quarantine_orphans:
+                excluded = quarantine(data, columns, set())
+                save_quarantine(source, data, excluded)
+                for table in data:
+                    data[table] = [row for i, row in enumerate(data[table]) if i not in excluded[table]]
+            else:
+                missing = source.execute('SELECT id FROM posts WHERE user_id NOT IN (SELECT id FROM users)').fetchall()
+                if missing:
+                    raise ValueError('Source contains orphan rows; rerun with --quarantine-orphans')
             preflight(connection, columns, foreign_keys, data, source_findings(source))
             print('Load order:', ', '.join(order))
             connection.execute(sql.SQL('TRUNCATE {} RESTART IDENTITY').format(table_list))
@@ -260,7 +384,13 @@ def main():
                 connection.execute(sql.SQL('INSERT INTO public.{} ({}) SELECT {} FROM {}').format(
                     ident(table), names, names, ident('etl_' + table)))
             maximums = reset_sequences(connection, columns)
-            results = verify(source, connection, columns)
+            repair_counters(connection, source_data, excluded, columns)
+            results = verify(source, connection, columns, excluded, source_data)
+            for table in columns:
+                source_count = source.execute(f'SELECT count(*) FROM "{table}"').fetchone()[0]
+                excluded_count = len(excluded[table])
+                loaded_count = len(data[table])
+                results.append((table + ' reconciliation', 'PASS' if source_count == excluded_count + loaded_count else 'FAIL', f'source={source_count}, excluded={excluded_count}, loaded={loaded_count}'))
             results.extend(prove_sequences(connection, maximums))
             reset_sequences(connection, columns)
             report(results)

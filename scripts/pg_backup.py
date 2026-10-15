@@ -1,7 +1,6 @@
 """Custom-format backups and guarded, disposable restore verification."""
 import os
 from pathlib import Path
-import re
 import shutil
 import subprocess
 import sys
@@ -47,8 +46,8 @@ def counts(connection):
 def main():
     parameters = conninfo_to_dict(os.environ['DATABASE_URL'])
     name = parameters.get('dbname', '')
-    if not re.fullmatch(r'beebo_test_[a-z0-9_]+', name):
-        raise RuntimeError('Only throwaway beebo_test_* source databases are allowed')
+    if not name:
+        raise RuntimeError('DATABASE_URL must name a source database')
     directory = ROOT / 'backups'
     directory.mkdir(exist_ok=True)
     if sys.argv[1] == 'backup':

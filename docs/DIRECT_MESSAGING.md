@@ -141,7 +141,7 @@ or a production WSGI server with enough workers) if concurrent viewers
 grow.
 
 **Idempotency / concurrency.** Message sends and conversation creation run
-under `BEGIN IMMEDIATE` (same pattern as `wallet.claim_monthly_reward`), so
+inside a PostgreSQL transaction with a per-conversation `FOR UPDATE` lock (same pattern as `wallet.claim_monthly_reward`), so
 two simultaneous `POST /api/chat/conversations` for the same pair produce
 exactly one row, and a retried send with the same `client_id` returns the
 original message with 200 (UNIQUE constraint as the backstop, handled as a

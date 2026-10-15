@@ -11,7 +11,7 @@ re-verified against the current tree.
 
 ## Stack & Run
 
-- Backend: Flask + raw `sqlite3` (no ORM), split into an application
+- Backend: Flask + psycopg/psycopg-pool against PostgreSQL (no ORM), split into an application
   factory + blueprints under `app/` (not a single file):
   - `app/__init__.py` — `create_app()`: CORS, server-side sessions
     (`flask_session`, filesystem-backed, `./flask_session/`), CSRF
@@ -26,7 +26,7 @@ re-verified against the current tree.
   - `app.py` (project root, 6 lines) — thin entry point only:
     `create_app()` + `init_db()` + `app.run(...)`. All real logic lives
     under `app/`.
-- DB: `beebo.db` (SQLite, committed in repo during dev; **never** the
+- DB: PostgreSQL selected by required `DATABASE_URL`; `beebo.db` and `migrations/*.sql` are legacy source artifacts and **never** the
   target of a test run — see Testing). Tables: `users`, `posts`,
   `post_images`, `comments`, `likes`, `follows`, `highlights`,
   `search_history`, `library_files`, `credit_transactions`. Schema created idempotently in
@@ -71,7 +71,7 @@ re-verified against the current tree.
 | Concern | Location |
 |---|---|
 | App factory, CORS, sessions, CSRF, static/page routes | `app/__init__.py` |
-| DB schema / migrations | `app/db.py` (`init_db`) |
+| DB schema / migrations | PostgreSQL `migrations/pg/*.sql`; SQLite `app/db.py` is legacy |
 | Row → JSON shaping (posts/comments/users/library files) | `app/serializers.py` |
 | Auth: signup/login/logout/session/account-switch | `app/routes/auth.py` |
 | Post create (JSON + multipart w/ images) | `app/routes/posts.py:18` |
@@ -314,6 +314,8 @@ one batched `IN (...)` query against `post_images`, not N+1.
   (`style.css:~585`) rather than a JS-driven `src` swap — keep any future
   theme-dependent asset on this pattern, not a JS branch.
 
+**Phase 7 migration:** PostgreSQL quarantine mode preserves full excluded rows in `backups/quarantine_<timestamp>.json`, excludes dependency closure, and repairs only affected surviving counters.
+
 ## Bug / fix log
 
 **Problem:** Post images displayed correctly in the Home feed but were
@@ -375,6 +377,16 @@ those if this file doesn't answer the question and the topic matches one
 of their titles. Not individually re-verified in this update — if one
 contradicts this file, this file wins (it was checked against the live
 tree; they may not have been).
+
+## Non-obvious decisions worth preserving
+
+- Direct-message sends take a per-conversation `FOR UPDATE` lock so message ids commit in order; clients and read markers rely on that monotonic order.
+- Wallet mutations take a per-user lock to serialize balance and ledger updates.
+- PostgreSQL stores `timestamptz` and normalizes timestamps to UTC.
+- Usernames use a `lower(username)` unique index for case-insensitive uniqueness.
+- `community_members.seq` replaces SQLite rowid ordering.
+- PostgreSQL text searches intentionally use `ILIKE`; nullable sort keys specify explicit NULL ordering.
+- The quarantine flag exists because unrecoverable missing-user rows must be preserved for audit while keeping enforced foreign keys valid.
 
 ## Testing
 
