@@ -1,9 +1,7 @@
 #!/bin/bash
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/test_guard.sh" || exit 1
 
 # These tests hit whatever server is running on localhost:5050.
-# Before running: start the server with DB_PATH=beebo_test.db (see CLAUDE.md Testing section).
-# Running these against a server started without DB_PATH set will write
-# test data into the real beebo.db.
 
 BASE_URL="http://localhost:5050"
 COOKIES_FILE="cookies_highlights_test.txt"
@@ -23,7 +21,7 @@ rm -f "$COOKIES_FILE"
 
 # Step 1: Sign up a test user
 echo -e "\n${YELLOW}1. Signing up test user...${NC}"
-SIGNUP_RESPONSE=$(curl -s -c "$COOKIES_FILE" -X POST "$BASE_URL/api/signup" \
+SIGNUP_RESPONSE=$(test_curl -s -c "$COOKIES_FILE" -X POST "$BASE_URL/api/signup" \
   -H "Content-Type: application/json" \
   -d '{
     "full_name": "Highlights Tester",
@@ -49,7 +47,7 @@ convert -size 100x100 xc:blue /tmp/test_photo.jpg 2>/dev/null || {
   echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > /tmp/test_photo.jpg
 }
 
-PHOTO_RESPONSE=$(curl -s -b "$COOKIES_FILE" -X POST "$BASE_URL/api/highlights" \
+PHOTO_RESPONSE=$(test_curl -s -b "$COOKIES_FILE" -X POST "$BASE_URL/api/highlights" \
   -F "media=@/tmp/test_photo.jpg" \
   -F "title=Summer Vibes")
 
@@ -64,7 +62,7 @@ fi
 
 # Step 3: Create another photo highlight
 echo -e "\n${YELLOW}3. Creating another photo highlight...${NC}"
-PHOTO2_RESPONSE=$(curl -s -b "$COOKIES_FILE" -X POST "$BASE_URL/api/highlights" \
+PHOTO2_RESPONSE=$(test_curl -s -b "$COOKIES_FILE" -X POST "$BASE_URL/api/highlights" \
   -F "media=@/tmp/test_photo.jpg" \
   -F "title=Winter Fun")
 
@@ -79,7 +77,7 @@ fi
 
 # Step 4: Get user's highlights
 echo -e "\n${YELLOW}4. Getting user's highlights...${NC}"
-HIGHLIGHTS_RESPONSE=$(curl -s -b "$COOKIES_FILE" -X GET "$BASE_URL/api/users/$USER_ID/highlights")
+HIGHLIGHTS_RESPONSE=$(test_curl -s -b "$COOKIES_FILE" -X GET "$BASE_URL/api/users/$USER_ID/highlights")
 
 echo "$HIGHLIGHTS_RESPONSE" | python3 -m json.tool
 
@@ -89,7 +87,7 @@ echo -e "${GREEN}Found $HIGHLIGHT_COUNT highlights${NC}"
 
 # Step 5: Test validation - title too long
 echo -e "\n${YELLOW}5. Testing validation - title too long...${NC}"
-VALIDATION_RESPONSE=$(curl -s -b "$COOKIES_FILE" -X POST "$BASE_URL/api/highlights" \
+VALIDATION_RESPONSE=$(test_curl -s -b "$COOKIES_FILE" -X POST "$BASE_URL/api/highlights" \
   -F "media=@/tmp/test_photo.jpg" \
   -F "title=This title is definitely way too long for the maximum allowed")
 
@@ -97,7 +95,7 @@ echo "$VALIDATION_RESPONSE" | python3 -m json.tool
 
 # Step 6: Test validation - no title
 echo -e "\n${YELLOW}6. Testing validation - no title...${NC}"
-NO_TITLE_RESPONSE=$(curl -s -b "$COOKIES_FILE" -X POST "$BASE_URL/api/highlights" \
+NO_TITLE_RESPONSE=$(test_curl -s -b "$COOKIES_FILE" -X POST "$BASE_URL/api/highlights" \
   -F "media=@/tmp/test_photo.jpg" \
   -F "title=")
 
@@ -106,13 +104,13 @@ echo "$NO_TITLE_RESPONSE" | python3 -m json.tool
 # Step 7: Delete a highlight
 if [ -n "$PHOTO_ID" ]; then
   echo -e "\n${YELLOW}7. Deleting highlight ID $PHOTO_ID...${NC}"
-  DELETE_RESPONSE=$(curl -s -b "$COOKIES_FILE" -X DELETE "$BASE_URL/api/highlights/$PHOTO_ID")
+  DELETE_RESPONSE=$(test_curl -s -b "$COOKIES_FILE" -X DELETE "$BASE_URL/api/highlights/$PHOTO_ID")
   
   echo "$DELETE_RESPONSE" | python3 -m json.tool
   
   # Verify deletion
   echo -e "\n${YELLOW}8. Verifying deletion - getting highlights again...${NC}"
-  VERIFY_RESPONSE=$(curl -s -b "$COOKIES_FILE" -X GET "$BASE_URL/api/users/$USER_ID/highlights")
+  VERIFY_RESPONSE=$(test_curl -s -b "$COOKIES_FILE" -X GET "$BASE_URL/api/users/$USER_ID/highlights")
   
   echo "$VERIFY_RESPONSE" | python3 -m json.tool
   
@@ -122,7 +120,7 @@ fi
 
 # Step 9: Test unauthorized access
 echo -e "\n${YELLOW}9. Testing unauthorized access (no auth)...${NC}"
-UNAUTH_RESPONSE=$(curl -s -X POST "$BASE_URL/api/highlights" \
+UNAUTH_RESPONSE=$(test_curl -s -X POST "$BASE_URL/api/highlights" \
   -F "media=@/tmp/test_photo.jpg" \
   -F "title=Unauthorized")
 
@@ -133,7 +131,7 @@ echo -e "\n${YELLOW}10. Testing cross-user deletion protection...${NC}"
 rm -f "$COOKIES_FILE"
 
 # Sign up second user
-USER2_RESPONSE=$(curl -s -c "$COOKIES_FILE" -X POST "$BASE_URL/api/signup" \
+USER2_RESPONSE=$(test_curl -s -c "$COOKIES_FILE" -X POST "$BASE_URL/api/signup" \
   -H "Content-Type: application/json" \
   -d '{
     "full_name": "Second User",
@@ -143,7 +141,7 @@ USER2_RESPONSE=$(curl -s -c "$COOKIES_FILE" -X POST "$BASE_URL/api/signup" \
 
 # Try to delete first user's highlight
 if [ -n "$PHOTO2_ID" ]; then
-  CROSS_DELETE=$(curl -s -b "$COOKIES_FILE" -X DELETE "$BASE_URL/api/highlights/$PHOTO2_ID")
+  CROSS_DELETE=$(test_curl -s -b "$COOKIES_FILE" -X DELETE "$BASE_URL/api/highlights/$PHOTO2_ID")
   echo "$CROSS_DELETE" | python3 -m json.tool
 fi
 

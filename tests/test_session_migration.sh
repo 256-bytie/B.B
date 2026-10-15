@@ -1,4 +1,5 @@
 #!/bin/bash
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/test_guard.sh" || exit 1
 
 # Test script to verify Phase 1 & 2 migration
 # Tests that session changes don't affect API response shapes
@@ -8,16 +9,18 @@ echo ""
 
 # Start the server in the background
 echo "Starting server..."
-python3 app.py > test_server.log 2>&1 &
+if [[ "${BEEBO_SERVER_RUNNING:-0}" != 1 ]]; then
+python3 -B app.py > test_server.log 2>&1 &
 SERVER_PID=$!
 sleep 3
+fi
 
 # Function to cleanup on exit
 cleanup() {
     echo ""
     echo "Stopping server..."
-    kill $SERVER_PID 2>/dev/null
-    wait $SERVER_PID 2>/dev/null
+    kill "${SERVER_PID:-}" 2>/dev/null
+    wait "${SERVER_PID:-}" 2>/dev/null || true
 }
 trap cleanup EXIT
 

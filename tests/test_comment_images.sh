@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/test_guard.sh" || exit 1
 # Test suite for comment image uploads (multipart replies)
 set -e
 
 API="http://localhost:5050"
-DB="beebo_test.db"
 
 echo "=== Comment Images Test Suite ==="
 

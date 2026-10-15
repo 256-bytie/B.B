@@ -1,4 +1,5 @@
 #!/bin/bash
+source "$(dirname "${BASH_SOURCE[0]}")/test_guard.sh" || exit 1
 
 BASE_URL="http://localhost:5050"
 COOKIES_FILE="cookies_demo.txt"

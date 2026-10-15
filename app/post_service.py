@@ -17,7 +17,7 @@ import uuid
 
 from werkzeug.utils import secure_filename
 
-from app.serializers import serialize_post, serialize_comment
+from app.serializers import timestamp_text, serialize_post, serialize_comment
 from app.community_access import post_community, viewer_role, can_view, can_interact
 
 UPLOAD_FOLDER = 'static/uploads'
@@ -222,11 +222,10 @@ def create_post(conn, user_id, content, audience, files, community_id=None, quot
     ''', (post_id,))
     row = cursor.fetchone()
 
-    # PG-PHASE3: NULL_ORDERING — created_at ordering semantics deferred.
     cursor.execute('''
         SELECT image_path FROM post_images
         WHERE post_id = %s
-        ORDER BY position ASC
+        ORDER BY position ASC NULLS FIRST
     ''', (post_id,))
     image_rows = cursor.fetchall()
 
@@ -281,7 +280,6 @@ def fetch_post_quote_data(conn, post_ids, current_user_id):
         return payloads, share_counts
 
     quote_placeholders = ','.join(['%s'] * len(quote_ids))
-    # PG-PHASE3: TYPE_STRICTNESS — EXISTS needs an int cast for the CASE result.
 
     # The joined author row and the same denormalized counts used by the feed
     # are fetched in one query. The community type/member check applies the
@@ -324,7 +322,7 @@ def fetch_post_quote_data(conn, post_ids, current_user_id):
             'author_handle': username or email.split('@')[0],
             'author_avatar': profile_picture,
             'content': content,
-            'created_at': created_at,
+            'created_at': timestamp_text(created_at),
             'like_count': like_count,
             'comment_count': comment_count,
             'share_count': share_counts.get(original_id, 0),
@@ -337,7 +335,7 @@ def fetch_post_quote_data(conn, post_ids, current_user_id):
         SELECT post_id, image_path
         FROM post_images
         WHERE post_id IN ({quote_placeholders})
-        ORDER BY post_id, position ASC
+        ORDER BY post_id, position ASC NULLS FIRST
         ''',
         quote_ids,
     )
@@ -423,9 +421,7 @@ def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cu
 
     query += ' WHERE ' + ' AND '.join(where_clauses)
 
-    # PG-PHASE3: NULL_ORDERING — created_at is nullable; PG/Postgres NULL sort
-    # order differs from SQLite for the mixed NULL/non-NULL case.
-    query += ' ORDER BY posts.created_at DESC, posts.id DESC LIMIT %s'
+    query += ' ORDER BY posts.created_at DESC NULLS LAST, posts.id DESC LIMIT %s'
     params.append(limit + 1)  # one extra row, to detect a next page
 
     cursor.execute(query, params)
@@ -442,12 +438,11 @@ def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cu
             SELECT post_id, image_path
             FROM post_images
             WHERE post_id IN ({placeholders})
-            ORDER BY post_id, position ASC
+            ORDER BY post_id, position ASC NULLS FIRST
         ''', post_ids)
         images_by_post = {}
         for post_id, image_path in cursor.fetchall():
             images_by_post.setdefault(post_id, []).append(image_path)
-        # PG-PHASE3: TYPE_STRICTNESS — EXISTS yields a native boolean, converted by bool() below.
         cursor.execute(f'''
             SELECT posts.id, c.slug, c.name, c.type,
                    EXISTS(SELECT 1 FROM community_members m
@@ -486,7 +481,6 @@ def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cu
 
 
 def get_comments(conn, post_id, current_user_id):
-    # PG-PHASE3: NULL_ORDERING — nullable created_at sorts differently in PostgreSQL.
     """All comments on post_id, oldest first, with per-viewer
     liked_by_user. Raises PostNotFoundError if post_id doesn't exist."""
     cursor = conn.cursor()
@@ -509,8 +503,7 @@ def get_comments(conn, post_id, current_user_id):
                        AND likes.target_id = comments.id
                        AND likes.user_id = %s
         WHERE comments.post_id = %s
-        -- PG-PHASE3: NULL_ORDERING
-        ORDER BY comments.created_at ASC
+        ORDER BY comments.created_at ASC NULLS FIRST
     ''', (current_user_id, post_id))
     return [serialize_comment(row) for row in cursor.fetchall()]
 
@@ -600,46 +593,30 @@ def _toggle_like(conn, user_id, target_type, target_id, table, exists_query, not
     (likes) and same race-handling shape for both, differing only in
     target_type and which table's like_count to adjust.
     """
-    # PG-PHASE3: LOCKING READ_MODIFY_WRITE — concurrent toggles need transaction review.
     cursor = conn.cursor()
 
-    cursor.execute(exists_query, (target_id,))
+    cursor.execute(exists_query + ' FOR UPDATE', (target_id,))
     if not cursor.fetchone():
         raise not_found_error()
 
     cursor.execute('''
-        SELECT id FROM likes
+        DELETE FROM likes
         WHERE user_id = %s AND target_type = %s AND target_id = %s
+        RETURNING id
     ''', (user_id, target_type, target_id))
-    existing_like = cursor.fetchone()
-
-    if existing_like:
-        cursor.execute('''
-            DELETE FROM likes
-            WHERE user_id = %s AND target_type = %s AND target_id = %s
-        ''', (user_id, target_type, target_id))
-        if cursor.rowcount > 0:
-            cursor.execute(f'UPDATE {table} SET like_count = like_count - 1 WHERE id = %s', (target_id,))
+    if cursor.fetchone() is not None:
+        cursor.execute(f'UPDATE {table} SET like_count = like_count - 1 WHERE id = %s', (target_id,))
         liked = False
     else:
-        try:
-            cursor.execute('''
-                INSERT INTO likes (user_id, target_type, target_id)
-                VALUES (%s, %s, %s)
-            ''', (user_id, target_type, target_id))
+        cursor.execute('''
+            INSERT INTO likes (user_id, target_type, target_id)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (user_id, target_type, target_id) DO NOTHING
+            RETURNING id
+        ''', (user_id, target_type, target_id))
+        if cursor.fetchone() is not None:
             cursor.execute(f'UPDATE {table} SET like_count = like_count + 1 WHERE id = %s', (target_id,))
-            liked = True
-        except Exception:
-            # Race: another request inserted this like between our SELECT
-            # and INSERT. Roll back the failed insert, re-check current
-            # state, treat as truth - do NOT double-increment, the
-            # winning request already did.
-            conn.rollback()
-            cursor.execute('''
-                SELECT id FROM likes
-                WHERE user_id = %s AND target_type = %s AND target_id = %s
-            ''', (user_id, target_type, target_id))
-            liked = cursor.fetchone() is not None
+        liked = True
 
     conn.commit()
 

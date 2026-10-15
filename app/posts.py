@@ -221,7 +221,6 @@ def get_posts():
         if where_clauses:
             query += ' WHERE ' + ' AND '.join(where_clauses)
 
-        # PG-PHASE3: NULL_ORDERING TIMESTAMP_TEXT — legacy unregistered blueprint.
         query += ' ORDER BY posts.created_at DESC, posts.id DESC LIMIT %s'
         # Fetch one extra row to detect whether there's a next page.
         params.append(limit + 1)
@@ -297,7 +296,7 @@ def get_comments(post_id):
                            AND likes.target_id = comments.id
                            AND likes.user_id = %s
             WHERE comments.post_id = %s
-            -- PG-PHASE3: NULL_ORDERING TIMESTAMP_TEXT
+
             ORDER BY comments.created_at ASC
         ''', (current_user_id, post_id))
         rows = cursor.fetchall()
@@ -392,7 +391,6 @@ def create_comment(post_id):
 
 @bp.route('/api/posts/<int:post_id>/like', methods=['POST'])
 def like_post(post_id):
-    # PG-PHASE3: LOCKING READ_MODIFY_WRITE — legacy unregistered toggle path.
     """Toggle like on a post"""
     if 'user_id' not in session:
         return jsonify({'error': 'Authentication required'}), 401
@@ -468,7 +466,6 @@ def like_post(post_id):
 
 @bp.route('/api/comments/<int:comment_id>/like', methods=['POST'])
 def like_comment(comment_id):
-    # PG-PHASE3: LOCKING READ_MODIFY_WRITE — legacy unregistered toggle path.
     """Toggle like on a comment"""
     if 'user_id' not in session:
         return jsonify({'error': 'Authentication required'}), 401

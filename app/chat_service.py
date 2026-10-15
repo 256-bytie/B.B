@@ -223,7 +223,7 @@ def get_or_create_conversation(cursor, viewer_id, other_user_id):
 
     Returns (conversation_id, created). Runs inside the caller's implicit
     transaction. The unique pair constraint prevents duplicate rows;
-    PostgreSQL retry behavior after a losing insert is deferred to Phase 3.
+    INSERT ON CONFLICT resolves concurrent creation without aborting the transaction.
 
     Raises ChatValidationError for a self-DM or invalid id,
     UserNotFoundError for an unknown user.
@@ -247,31 +247,33 @@ def get_or_create_conversation(cursor, viewer_id, other_user_id):
     existing = cursor.fetchone()
     if existing:
         return existing[0], False
-
-    try:
-        cursor.execute(
-            'INSERT INTO conversations (user_low_id, user_high_id) VALUES (%s, %s) RETURNING id',
-            (low, high)
-        )
-    except psycopg.errors.UniqueViolation:
-        # PG-PHASE3: LOCKING READ_MODIFY_WRITE — retry needs a savepoint or rollback before SELECT.
-        # Lost a get-or-create race: the pair now exists, return it.
-        cursor.execute(
-            'SELECT id FROM conversations WHERE user_low_id = %s AND user_high_id = %s',
-            (low, high)
-        )
-        row = cursor.fetchone()
-        if row is None:
-            raise
-        return row[0], False
-
-    conversation_id = cursor.fetchone()[0]
+    # INSERT ... ON CONFLICT DO NOTHING prevents race conditions;
+    # if nothing inserted, the row already exists and we fetch it.
     cursor.execute(
-        'INSERT INTO conversation_state (conversation_id, last_message_id) '
-        'VALUES (%s, 0)',
-        (conversation_id,)
+        'INSERT INTO conversations (user_low_id, user_high_id) '
+        'VALUES (%s, %s) '
+        'ON CONFLICT (user_low_id, user_high_id) DO NOTHING '
+        'RETURNING id',
+        (low, high)
     )
-    return conversation_id, True
+    row = cursor.fetchone()
+    if row:
+        conversation_id = row[0]
+        cursor.execute(
+            'INSERT INTO conversation_state (conversation_id, last_message_id) '
+            'VALUES (%s, 0)',
+            (conversation_id,)
+        )
+        return conversation_id, True
+    # Lost the race; fetch the existing conversation
+    cursor.execute(
+        'SELECT id FROM conversations WHERE user_low_id = %s AND user_high_id = %s',
+        (low, high)
+    )
+    row = cursor.fetchone()
+    if row is None:
+        raise RuntimeError('Conversation not found after conflict')
+    return row[0], False
 
 
 def conversation_exists_for_pair(cursor, user_a, user_b):
@@ -314,38 +316,56 @@ def send_message(conn, conversation_id, sender_id, body, client_id=None):
         elif len(client_id) > 255:
             client_id = client_id[:255]
 
-    # PG-PHASE3: LOCKING — psycopg opens a transaction on the first statement;
-    # the SQLite write-lock analog is deferred.
     try:
         cursor = conn.cursor()
+        # Take a per-conversation lock to ensure message IDs become visible
+        # in order. Without this, message N+1 can commit before message N,
+        # and a long-poll reader at cursor N will miss message N forever.
+        cursor.execute(
+            'SELECT 1 FROM conversations WHERE id = %s FOR UPDATE',
+            (conversation_id,)
+        )
+        if cursor.fetchone() is None:
+            raise ConversationNotFoundError('Conversation not found')
+
         row = _require_member(cursor, conversation_id, sender_id)
         if row is None:
             raise ConversationNotFoundError('Conversation not found')
 
-        if client_id is not None:
+        # Idempotency: INSERT ... ON CONFLICT by client_id.
+        # If nothing inserted, fetch the existing message.
+        cursor.execute(
+            'INSERT INTO messages (conversation_id, sender_id, body, client_id) '
+            'VALUES (%s, %s, %s, %s) '
+            'ON CONFLICT (conversation_id, sender_id, client_id) DO NOTHING '
+            'RETURNING id, conversation_id, sender_id, body, created_at',
+            (conversation_id, sender_id, body, client_id)
+        )
+        row = cursor.fetchone()
+        if row:
+            # New message inserted
+            message_id = row[0]
+            message_data = row
+            created = True
+            # Update conversation_state with GREATEST to ensure monotonic increment
+            cursor.execute(
+                'INSERT INTO conversation_state (conversation_id, last_message_id) '
+                'VALUES (%s, %s) '
+                'ON CONFLICT(conversation_id) DO UPDATE '
+                'SET last_message_id = GREATEST(conversation_state.last_message_id, excluded.last_message_id)',
+                (conversation_id, message_id)
+            )
+        else:
+            # Idempotent retry: fetch the existing message
             cursor.execute(
                 'SELECT id, conversation_id, sender_id, body, created_at '
                 'FROM messages WHERE conversation_id = %s AND sender_id = %s '
                 'AND client_id = %s',
                 (conversation_id, sender_id, client_id)
             )
-            existing = cursor.fetchone()
-            if existing:
-                conn.rollback()
-                return serialize_chat_message(existing), False
+            message_data = cursor.fetchone()
+            created = False
 
-        cursor.execute(
-            'INSERT INTO messages (conversation_id, sender_id, body, client_id) '
-            'VALUES (%s, %s, %s, %s) RETURNING id',
-            (conversation_id, sender_id, body, client_id)
-        )
-        message_id = cursor.fetchone()[0]
-        cursor.execute(
-            'INSERT INTO conversation_state (conversation_id, last_message_id) '
-            'VALUES (%s, %s) '
-            'ON CONFLICT(conversation_id) DO UPDATE SET last_message_id = excluded.last_message_id',
-            (conversation_id, message_id)
-        )
         conn.commit()
     except ConversationNotFoundError:
         conn.rollback()
@@ -354,9 +374,9 @@ def send_message(conn, conversation_id, sender_id, body, client_id=None):
         conn.rollback()
         raise
 
-    message = get_message(conn, conversation_id, message_id, sender_id)
-    notify_updates()
-    return message, True
+    if created:
+        notify_updates()
+    return serialize_chat_message(message_data), created
 
 
 def get_messages(cursor, conversation_id, viewer_id, before_id=None,

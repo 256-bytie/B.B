@@ -1,4 +1,5 @@
 #!/bin/bash
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/test_guard.sh" || exit 1
 
 # SPA route tests - verify that /profile and /u/<id> serve beebo.html correctly.
 # These tests hit whatever server is running on localhost:5050.

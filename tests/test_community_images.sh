@@ -1,4 +1,5 @@
 #!/bin/bash
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/test_guard.sh" || exit 1
 set -e
 BASE_URL="http://127.0.0.1:5050"
 RUN_ID="$(date +%s)$$"

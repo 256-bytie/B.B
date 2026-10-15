@@ -1,9 +1,9 @@
 #!/bin/bash
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/test_guard.sh" || exit 1
 
 # End-to-end tests for the direct messaging API (conversations, messages,
 # read cursors, long-poll updates). Run against a server started with an
 # isolated DB (never beebo.db):
-#   DB_PATH=beebo_test.db python app.py &
 #   bash tests/test_chat.sh
 # Uses unique per-run emails, so it needs no direct DB access and is safe
 # to re-run against the same test database.

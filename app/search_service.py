@@ -18,7 +18,7 @@ enough for this to matter, _search_posts is the one place to swap in
 FTS5.
 """
 import re
-from app.serializers import serialize_post, serialize_user_public
+from app.serializers import timestamp_text, serialize_post, serialize_user_public
 from app import post_service
 
 VALID_TYPES = {'all', 'people', 'posts', 'topics'}
@@ -95,14 +95,11 @@ def _search_people(cursor, q, current_user_id, limit):
     """
     like = f'%{q}%'
     prefix = f'{q}%'
-    # PG-PHASE3: LIKE_CASE COLLATE_NOCASE — matching and name ordering require parity review.
     cursor.execute('''
         SELECT id, full_name, email, profile_picture, cover_image, username, bio
         FROM users
         WHERE id != %s
-          AND (username LIKE %s OR full_name LIKE %s OR bio LIKE %s)
-        -- PG-PHASE3: LIKE_CASE — SQLite ASCII LIKE is case-insensitive; PG LIKE
-        -- is case-sensitive.
+          AND (username ILIKE %s OR full_name ILIKE %s OR bio ILIKE %s)
         ORDER BY
             CASE
                 WHEN LOWER(username) = LOWER(%s) THEN 0
@@ -110,15 +107,13 @@ def _search_people(cursor, q, current_user_id, limit):
                 WHEN LOWER(full_name) LIKE LOWER(%s) THEN 2
                 ELSE 3
             END,
-            -- PG-PHASE3: COLLATE_NOCASE — lower() uses PostgreSQL collation rules.
-            lower(full_name)
+            lower(full_name), id
         LIMIT %s
     ''', (current_user_id, like, like, like, q, prefix, prefix, limit))
     return [serialize_user_public(row) for row in cursor.fetchall()]
 
 
 def _search_posts(cursor, q, current_user_id, limit, cursor_id):
-    # PG-PHASE3: LIKE_CASE — preserve the existing LIKE operator pending parity work.
     """Same shape/pagination convention as GET /api/posts (keyset on id,
     author join, per-user liked_by_user flag) so results can be rendered
     with the existing buildPostCardHtml()/serialize_post() and get real
@@ -136,16 +131,14 @@ def _search_posts(cursor, q, current_user_id, limit, cursor_id):
         LEFT JOIN likes ON likes.target_type = 'post'
                        AND likes.target_id = posts.id
                        AND likes.user_id = %s
-        -- PG-PHASE3: LIKE_CASE
-        WHERE posts.content LIKE %s
+        WHERE posts.content ILIKE %s
           AND posts.community_id IS NULL
     '''
     params = [current_user_id, like]
     if cursor_id is not None:
         query += ' AND posts.id < %s'
         params.append(cursor_id)
-    # PG-PHASE3: NULL_ORDERING
-    query += ' ORDER BY posts.created_at DESC, posts.id DESC LIMIT %s'
+    query += ' ORDER BY posts.created_at DESC NULLS LAST, posts.id DESC LIMIT %s'
     params.append(limit + 1)
 
     cursor.execute(query, params)
@@ -160,7 +153,7 @@ def _search_posts(cursor, q, current_user_id, limit, cursor_id):
         cursor.execute(f'''
             SELECT post_id, image_path FROM post_images
             WHERE post_id IN ({placeholders})
-            ORDER BY post_id, position ASC
+            ORDER BY post_id, position ASC NULLS FIRST
         ''', post_ids)
         images_by_post = {}
         for post_id, image_path in cursor.fetchall():
@@ -192,8 +185,7 @@ def _hashtag_counts(cursor):
     posts.content directly - filtered to rows that contain '#' first so
     the regex only runs over candidate rows, not the whole table.
     """
-    # PG-PHASE3: LIKE_CASE
-    cursor.execute("SELECT content FROM posts WHERE content LIKE '%#%' AND community_id IS NULL")
+    cursor.execute("SELECT content FROM posts WHERE content ILIKE '%#%' AND community_id IS NULL")
     counts = {}
     for (content,) in cursor.fetchall():
         for tag in HASHTAG_RE.findall(content):
@@ -257,16 +249,13 @@ def get_suggestions(conn, q, current_user_id):
 
     like = f'%{q}%'
     prefix = f'{q}%'
-    # PG-PHASE3: LIKE_CASE COLLATE_NOCASE — matching and name ordering require parity review.
     cursor.execute('''
         SELECT full_name, username, email
         FROM users
-        WHERE id != %s AND (username LIKE %s OR full_name LIKE %s)
-        -- PG-PHASE3: LIKE_CASE
+        WHERE id != %s AND (username ILIKE %s OR full_name ILIKE %s)
         ORDER BY
             CASE WHEN LOWER(username) LIKE LOWER(%s) THEN 0 ELSE 1 END,
-            -- PG-PHASE3: COLLATE_NOCASE — lower() uses PostgreSQL collation rules.
-            lower(full_name)
+            lower(full_name), id
         LIMIT 5
     ''', (current_user_id, like, like, prefix))
     for full_name, username, email in cursor.fetchall():
@@ -288,21 +277,18 @@ def get_suggestions(conn, q, current_user_id):
 
 
 def get_history(conn, user_id):
-    # PG-PHASE3: NULL_ORDERING — nullable created_at sorts differently in PostgreSQL.
     """Most recent searches for a user, newest first."""
     cursor = conn.cursor()
     cursor.execute('''
         SELECT id, query, created_at FROM search_history
         WHERE user_id = %s
-        -- PG-PHASE3: NULL_ORDERING
-        ORDER BY created_at DESC, id DESC
+        ORDER BY created_at DESC NULLS LAST, id DESC
         LIMIT %s
     ''', (user_id, MAX_HISTORY_PER_USER))
-    return [{'id': r[0], 'query': r[1], 'created_at': r[2]} for r in cursor.fetchall()]
+    return [{'id': r[0], 'query': r[1], 'created_at': timestamp_text(r[2])} for r in cursor.fetchall()]
 
 
 def add_history(conn, user_id, query):
-    # PG-PHASE3: NULL_ORDERING — history pruning orders by nullable created_at.
     """Record a submitted search term. De-dupes case-insensitively (a
     repeat search moves to the top rather than appearing twice) and
     trims the account down to the most recent MAX_HISTORY_PER_USER
@@ -327,8 +313,7 @@ def add_history(conn, user_id, query):
         WHERE user_id = %s AND id NOT IN (
             SELECT id FROM search_history
             WHERE user_id = %s
-            -- PG-PHASE3: NULL_ORDERING
-            ORDER BY created_at DESC, id DESC
+            ORDER BY created_at DESC NULLS LAST, id DESC
             LIMIT %s
         )
     ''', (user_id, user_id, MAX_HISTORY_PER_USER))

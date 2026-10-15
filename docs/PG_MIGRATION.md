@@ -110,3 +110,104 @@ here because Docker is already available.
   and explicitly deferred Phase 3 differences. Re-run with
   `bash scripts/pg_test_env.sh -- python -B tests/test_pg_phase2.py` after
   supplying the standard PostgreSQL credential environment variables.
+
+## Phase 3 — behavioral parity (reduced scope)
+
+### Fixes, in requested order
+
+- A: user-facing people/post/suggestions, library title/course, and community
+  browse/member searches use ILIKE; existing lower-based ranking remains.
+  Regression checks prove john/JOHN/John return identical rows. PostgreSQL
+  accepts a bound single-character ESCAPE: verified with a literal underscore
+  pattern. Community browsing retains bound backslash escapes.
+- B: interrupted work already added `lower(full_name), id` to people and
+  suggestion ordering; retained that deterministic ordering. PostgreSQL locale
+  collation and Unicode lowercasing can differ from SQLite's ASCII NOCASE/binary
+  treatment for accented and other non-ASCII names in both endpoints.
+- C: nullable timestamps explicitly sort NULLS FIRST ascending / NULLS LAST
+  descending in posts, comments, history, highlights, library, and membership
+  lists. Nullable image positions also use NULLS FIRST. Membership ordering
+  retains Phase 2's monotonic `m.seq` replacement for rowid.
+- D/E/H: fix-on-failure only, as requested. No new GROUP BY/DISTINCT, input
+  type, or reserved-name failures surfaced in the executed suites. This is
+  not a comprehensive malformed-JSON audit. Existing EXISTS casts remain.
+- F: native timestamps serialize as UTC `YYYY-MM-DD HH:MM:SS` for posts,
+  comments, quotes, messages, library, highlights, and history; wallet and
+  community timestamps retain `YYYY-MM-DDTHH:MM:SSZ`. Wallet arithmetic uses
+  aware UTC datetimes, second precision, and unchanged month-end clamping.
+  Feed cursors are integer ids, not encoded timestamp/id tuples: no timestamp
+  encode/decode path exists to port; created_at DESC, id DESC remains.
+- G: see Concurrency below. Removed interrupted-edit corruption, including
+  accidental service deletion and unreachable duplicate message-send code.
+
+### Concurrency
+
+- Conversation creation: pair-unique INSERT ON CONFLICT DO NOTHING RETURNING
+  id; a losing insert selects the committed row. Only the insertion winner
+  returns created=True (201); route commits creation and state together.
+- Message sends: lock the conversation row FOR UPDATE before allocating an id;
+  hold to commit. This prevents ids becoming visible out of order within that
+  conversation. Idempotency uses the conversation/sender/client unique key with
+  DO NOTHING RETURNING, then fetches the original on conflict. State uses
+  GREATEST(existing, excluded) and commits with the message.
+- Wallet: record_transaction locks the user's row FOR UPDATE before balance
+  check and insert, without committing; every current caller is covered (the
+  monthly claim is the sole caller). Claim locks before eligibility check and
+  holds through commit. Failed eligibility rolls back. Future spend callers
+  must commit/rollback the surrounding transaction, never release early.
+- Likes: lock the target post/comment row FOR UPDATE before toggling. DELETE
+  RETURNING decides removal; INSERT ON CONFLICT DO NOTHING RETURNING decides
+  creation; atomic counter arithmetic runs only for actual mutations in that
+  transaction. This serializes same-target toggles and prevents counter drift.
+- Follows: lock the followee user row FOR UPDATE until commit; DELETE RETURNING
+  and INSERT ON CONFLICT DO NOTHING RETURNING replace exception-based retries.
+- Username: keep the preflight check for the existing error; catch PostgreSQL
+  UniqueViolation during UPDATE/commit, rollback, and raise UsernameTakenError
+  (409). The unique lower(username) index is the concurrency guard.
+- Community slug allocation and other membership/comment subtree changes were
+  excluded by the reduced G.4 scope, not claimed concurrency-safe here. Library
+  download count already uses atomic `download_count = download_count + 1`.
+
+### Verification evidence
+
+Run with standard PG credential environment variables, never production DBs:
+
+```
+bash scripts/pg_test_env.sh -- python3 -B tests/test_pg_phase3.py
+bash scripts/run_pg_shell_tests.sh
+```
+
+The shell harness copies the repo without beebo.db into `/tmp/beebo_test_suite_*`
+and runs **every tests/*.sh**, not just run_all_tests.sh. Legacy sqlite3 probes
+are redirected to guarded throwaway PostgreSQL connections, so even the stale
+hardcoded production cleanup cannot touch SQLite. Logs persist in that copy.
+
+Final run: `/tmp/beebo_test_suite_VA6f5u/results.txt` and per-test logs:
+
+- All 17 baseline-passing shell files return zero; new test_ilike_case.sh passes.
+- test_chat.sh: 44 passed, 0 failed; test_communities.sh: 150 passed, 0 failed;
+  test_wallet.sh: 25 passed, 0 failed; CSRF/rate limit: 15 passed, 0 failed.
+- test_comment_delete.sh exits 1 and test_pagination.sh exits 2: the same two
+  baseline stale CSRF/register failures. Both were executed, not skipped.
+- Legacy scripts such as follows/comments print failed checks or CSRF errors
+  while returning zero, just as the baseline's exit-code classification permits.
+  Thus matching baseline PASS means matching file outcomes, not proving every
+  assertion in these weak scripts passed. No blanket assertion-level claim.
+- Both required concurrency tests pass: 20 parallel sends have unique ids in
+  instrumented commit order and state=max(id); 10 parallel monthly claims yield
+  one success and exactly one ledger entry. Commit instrumentation records while
+  holding a Python mutex around commit, not unreliable HTTP response ordering.
+- UTC offset conversion and leap-year Jan 31 -> Feb 29 arithmetic pass.
+- Feed spot check: created_at `2026-10-15 12:25:06`; wallet spot check:
+  last_claimed_at `2026-10-15T12:25:06Z`, next_claim_at
+  `2026-11-15T12:25:06Z`. No cross-backend byte-diff claimed.
+- Phase 2 smoke also passes (migrations twice, pool rollback, tuple rows, UTC,
+  JSON 503). Three SQLite Python unit suites intentionally skipped until Phase 4.
+- No deferred Phase 3 source markers remain; Python sources parse and
+  `git diff --check` passes. beebo.db SHA256 equals git HEAD:
+  `317bac699430cbe300ab21b0b1ee904a74714f0f7cda21d03dbf3fe175a3496e`.
+
+Reduced gate passes at baseline file-outcome level, with the legacy assertion
+limitations and non-ASCII collation differences explicitly retained as risks.
+No frontend or production data changes; unrelated pre-existing working-tree
+artifacts left alone. Changes remain uncommitted.

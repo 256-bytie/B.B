@@ -112,12 +112,12 @@ PY
 
 # --- setup / teardown -------------------------------------------------------
 
-# If already inside a throwaway session, don't create a second database.
-if [[ -n "${BEEBO_TEST_DB:-}" && -n "${DATABASE_URL:-}" ]]; then
-    return 0 2>/dev/null || exit 0
+if [[ -n "${DATABASE_URL:-}" ]]; then
+    python3 -B "$(dirname "${BASH_SOURCE[0]}")/../tests/pg_support.py"
 fi
 
 BEEBO_TEST_DB="$(pg_test_new_name)"
+trap 'pg_test_drop "$BEEBO_TEST_DB"' EXIT
 pg_test_create "$BEEBO_TEST_DB"
 DATABASE_URL="$(pg_test_url "$BEEBO_TEST_DB")"
 BEEBO_TEST=1
@@ -125,7 +125,7 @@ BEEBO_TEST=1
 export BEEBO_TEST_DB DATABASE_URL BEEBO_TEST
 
 _teardown() {
-    pg_test_drop "$BEEBO_TEST_DB" || true
+    pg_test_drop "$BEEBO_TEST_DB"
     unset BEEBO_TEST_DB DATABASE_URL BEEBO_TEST || true
 }
 trap _teardown EXIT

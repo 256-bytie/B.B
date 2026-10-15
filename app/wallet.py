@@ -45,23 +45,18 @@ class InsufficientCreditsError(Exception):
 # ---- time helpers ----
 
 def utcnow():
-    """Current time as a naive UTC datetime."""
-    return datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
+    """Current time as an aware UTC datetime."""
+    return datetime.now(timezone.utc).replace(microsecond=0)
 
 
 def to_db_ts(dt):
-    # PG-PHASE3: TIMESTAMPS — psycopg already accepts a timezone-aware
-    # datetime directly; keep the string only while the SQLite-era helper shape
-    # remains in use.
-    return dt.strftime(_DB_TS_FORMAT)
+    return from_db_ts(dt)
 
 
 def from_db_ts(value):
-    # PG-PHASE3: TIMESTAMPS — timestamptz rows now come back as datetime objects,
-    # so this strptime path must handle datetime too before final semantic parity.
     if isinstance(value, datetime):
-        return value.replace(tzinfo=None, microsecond=0)
-    return datetime.strptime(value, _DB_TS_FORMAT)
+        return (value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)).replace(microsecond=0)
+    return datetime.strptime(value, _DB_TS_FORMAT).replace(tzinfo=timezone.utc)
 
 
 def add_one_month(dt):
@@ -86,12 +81,19 @@ def record_transaction(conn, user_id, amount, kind, reason, description, now=Non
     """Append one ledger entry and return its id. Does NOT commit.
 
     Spends (amount < 0) are refused if they would overdraw the balance.
-    That check is only race-free when the caller already holds a write
-    lock for the surrounding transaction, as
-    claim_monthly_reward does.
+    A user row lock serializes the balance check and insert until the
+    caller commits or rolls back.
     """
-    # PG-PHASE3: LOCKING READ_MODIFY_WRITE — balance checks need PostgreSQL concurrency design.
-    if not isinstance(amount, int) or amount == 0:
+    # Take a per-user lock to ensure overdraft check + insert are atomic.
+    cursor = conn.cursor()
+    cursor.execute(
+        'SELECT 1 FROM users WHERE id = %s FOR UPDATE',
+        (user_id,)
+    )
+    if cursor.fetchone() is None:
+        raise ValueError(f'User {user_id} not found')
+
+    if not isinstance(amount, int) or isinstance(amount, bool) or amount == 0:
         raise ValueError('amount must be a non-zero integer')
     if amount < 0 and get_balance(conn, user_id) + amount < 0:
         raise InsufficientCreditsError('Not enough credits')
@@ -150,11 +152,11 @@ def get_monthly_reward_status(conn, user_id, now=None):
     Aug 15 unlocks the next on Sep 15. A user who has never claimed can
     claim immediately.
 
-    Returns a dict of naive-UTC datetimes:
+    Returns a dict of aware-UTC datetimes:
         {'amount', 'claimable', 'next_claim_at', 'last_claimed_at'}
     where next_claim_at is None whenever the reward is claimable now.
     """
-    now = now or utcnow()
+    now = from_db_ts(now) if now is not None else utcnow()
     row = conn.execute(
         'SELECT created_at FROM credit_transactions '
         'WHERE user_id = %s AND reason = %s ORDER BY id DESC LIMIT 1',
@@ -184,13 +186,20 @@ def claim_monthly_reward(conn, user_id, now=None):
     """Grant the monthly free credits if they're claimable; return the new ledger row id.
 
     The eligibility check and insert share an implicit transaction.
-    PostgreSQL concurrency protection is deferred to Phase 3.
+    A user row lock serializes eligibility checks and inserts.
     Raises AlreadyClaimedError when a prior claim is visible.
     """
-    now = now or utcnow()
-    # PG-PHASE3: LOCKING — psycopg opens a transaction on the first statement;
-    # the SQLite write-lock analog is deferred.
+    now = from_db_ts(now) if now is not None else utcnow()
+    # Take a per-user lock: eligibility check + insert must be atomic.
     try:
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT 1 FROM users WHERE id = %s FOR UPDATE',
+            (user_id,)
+        )
+        if cursor.fetchone() is None:
+            raise ValueError(f'User {user_id} not found')
+
         status = get_monthly_reward_status(conn, user_id, now)
         if not status['claimable']:
             conn.rollback()

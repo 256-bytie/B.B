@@ -130,8 +130,7 @@ def list_files(conn, current_user_id, search='', category='', department=''):
 
     search = (search or '').strip()
     if search:
-        # PG-PHASE3: LIKE_CASE
-        query += ' AND (library_files.title LIKE %s OR library_files.course LIKE %s)'
+        query += ' AND (library_files.title ILIKE %s OR library_files.course ILIKE %s)'
         pattern = f'%{search}%'
         params.extend([pattern, pattern])
 
@@ -145,8 +144,7 @@ def list_files(conn, current_user_id, search='', category='', department=''):
         query += ' AND library_files.department = %s'
         params.append(department)
 
-    # PG-PHASE3: NULL_ORDERING
-    query += ' ORDER BY library_files.created_at DESC LIMIT 50'
+    query += ' ORDER BY library_files.created_at DESC NULLS LAST LIMIT 50'
 
     cursor = conn.cursor()
     cursor.execute(query, params)
@@ -201,7 +199,6 @@ def prepare_download(conn, requesting_user_id, file_id):
     if not os.path.exists(full_path):
         raise LibraryNotFoundError('File not found.')
 
-    # PG-PHASE3: READ_MODIFY_WRITE — review access-check/download-count transaction boundaries.
     try:
         cursor.execute('''
             UPDATE library_files

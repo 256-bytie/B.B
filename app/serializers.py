@@ -1,4 +1,13 @@
 """Shared serialization functions for converting DB rows to JSON dicts."""
+from datetime import datetime, timezone
+
+
+def timestamp_text(value):
+    if isinstance(value, datetime):
+        value = value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+        return value.strftime('%Y-%m-%d %H:%M:%S')
+    return value
+
 
 
 def serialize_post(
@@ -19,7 +28,6 @@ def serialize_post(
         quoted_post: one-level quote payload, unavailable stub, or None
         share_count: number of existing quote posts referencing this post
     """
-    # PG-PHASE3: TIMESTAMP_TEXT — preserve API timestamp formatting for native datetime rows.
     if len(row) == 13:
         # Old format without liked_by_user in row (e.g., from create_post)
         (post_id, user_id, content, audience, created_at, comment_count,
@@ -46,7 +54,7 @@ def serialize_post(
         'user_id': user_id,
         'content': content,
         'audience': audience,
-        'created_at': created_at,
+        'created_at': timestamp_text(created_at),
         'comment_count': comment_count,
         'like_count': like_count,
         'view_count': view_count,
@@ -78,7 +86,6 @@ def serialize_comment(row, liked_by_user=None, disliked_by_user=None):
         disliked_by_user: Optional int (0/1) from the row's disliked_by_user
             field. Same omit-if-None convention as liked_by_user.
     """
-    # PG-PHASE3: TIMESTAMP_TEXT — native datetime JSON formatting needs parity review.
     image_path = None
 
     if len(row) == 15:
@@ -108,7 +115,7 @@ def serialize_comment(row, liked_by_user=None, disliked_by_user=None):
         'username': username,
         'bio': bio,
         'content': content,
-        'created_at': created_at,
+        'created_at': timestamp_text(created_at),
         'like_count': like_count,
         'parent_comment_id': parent_comment_id,
         'image': image_path
@@ -147,14 +154,13 @@ def serialize_chat_message(row):
     Args:
         row: tuple (id, conversation_id, sender_id, body, created_at)
     """
-    # PG-PHASE3: TIMESTAMP_TEXT — native datetime JSON formatting needs parity review.
     message_id, conversation_id, sender_id, body, created_at = row
     return {
         'id': message_id,
         'conversation_id': conversation_id,
         'sender_id': sender_id,
         'body': body,
-        'created_at': created_at,
+        'created_at': timestamp_text(created_at),
     }
 
 
@@ -173,7 +179,6 @@ def serialize_conversation(conv_row, other_user_row, last_message_row,
         viewer_id: current user; only used to pick which participant is
             "the other user"
     """
-    # PG-PHASE3: TIMESTAMP_TEXT — last_message timestamps need JSON parity review.
     conversation_id = conv_row[0]
     other = serialize_user_public(other_user_row) if other_user_row else None
     last_message = None
@@ -182,7 +187,7 @@ def serialize_conversation(conv_row, other_user_row, last_message_row,
             'id': last_message_row[0],
             'sender_id': last_message_row[1],
             'body': last_message_row[2],
-            'created_at': last_message_row[3],
+            'created_at': timestamp_text(last_message_row[3]),
         }
     return {
         'id': conversation_id,
@@ -204,7 +209,6 @@ def serialize_library_file(row, uploader_name=None):
         row: tuple from library_files (may or may not include joined user data)
         uploader_name: string, the uploader's display name (full_name)
     """
-    # PG-PHASE3: TIMESTAMP_TEXT — native datetime JSON formatting needs parity review.
     (file_id, user_id, title, category, department, course, level,
      file_path, file_type, file_size, status, download_count, created_at) = row[:13]
 
@@ -220,7 +224,7 @@ def serialize_library_file(row, uploader_name=None):
         'status': status,
         'uploader_id': user_id,
         'uploader_name': uploader_name or '',
-        'created_at': created_at,
+        'created_at': timestamp_text(created_at),
         'download_count': download_count
     }
 
@@ -229,11 +233,10 @@ def _iso_utc(value):
     """Turn a naive-UTC datetime (or a stored 'YYYY-MM-DD HH:MM:SS' string) into an
     unambiguous ISO-8601 UTC timestamp ('...T...Z') so clients don't have to guess
     the timezone of SQLite's bare timestamps."""
-    # PG-PHASE3: TIMESTAMP_TEXT — verify UTC and precision across timestamp serializers.
     if value is None:
         return None
     if hasattr(value, 'strftime'):
-        return value.strftime('%Y-%m-%dT%H:%M:%SZ')
+        return timestamp_text(value).replace(' ', 'T') + 'Z'
     return str(value).replace(' ', 'T') + 'Z'
 
 

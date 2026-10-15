@@ -1,27 +1,25 @@
 #!/usr/bin/env python3
 """Unit tests for app/wallet.py (ledger, monthly reward, pagination).
 
-Runs against a throwaway temporary database - never beebo.db - and needs
+Runs against a throwaway PostgreSQL database - never beebo.db - and needs
 no running server:  python3 test_wallet_logic.py
 """
 import os
-import sqlite3
+import psycopg
 import sys
-import tempfile
 import threading
 import unittest
-from datetime import datetime
+from datetime import datetime, timezone
 
-_TMP = tempfile.NamedTemporaryFile(suffix='.db', delete=False)
-_TMP.close()
-os.environ['DB_PATH'] = _TMP.name  # must be set before importing app.db
+from pg_support import isolated_database
+isolated_database()
 
 from app.db import init_db, get_db  # noqa: E402
 from app import wallet  # noqa: E402
 
 
 def dt(y, m, d, hh=10, mm=0, ss=0):
-    return datetime(y, m, d, hh, mm, ss)
+    return datetime(y, m, d, hh, mm, ss, tzinfo=timezone.utc)
 
 
 class WalletLogicTests(unittest.TestCase):
@@ -31,10 +29,10 @@ class WalletLogicTests(unittest.TestCase):
 
     def setUp(self):
         self.conn = get_db()
-        self.conn.execute('DELETE FROM credit_transactions')
-        self.conn.execute('DELETE FROM users')
+        self.conn.execute('TRUNCATE users RESTART IDENTITY CASCADE')
         self.conn.execute("INSERT INTO users (id, full_name, email, password_hash, username) VALUES (1,'A','a@x.com','x','a')")
         self.conn.execute("INSERT INTO users (id, full_name, email, password_hash, username) VALUES (2,'B','b@x.com','x','b')")
+        self.conn.execute("SELECT setval(pg_get_serial_sequence('users', 'id'), (SELECT MAX(id) FROM users))")
         self.conn.commit()
 
     def tearDown(self):
@@ -62,7 +60,7 @@ class WalletLogicTests(unittest.TestCase):
             wallet.record_transaction(self.conn, 1, 0, 'usage', 'post', 'x')
 
     def test_schema_rejects_bad_kind(self):
-        with self.assertRaises(sqlite3.IntegrityError):
+        with self.assertRaises(psycopg.IntegrityError):
             self.conn.execute(
                 "INSERT INTO credit_transactions (user_id, amount, kind, reason, description) VALUES (1, 5, 'bogus', 'r', 'd')")
 
@@ -116,7 +114,6 @@ class WalletLogicTests(unittest.TestCase):
 
         def attempt():
             conn = get_db()
-            conn.execute('PRAGMA busy_timeout = 10000')
             try:
                 wallet.claim_monthly_reward(conn, 1, now)
                 results.append('ok')
@@ -172,8 +169,4 @@ class WalletLogicTests(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    try:
-        result = unittest.main(exit=False, verbosity=2).result
-    finally:
-        os.unlink(_TMP.name)
-    sys.exit(0 if result.wasSuccessful() else 1)
+    unittest.main(verbosity=2)

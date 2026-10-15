@@ -1,73 +1,34 @@
-#!/bin/bash
-set -e
-
-# Tests, app.py and the DB path are all relative to the repo root; run from
-# there regardless of the caller's cwd.
-cd "$(dirname "$0")/.."
-
-echo "=========================================="
-echo "Running Full Test Suite"
-echo "=========================================="
-echo ""
-
-# Clean up
-rm -f beebo_test.db cookies*.txt test_cookie.txt e2e_cookie.txt
-
-# Start server
-echo "Starting server with DB_PATH=beebo_test.db..."
-DB_PATH=beebo_test.db python3 app.py > /tmp/server.log 2>&1 &
-SERVER_PID=$!
-echo $SERVER_PID > /tmp/server.pid
-sleep 3
-
-if ! kill -0 $SERVER_PID 2>/dev/null; then
-    echo "✗ Server failed to start"
-    cat /tmp/server.log
-    exit 1
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(builtin cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ -n "${DATABASE_URL:-}" ]]; then
+    python3 -B "$ROOT/tests/pg_support.py"
 fi
-
-echo "✓ Server started (PID: $SERVER_PID)"
-echo ""
-
-# Run tests
-TESTS=(
-    "test_comments.sh"
-    "test_comments2.sh"
-    "test_comment_images.sh"
-    "test_follows.sh"
-    "test_highlights.sh"
-    "test_highlights_video.sh"
-    "test_file_cleanup.sh"
-    "test_wallet.sh"
-    "test_communities.sh"
-    "test_community_images.sh"
-    "test_quotes.sh"
-)
-
+SUITE=$(mktemp -d /tmp/beebo_test_suite_XXXXXX)
+tar -C "$ROOT" --exclude=.git --exclude='*.db' --exclude=.env --exclude=__pycache__ --exclude=flask_session --exclude='cookies*.txt' -cf - . | tar -C "$SUITE" -xf -
+cd "$SUITE"
+export PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$SUITE${PYTHONPATH:+:$PYTHONPATH}"
+unset BEEBO_TEST_DB DATABASE_URL
 PASSED=0
 FAILED=0
-
-for TEST in "${TESTS[@]}"; do
+for TEST in tests/test_*.sh tests/test_*.py; do
+    LOG="$SUITE/$(basename "$TEST").log"
+    export TEST_SERVER_LOG="$SUITE/$(basename "$TEST").server.log"
     echo "Running $TEST..."
-    if bash "tests/$TEST" > /tmp/${TEST}.log 2>&1; then
-        echo "✓ $TEST PASSED"
+    if [[ "$TEST" == *_logic.py || "$TEST" == *test_community_members.py ]]; then
+        COMMAND=(python3 -B "$TEST")
+    else
+        COMMAND=(bash scripts/pg_test_env.sh -- bash scripts/run_one_test.sh "$TEST")
+    fi
+    if "${COMMAND[@]}" >"$LOG" 2>&1 && ! grep -Eq '✗|Traceback \(most recent call last\):|command not found|No such file or directory' "$LOG"; then
+        echo "PASS $TEST"
         PASSED=$((PASSED + 1))
     else
-        echo "✗ $TEST FAILED (see /tmp/${TEST}.log)"
+        echo "FAIL $TEST (see $LOG)"
+        tail -15 "$LOG"
         FAILED=$((FAILED + 1))
     fi
-    echo ""
 done
-
-# Stop server
-echo "Stopping server..."
-kill $SERVER_PID 2>/dev/null || true
-wait $SERVER_PID 2>/dev/null || true
-
-echo "=========================================="
 echo "Test Summary: $PASSED passed, $FAILED failed"
-echo "=========================================="
-
-if [ $FAILED -gt 0 ]; then
-    exit 1
-fi
+echo "Logs: $SUITE"
+[[ "$FAILED" == 0 ]]

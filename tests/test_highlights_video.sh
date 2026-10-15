@@ -1,9 +1,7 @@
 #!/bin/bash
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/test_guard.sh" || exit 1
 
 # These tests hit whatever server is running on localhost:5050.
-# Before running: start the server with DB_PATH=beebo_test.db (see CLAUDE.md Testing section).
-# Running these against a server started without DB_PATH set will write
-# test data into the real beebo.db.
 
 BASE_URL="http://localhost:5050"
 COOKIES_FILE="cookies_video_test.txt"
@@ -17,7 +15,7 @@ rm -f "$COOKIES_FILE"
 
 # Sign up user
 echo -e "\n1. Signing up test user..."
-SIGNUP_RESPONSE=$(curl -s -c "$COOKIES_FILE" -X POST "$BASE_URL/api/signup" \
+SIGNUP_RESPONSE=$(test_curl -s -c "$COOKIES_FILE" -X POST "$BASE_URL/api/signup" \
   -H "Content-Type: application/json" \
   -d '{
     "full_name": "Video Tester",
@@ -37,7 +35,7 @@ dd if=/dev/zero bs=1024 count=10 >> /tmp/test_video.mp4 2>/dev/null
 
 # Upload video highlight
 echo -e "\n3. Uploading video highlight..."
-VIDEO_RESPONSE=$(curl -s -b "$COOKIES_FILE" -X POST "$BASE_URL/api/highlights" \
+VIDEO_RESPONSE=$(test_curl -s -b "$COOKIES_FILE" -X POST "$BASE_URL/api/highlights" \
   -F "media=@/tmp/test_video.mp4;type=video/mp4" \
   -F "title=My Video Highlight")
 
@@ -55,7 +53,7 @@ fi
 # Test file size validation (create a file over 25MB)
 echo -e "\n4. Testing 25MB file size limit..."
 dd if=/dev/zero of=/tmp/large_video.mp4 bs=1M count=26 2>/dev/null
-LARGE_RESPONSE=$(curl -s -b "$COOKIES_FILE" -X POST "$BASE_URL/api/highlights" \
+LARGE_RESPONSE=$(test_curl -s -b "$COOKIES_FILE" -X POST "$BASE_URL/api/highlights" \
   -F "media=@/tmp/large_video.mp4;type=video/mp4" \
   -F "title=Too Large")
 
@@ -64,7 +62,7 @@ echo "$LARGE_RESPONSE" | python3 -m json.tool
 # Test invalid file type
 echo -e "\n5. Testing invalid file type..."
 echo "This is a text file" > /tmp/test.txt
-INVALID_RESPONSE=$(curl -s -b "$COOKIES_FILE" -X POST "$BASE_URL/api/highlights" \
+INVALID_RESPONSE=$(test_curl -s -b "$COOKIES_FILE" -X POST "$BASE_URL/api/highlights" \
   -F "media=@/tmp/test.txt" \
   -F "title=Invalid File")
 
@@ -72,7 +70,7 @@ echo "$INVALID_RESPONSE" | python3 -m json.tool
 
 # Get all highlights
 echo -e "\n6. Getting all highlights..."
-ALL_HIGHLIGHTS=$(curl -s -b "$COOKIES_FILE" -X GET "$BASE_URL/api/users/$USER_ID/highlights")
+ALL_HIGHLIGHTS=$(test_curl -s -b "$COOKIES_FILE" -X GET "$BASE_URL/api/users/$USER_ID/highlights")
 echo "$ALL_HIGHLIGHTS" | python3 -m json.tool
 
 # Cleanup

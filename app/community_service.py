@@ -140,7 +140,7 @@ def list_community_members(conn, slug, viewer_id):
 
     cursor.execute(user_columns + '''
         WHERE m.community_id = %s AND m.role = 'moderator'
-        ORDER BY m.joined_at ASC, m.seq ASC
+        ORDER BY m.joined_at ASC NULLS FIRST, m.seq ASC
     ''', (community_id,))
     moderators = [serialize_user_public(row) for row in cursor.fetchall()]
 
@@ -165,7 +165,7 @@ def list_community_members(conn, slug, viewer_id):
         all_members.append(serialize_user_public(first_row))
         cursor.execute(user_columns + '''
             WHERE m.community_id = %s AND m.user_id != %s
-            ORDER BY m.joined_at DESC, m.seq DESC
+            ORDER BY m.joined_at DESC NULLS LAST, m.seq DESC
             LIMIT 3
         ''', (community_id, first_row[0]))
         all_members.extend(serialize_user_public(row) for row in cursor.fetchall())
@@ -200,9 +200,7 @@ def list_all_community_members(conn, slug, viewer_id, q=None, limit=30, offset=0
     if term:
         escaped = term.replace('!', '!!').replace('%', '!%').replace('_', '!_')
         like = '%' + escaped + '%'
-        # PG-PHASE3: LIKE_CASE — SQLite ASCII LIKE is case-insensitive; PG LIKE
-        # is case-sensitive.
-        search_sql = " AND (lower(u.full_name) LIKE %s ESCAPE '!' OR lower(u.username) LIKE %s ESCAPE '!')"
+        search_sql = " AND (u.full_name ILIKE %s ESCAPE '!' OR u.username ILIKE %s ESCAPE '!')"
         search_params = [like, like]
 
     admin = None
@@ -213,14 +211,13 @@ def list_all_community_members(conn, slug, viewer_id, q=None, limit=30, offset=0
         row = cursor.fetchone()
         admin = serialize_user_public(row) if row else None
         cursor.execute(user_columns + "WHERE m.community_id = %s AND m.role = 'moderator'" + search_sql +
-                       ' ORDER BY m.joined_at ASC, m.seq ASC', [community_id] + search_params)
+                       ' ORDER BY m.joined_at ASC NULLS FIRST, m.seq ASC', [community_id] + search_params)
         moderators = [serialize_user_public(r) for r in cursor.fetchall()]
 
-    # PG-PHASE3: TYPE_STRICTNESS — the boolean (m.user_id = %s) ordering
     # expression is kept mechanical; final boolean/int ordering is Phase 3.
     cursor.execute(
         user_columns + 'WHERE m.community_id = %s' + search_sql +
-        ' ORDER BY (m.user_id = %s) DESC, m.joined_at DESC, m.seq DESC LIMIT %s OFFSET %s',
+        ' ORDER BY (m.user_id = %s) DESC, m.joined_at DESC NULLS LAST, m.seq DESC LIMIT %s OFFSET %s',
         [community_id] + search_params + [viewer_id if viewer_id is not None else -1, limit + 1, offset]
     )
     rows = cursor.fetchall()
@@ -281,7 +278,6 @@ def create_community(conn, creator_id, name, description, topic, community_type)
     cursor = conn.cursor()
     # The slug check-then-insert can race with a concurrent create of the
     # same name; the UNIQUE constraint catches it and we pick again.
-    # PG-PHASE3: LOCKING READ_MODIFY_WRITE — slug allocation can race.
     for _ in range(5):
         slug = _unique_slug(cursor, name)
         try:
@@ -389,7 +385,7 @@ def list_my_communities(conn, user_id):
         FROM community_members m
         JOIN communities c ON c.id = m.community_id
         WHERE m.user_id = %s
-        ORDER BY m.joined_at DESC, m.seq DESC
+        ORDER BY m.joined_at DESC NULLS LAST, m.seq DESC
     ''', (user_id,))
     return [
         serialize_community(row[:9], topic_style(row[4])[1], row[9], row[10], row[11])
@@ -475,9 +471,7 @@ def list_communities(conn, viewer_id, q, limit, cursor_id):
             # Escape LIKE special chars: %, _, and the escape char itself
             escaped = q_trimmed.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
             pattern = f'%{escaped}%'
-            # PG-PHASE3: LIKE_CASE — SQLite ASCII LIKE is case-insensitive; PG LIKE
-            # is case-sensitive.
-            query += ' AND (c.name LIKE %s ESCAPE %s OR c.slug LIKE %s ESCAPE %s OR c.description LIKE %s ESCAPE %s)'
+            query += " AND (c.name ILIKE %s ESCAPE %s OR c.slug ILIKE %s ESCAPE %s OR c.description ILIKE %s ESCAPE %s)"
             params.extend([pattern, '\\', pattern, '\\', pattern, '\\'])
 
     # Apply keyset cursor

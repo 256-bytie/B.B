@@ -14,9 +14,11 @@ import re
 import time
 import uuid
 
+import psycopg.errors
+
 from werkzeug.utils import secure_filename
 
-from app.serializers import serialize_user_public
+from app.serializers import timestamp_text, serialize_user_public
 from app.upload_utils import delete_if_local
 
 UPLOAD_FOLDER = 'static/uploads'
@@ -125,7 +127,6 @@ def toggle_follow(conn, follower_id, followee_id):
     followee_id doesn't exist, FollowRateLimitError if follower_id has
     toggled too many times recently.
     """
-    # PG-PHASE3: LOCKING READ_MODIFY_WRITE — concurrent toggles need transaction review.
     if follower_id == followee_id:
         raise UserValidationError('Cannot follow yourself')
 
@@ -133,37 +134,23 @@ def toggle_follow(conn, follower_id, followee_id):
 
     cursor = conn.cursor()
 
-    cursor.execute('SELECT id FROM users WHERE id = %s', (followee_id,))
+    cursor.execute('SELECT id FROM users WHERE id = %s FOR UPDATE', (followee_id,))
     if not cursor.fetchone():
         raise UserNotFoundError('User not found')
 
     cursor.execute(
-        'SELECT id FROM follows WHERE follower_id = %s AND followee_id = %s',
+        'DELETE FROM follows WHERE follower_id = %s AND followee_id = %s RETURNING id',
         (follower_id, followee_id)
     )
-    existing = cursor.fetchone()
-
-    if existing:
-        cursor.execute('DELETE FROM follows WHERE id = %s', (existing[0],))
+    if cursor.fetchone() is not None:
         following = False
     else:
-        try:
-            cursor.execute(
-                'INSERT INTO follows (follower_id, followee_id) VALUES (%s, %s)',
-                (follower_id, followee_id)
-            )
-            following = True
-        except Exception:
-            # Race: another request inserted this pair between our SELECT
-            # and INSERT. Roll back the failed insert, re-check current
-            # state, treat as "already following" rather than erroring.
-            conn.rollback()
-            cursor.execute(
-                'SELECT id FROM follows WHERE follower_id = %s AND followee_id = %s',
-                (follower_id, followee_id)
-            )
-            existing = cursor.fetchone()
-            following = existing is not None
+        cursor.execute(
+            'INSERT INTO follows (follower_id, followee_id) VALUES (%s, %s) '
+            'ON CONFLICT (follower_id, followee_id) DO NOTHING RETURNING id',
+            (follower_id, followee_id)
+        )
+        following = True
 
     conn.commit()
 
@@ -176,7 +163,6 @@ def toggle_follow(conn, follower_id, followee_id):
 def get_highlights(conn, user_id):
     """All highlights for user_id, oldest first. Raises
     UserNotFoundError if user_id doesn't exist."""
-    # PG-PHASE3: NULL_ORDERING TIMESTAMP_TEXT — ordering and timestamp JSON need parity review.
     cursor = conn.cursor()
     cursor.execute('SELECT id FROM users WHERE id = %s', (user_id,))
     if not cursor.fetchone():
@@ -186,11 +172,10 @@ def get_highlights(conn, user_id):
         SELECT id, title, kind, media_url, created_at
         FROM highlights
         WHERE user_id = %s
-        -- PG-PHASE3: NULL_ORDERING
-        ORDER BY created_at ASC
+        ORDER BY created_at ASC NULLS FIRST
     ''', (user_id,))
     return [
-        {'id': r[0], 'title': r[1], 'kind': r[2], 'cover': r[3], 'created_at': r[4]}
+        {'id': r[0], 'title': r[1], 'kind': r[2], 'cover': r[3], 'created_at': timestamp_text(r[4])}
         for r in cursor.fetchall()
     ]
 
@@ -302,11 +287,15 @@ def update_profile(conn, user_id, full_name, username, bio):
     if cursor.fetchone():
         raise UsernameTakenError('That username is already taken.')
 
-    cursor.execute(
-        'UPDATE users SET full_name = %s, username = %s, bio = %s WHERE id = %s',
-        (full_name, username, bio, user_id)
-    )
-    conn.commit()
+    try:
+        cursor.execute(
+            'UPDATE users SET full_name = %s, username = %s, bio = %s WHERE id = %s',
+            (full_name, username, bio, user_id)
+        )
+        conn.commit()
+    except psycopg.errors.UniqueViolation:
+        conn.rollback()
+        raise UsernameTakenError('That username is already taken.')
 
     return {'full_name': full_name, 'username': username, 'bio': bio}
 
@@ -366,7 +355,7 @@ def create_highlight(conn, user_id, file_storage, title):
     ''', (highlight_id,))
     row = cursor.fetchone()
 
-    return {'id': row[0], 'title': row[1], 'kind': row[2], 'cover': row[3], 'created_at': row[4]}
+    return {'id': row[0], 'title': row[1], 'kind': row[2], 'cover': row[3], 'created_at': timestamp_text(row[4])}
 
 
 def delete_highlight(conn, user_id, highlight_id):

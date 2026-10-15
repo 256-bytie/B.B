@@ -1,9 +1,7 @@
 #!/bin/bash
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/test_guard.sh" || exit 1
 
 # These tests hit whatever server is running on localhost:5050.
-# Before running: start the server with DB_PATH=beebo_test.db (see CLAUDE.md Testing section).
-# Running these against a server started without DB_PATH set will write
-# test data into the real beebo.db.
 
 BASE_URL="http://localhost:5050"
 
@@ -16,12 +14,12 @@ FAIL_COUNT=0
 
 # 1. Sign up two users (so we can exercise the user_id filter too)
 echo "1. Creating two test users..."
-SIGNUP_A=$(curl -s -c cookies_pg_a.txt -X POST "$BASE_URL/api/signup" \
+SIGNUP_A=$(test_curl -s -c cookies_pg_a.txt -X POST "$BASE_URL/api/signup" \
   -H "Content-Type: application/json" \
   -d '{"full_name": "Page User A", "email": "pageusera@example.com", "password": "password123"}')
 USER_A_ID=$(echo "$SIGNUP_A" | jq -r '.user.id')
 
-SIGNUP_B=$(curl -s -c cookies_pg_b.txt -X POST "$BASE_URL/api/signup" \
+SIGNUP_B=$(test_curl -s -c cookies_pg_b.txt -X POST "$BASE_URL/api/signup" \
   -H "Content-Type: application/json" \
   -d '{"full_name": "Page User B", "email": "pageuserb@example.com", "password": "password123"}')
 USER_B_ID=$(echo "$SIGNUP_B" | jq -r '.user.id')
@@ -32,7 +30,7 @@ echo ""
 echo "2. Creating posts (5 from A/Academic, 3 from B/Community)..."
 A_POST_IDS=()
 for i in 1 2 3 4 5; do
-  RESP=$(curl -s -X POST "$BASE_URL/api/posts" \
+  RESP=$(test_curl -s -X POST "$BASE_URL/api/posts" \
     -H "Content-Type: application/json" \
     -d "{\"content\": \"Page test A post $i\", \"audience\": \"Academic\"}" \
     -b cookies_pg_a.txt)
@@ -41,7 +39,7 @@ done
 
 B_POST_IDS=()
 for i in 1 2 3; do
-  RESP=$(curl -s -X POST "$BASE_URL/api/posts" \
+  RESP=$(test_curl -s -X POST "$BASE_URL/api/posts" \
     -H "Content-Type: application/json" \
     -d "{\"content\": \"Page test B post $i\", \"audience\": \"Community\"}" \
     -b cookies_pg_b.txt)
@@ -52,14 +50,14 @@ echo "   B post ids: ${B_POST_IDS[*]}"
 echo ""
 # 3. Full unpaginated list (baseline) for the whole table, no filters.
 echo "3. Fetching full unpaginated list as baseline (limit=50)..."
-FULL_LIST=$(curl -s "$BASE_URL/api/posts?limit=50" -b cookies_pg_a.txt | jq -r '.posts[].id')
+FULL_LIST=$(test_curl -s "$BASE_URL/api/posts?limit=50" -b cookies_pg_a.txt | jq -r '.posts[].id')
 FULL_COUNT=$(echo "$FULL_LIST" | wc -l)
 echo "   Total posts in table: $FULL_COUNT"
 echo ""
 
 # --- Test: limit=2 returns exactly 2 posts and non-null next_cursor ---
 echo "4. GET /api/posts?limit=2 returns exactly 2 posts with non-null next_cursor..."
-PAGE1=$(curl -s "$BASE_URL/api/posts?limit=2" -b cookies_pg_a.txt)
+PAGE1=$(test_curl -s "$BASE_URL/api/posts?limit=2" -b cookies_pg_a.txt)
 PAGE1_COUNT=$(echo "$PAGE1" | jq '.posts | length')
 PAGE1_CURSOR=$(echo "$PAGE1" | jq -r '.next_cursor')
 if [ "$PAGE1_COUNT" = "2" ] && [ "$PAGE1_CURSOR" != "null" ]; then
@@ -78,9 +76,9 @@ PAGE_NUM=0
 while true; do
   PAGE_NUM=$((PAGE_NUM + 1))
   if [ -z "$CURSOR" ]; then
-    RESP=$(curl -s "$BASE_URL/api/posts?limit=2" -b cookies_pg_a.txt)
+    RESP=$(test_curl -s "$BASE_URL/api/posts?limit=2" -b cookies_pg_a.txt)
   else
-    RESP=$(curl -s "$BASE_URL/api/posts?limit=2&cursor=$CURSOR" -b cookies_pg_a.txt)
+    RESP=$(test_curl -s "$BASE_URL/api/posts?limit=2&cursor=$CURSOR" -b cookies_pg_a.txt)
   fi
   PAGE_IDS=$(echo "$RESP" | jq -r '.posts[].id')
   for id in $PAGE_IDS; do
@@ -109,7 +107,7 @@ echo ""
 
 # --- Test: last page returns next_cursor: null ---
 echo "6. Last page returns next_cursor: null..."
-LAST_PAGE=$(curl -s "$BASE_URL/api/posts?limit=$FULL_COUNT" -b cookies_pg_a.txt)
+LAST_PAGE=$(test_curl -s "$BASE_URL/api/posts?limit=$FULL_COUNT" -b cookies_pg_a.txt)
 LAST_CURSOR=$(echo "$LAST_PAGE" | jq -r '.next_cursor')
 LAST_COUNT=$(echo "$LAST_PAGE" | jq '.posts | length')
 if [ "$LAST_CURSOR" = "null" ] && [ "$LAST_COUNT" = "$FULL_COUNT" ]; then
@@ -122,7 +120,7 @@ echo ""
 
 # --- Test: user_id filter returns only that user's posts, still paginated ---
 echo "7. GET /api/posts?user_id=<A> returns only User A's posts, paginated..."
-UA_PAGE1=$(curl -s "$BASE_URL/api/posts?user_id=$USER_A_ID&limit=2" -b cookies_pg_a.txt)
+UA_PAGE1=$(test_curl -s "$BASE_URL/api/posts?user_id=$USER_A_ID&limit=2" -b cookies_pg_a.txt)
 UA_PAGE1_IDS=$(echo "$UA_PAGE1" | jq -r '.posts[].id')
 UA_PAGE1_USER_IDS=$(echo "$UA_PAGE1" | jq -r '.posts[].user_id' | sort -u)
 UA_CURSOR=$(echo "$UA_PAGE1" | jq -r '.next_cursor')
@@ -134,7 +132,7 @@ PAGE_NUM=0
 while [ "$CURSOR" != "null" ]; do
   PAGE_NUM=$((PAGE_NUM + 1))
   [ $PAGE_NUM -gt 50 ] && break
-  RESP=$(curl -s "$BASE_URL/api/posts?user_id=$USER_A_ID&limit=2&cursor=$CURSOR" -b cookies_pg_a.txt)
+  RESP=$(test_curl -s "$BASE_URL/api/posts?user_id=$USER_A_ID&limit=2&cursor=$CURSOR" -b cookies_pg_a.txt)
   for id in $(echo "$RESP" | jq -r '.posts[].id'); do ALL_UA_IDS+=("$id"); done
   CURSOR=$(echo "$RESP" | jq -r '.next_cursor')
 done
@@ -153,7 +151,7 @@ echo ""
 
 # --- Test: user_id + audience combined ---
 echo "8. GET /api/posts?user_id=<B>&audience=Community combines both filters..."
-UB_COMMUNITY=$(curl -s "$BASE_URL/api/posts?user_id=$USER_B_ID&audience=Community&limit=50" -b cookies_pg_b.txt)
+UB_COMMUNITY=$(test_curl -s "$BASE_URL/api/posts?user_id=$USER_B_ID&audience=Community&limit=50" -b cookies_pg_b.txt)
 UB_IDS=$(echo "$UB_COMMUNITY" | jq -r '.posts[].id' | sort -n)
 UB_AUDIENCES=$(echo "$UB_COMMUNITY" | jq -r '.posts[].audience' | sort -u)
 EXPECTED_B_SORTED=$(printf '%s\n' "${B_POST_IDS[@]}" | sort -n)
@@ -166,7 +164,7 @@ else
 fi
 
 # Sanity: a mismatched combination (User B + Academic) should return none of B's posts
-UB_ACADEMIC=$(curl -s "$BASE_URL/api/posts?user_id=$USER_B_ID&audience=Academic&limit=50" -b cookies_pg_b.txt)
+UB_ACADEMIC=$(test_curl -s "$BASE_URL/api/posts?user_id=$USER_B_ID&audience=Academic&limit=50" -b cookies_pg_b.txt)
 UB_ACADEMIC_COUNT=$(echo "$UB_ACADEMIC" | jq '.posts | length')
 if [ "$UB_ACADEMIC_COUNT" = "0" ]; then
   echo "   ✓ PASS: user_id=B&audience=Academic correctly returns 0 posts (B never posted Academic)"
@@ -185,21 +183,21 @@ echo ""
 echo "9. Live insert between page fetches does not duplicate or skip posts..."
 
 # Fetch page 1 (limit=2) — this fixes next_cursor as our boundary.
-LIVE_PAGE1=$(curl -s "$BASE_URL/api/posts?limit=2" -b cookies_pg_a.txt)
+LIVE_PAGE1=$(test_curl -s "$BASE_URL/api/posts?limit=2" -b cookies_pg_a.txt)
 LIVE_PAGE1_IDS=$(echo "$LIVE_PAGE1" | jq -r '.posts[].id')
 LIVE_CURSOR=$(echo "$LIVE_PAGE1" | jq -r '.next_cursor')
 
 # Simulate live traffic: a brand new post lands *after* page 1 was fetched,
 # before page 2 is fetched. This new post's id is higher than everything
 # already paginated.
-NEW_POST_RESP=$(curl -s -X POST "$BASE_URL/api/posts" \
+NEW_POST_RESP=$(test_curl -s -X POST "$BASE_URL/api/posts" \
   -H "Content-Type: application/json" \
   -d '{"content": "Inserted between page fetches", "audience": "Academic"}' \
   -b cookies_pg_a.txt)
 NEW_POST_ID=$(echo "$NEW_POST_RESP" | jq -r '.id')
 
 # Now fetch page 2 using the cursor captured before the insert.
-LIVE_PAGE2=$(curl -s "$BASE_URL/api/posts?limit=2&cursor=$LIVE_CURSOR" -b cookies_pg_a.txt)
+LIVE_PAGE2=$(test_curl -s "$BASE_URL/api/posts?limit=2&cursor=$LIVE_CURSOR" -b cookies_pg_a.txt)
 LIVE_PAGE2_IDS=$(echo "$LIVE_PAGE2" | jq -r '.posts[].id')
 
 # The new post must not appear in page 2 (it's newer than the cursor

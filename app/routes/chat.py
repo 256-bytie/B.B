@@ -73,7 +73,6 @@ def create_conversation():
 
     conn = get_db()
     try:
-        # PG-PHASE3: LOCKING — psycopg opens a transaction on the first statement.
         try:
             cursor = conn.cursor()
             conversation_id, created = chat.get_or_create_conversation(
