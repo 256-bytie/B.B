@@ -9,6 +9,8 @@ from flask import Blueprint, request, jsonify, session
 from app.db import get_db
 from app import user_service as users
 from app import post_service as posts
+from psycopg_pool import PoolTimeout
+
 
 bp = Blueprint('users', __name__)
 
@@ -49,10 +51,10 @@ def toggle_follow(user_id):
     if auth_error:
         return auth_error
 
+    conn = None
     try:
         conn = get_db()
         following, follower_count = users.toggle_follow(conn, session['user_id'], user_id)
-        conn.close()
         return jsonify({'following': following, 'follower_count': follower_count}), 200
     except users.UserValidationError as e:
         return jsonify({'error': str(e)}), 400
@@ -60,22 +62,32 @@ def toggle_follow(user_id):
         return jsonify({'error': str(e)}), 404
     except users.FollowRateLimitError as e:
         return jsonify({'error': str(e)}), 429
+    except PoolTimeout:
+        raise
     except Exception as e:
         return jsonify({'error': f'Database error: {str(e)}'}), 500
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 @bp.route('/api/users/<int:user_id>/highlights', methods=['GET'])
 def get_user_highlights(user_id):
     """Get all highlights for a specific user, ordered by creation time"""
+    conn = None
     try:
         conn = get_db()
         highlights = users.get_highlights(conn, user_id)
-        conn.close()
         return jsonify(highlights), 200
     except users.UserNotFoundError as e:
         return jsonify({'error': str(e)}), 404
+    except PoolTimeout:
+        raise
     except Exception as e:
         return jsonify({'error': f'Database error: {str(e)}'}), 500
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 @bp.route('/api/profile/picture', methods=['POST'])
@@ -91,15 +103,20 @@ def update_profile_picture():
     if auth_error:
         return auth_error
 
+    conn = None
     try:
         conn = get_db()
         image_url = users.update_profile_picture(conn, session['user_id'], request.files.get('image'))
-        conn.close()
         return jsonify({'success': True, 'profile_picture': image_url}), 200
     except users.UserValidationError as e:
         return jsonify({'error': str(e)}), 400
+    except PoolTimeout:
+        raise
     except Exception as e:
         return jsonify({'error': f'Database error: {str(e)}'}), 500
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 @bp.route('/api/profile/cover', methods=['POST'])
@@ -114,15 +131,20 @@ def update_profile_cover():
     if auth_error:
         return auth_error
 
+    conn = None
     try:
         conn = get_db()
         image_url = users.update_profile_cover(conn, session['user_id'], request.files.get('image'))
-        conn.close()
         return jsonify({'success': True, 'cover_image': image_url}), 200
     except users.UserValidationError as e:
         return jsonify({'error': str(e)}), 400
+    except PoolTimeout:
+        raise
     except Exception as e:
         return jsonify({'error': f'Database error: {str(e)}'}), 500
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 @bp.route('/api/profile', methods=['PATCH'])
@@ -140,20 +162,25 @@ def update_profile():
 
     data = request.get_json() or {}
 
+    conn = None
     try:
         conn = get_db()
         result = users.update_profile(
             conn, session['user_id'],
             data.get('full_name'), data.get('username'), data.get('bio')
         )
-        conn.close()
         return jsonify({'success': True, **result}), 200
     except users.UserValidationError as e:
         return jsonify({'error': str(e)}), 400
     except users.UsernameTakenError as e:
         return jsonify({'error': str(e)}), 409
+    except PoolTimeout:
+        raise
     except Exception as e:
         return jsonify({'error': f'Database error: {str(e)}'}), 500
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 @bp.route('/api/highlights', methods=['POST'])
@@ -168,18 +195,23 @@ def create_highlight():
     if auth_error:
         return auth_error
 
+    conn = None
     try:
         conn = get_db()
         highlight = users.create_highlight(
             conn, session['user_id'],
             request.files.get('media'), request.form.get('title', '')
         )
-        conn.close()
         return jsonify(highlight), 201
     except users.UserValidationError as e:
         return jsonify({'error': str(e)}), 400
+    except PoolTimeout:
+        raise
     except Exception as e:
         return jsonify({'error': f'Server error: {str(e)}'}), 500
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 @bp.route('/api/highlights/<int:highlight_id>', methods=['DELETE'])
@@ -189,17 +221,22 @@ def delete_highlight(highlight_id):
     if auth_error:
         return auth_error
 
+    conn = None
     try:
         conn = get_db()
         users.delete_highlight(conn, session['user_id'], highlight_id)
-        conn.close()
         return jsonify({'success': True}), 200
     except users.UserNotFoundError as e:
         return jsonify({'error': str(e)}), 404
     except users.HighlightOwnershipError as e:
         return jsonify({'error': str(e)}), 403
+    except PoolTimeout:
+        raise
     except Exception as e:
         return jsonify({'error': f'Database error: {str(e)}'}), 500
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 @bp.route('/api/posts/<int:post_id>', methods=['DELETE'])
@@ -209,17 +246,19 @@ def delete_post(post_id):
     if auth_error:
         return auth_error
 
+    conn = None
     try:
         conn = get_db()
         posts.delete_post(conn, session['user_id'], post_id)
-        conn.close()
         return jsonify({'success': True}), 200
     except posts.PostNotFoundError as e:
         return jsonify({'error': str(e)}), 404
     except posts.PostOwnershipError as e:
         return jsonify({'error': str(e)}), 403
+    except PoolTimeout:
+        raise
     except Exception as e:
-        if 'conn' in locals():
-            conn.rollback()
-            conn.close()
         return jsonify({'error': f'Database error: {str(e)}'}), 500
+    finally:
+        if conn is not None:
+            conn.close()

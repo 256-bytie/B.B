@@ -131,7 +131,7 @@ _teardown() {
 trap _teardown EXIT
 
 echo "pg_test_env: created throwaway database '$BEEBO_TEST_DB'" >&2
-echo "pg_test_env: DATABASE_URL=$DATABASE_URL" >&2
+echo "pg_test_env: target=$PGHOST/$BEEBO_TEST_DB" >&2
 echo "pg_test_env: BEEBO_TEST=$BEEBO_TEST (database dropped on shell exit)" >&2
 
 # If run (not sourced) with `-- <command>`, execute that command now.
@@ -142,5 +142,5 @@ fi
 
 if [[ "${1:-}" == "--" ]]; then
     shift
-    exec "$@"
+    "$@"
 fi

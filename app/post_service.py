@@ -1,6 +1,6 @@
 """Post, comment, and like domain logic.
 
-Deliberately independent of Flask (plain sqlite3 connection in, plain
+Deliberately independent of Flask (a plain psycopg connection in, plain
 values out), matching app/wallet.py, app/library_service.py,
 app/search_service.py, and app/user_service.py's shape. As in
 library_service.py and user_service.py, image uploads accept a
@@ -14,6 +14,7 @@ from app/routes/posts.py, which is now the thin HTTP layer.
 """
 import os
 import uuid
+
 from werkzeug.utils import secure_filename
 
 from app.serializers import serialize_post, serialize_comment
@@ -88,7 +89,7 @@ def _validate_quote_target(cursor, quoted_post_id, viewer_id):
     Access failures intentionally collapse to PostNotFoundError so a private
     post cannot be discovered by trying to quote it.
     """
-    cursor.execute('SELECT id FROM posts WHERE id = ?', (quoted_post_id,))
+    cursor.execute('SELECT id FROM posts WHERE id = %s', (quoted_post_id,))
     if not cursor.fetchone():
         raise PostNotFoundError('Post not found')
     _check_post_access(cursor, quoted_post_id, viewer_id, interact=False)
@@ -175,16 +176,18 @@ def create_post(conn, user_id, content, audience, files, community_id=None, quot
             # Community post: ignore audience, let the column default fill it
             cursor.execute(
                 '''INSERT INTO posts (user_id, content, community_id, quoted_post_id)
-                   VALUES (?, ?, ?, ?)''',
+                   VALUES (%s, %s, %s, %s)
+                   RETURNING id''',
                 (user_id, content, community_id, quoted_post_id)
             )
         else:
             cursor.execute(
                 '''INSERT INTO posts (user_id, content, audience, quoted_post_id)
-                   VALUES (?, ?, ?, ?)''',
+                   VALUES (%s, %s, %s, %s)
+                   RETURNING id''',
                 (user_id, content, audience, quoted_post_id)
             )
-        post_id = cursor.lastrowid
+        post_id = cursor.fetchone()[0]
 
         for position, file_storage in enumerate(files):
             if file_storage and file_storage.filename:
@@ -196,7 +199,7 @@ def create_post(conn, user_id, content, audience, files, community_id=None, quot
 
                 image_url = f"/static/uploads/{unique_filename}"
                 cursor.execute(
-                    'INSERT INTO post_images (post_id, image_path, position) VALUES (?, ?, ?)',
+                    'INSERT INTO post_images (post_id, image_path, position) VALUES (%s, %s, %s)',
                     (post_id, image_url, position)
                 )
 
@@ -215,13 +218,14 @@ def create_post(conn, user_id, content, audience, files, community_id=None, quot
                users.username, users.bio
         FROM posts
         JOIN users ON posts.user_id = users.id
-        WHERE posts.id = ?
+        WHERE posts.id = %s
     ''', (post_id,))
     row = cursor.fetchone()
 
+    # PG-PHASE3: NULL_ORDERING — created_at ordering semantics deferred.
     cursor.execute('''
         SELECT image_path FROM post_images
-        WHERE post_id = ?
+        WHERE post_id = %s
         ORDER BY position ASC
     ''', (post_id,))
     image_rows = cursor.fetchall()
@@ -246,7 +250,7 @@ def fetch_post_quote_data(conn, post_ids, current_user_id):
         return {}, {}
 
     cursor = conn if not hasattr(conn, 'cursor') else conn.cursor()
-    placeholders = ','.join('?' * len(post_ids))
+    placeholders = ','.join(['%s'] * len(post_ids))
     cursor.execute(
         f'SELECT id, quoted_post_id FROM posts WHERE id IN ({placeholders})',
         post_ids,
@@ -258,7 +262,7 @@ def fetch_post_quote_data(conn, post_ids, current_user_id):
     }
     quote_ids = list(dict.fromkeys(quote_target_by_post.values()))
     count_ids = list(dict.fromkeys(post_ids + quote_ids))
-    count_placeholders = ','.join('?' * len(count_ids))
+    count_placeholders = ','.join(['%s'] * len(count_ids))
     cursor.execute(
         f'''
         SELECT quoted_post_id, COUNT(*)
@@ -276,7 +280,8 @@ def fetch_post_quote_data(conn, post_ids, current_user_id):
     if not quote_ids:
         return payloads, share_counts
 
-    quote_placeholders = ','.join('?' * len(quote_ids))
+    quote_placeholders = ','.join(['%s'] * len(quote_ids))
+    # PG-PHASE3: TYPE_STRICTNESS — EXISTS needs an int cast for the CASE result.
 
     # The joined author row and the same denormalized counts used by the feed
     # are fetched in one query. The community type/member check applies the
@@ -287,10 +292,10 @@ def fetch_post_quote_data(conn, post_ids, current_user_id):
                p.comment_count, p.like_count,
                u.full_name, u.email, u.profile_picture, u.username,
                c.type,
-               CASE WHEN c.id IS NOT NULL THEN EXISTS(
+               CASE WHEN c.id IS NOT NULL THEN (EXISTS(
                    SELECT 1 FROM community_members m
-                   WHERE m.community_id = c.id AND m.user_id = ?
-               ) ELSE 0 END AS viewer_is_member,
+                   WHERE m.community_id = c.id AND m.user_id = %s
+               ))::int ELSE 0 END AS viewer_is_member,
                CASE WHEN likes.id IS NOT NULL THEN 1 ELSE 0 END AS liked_by_user
         FROM posts p
         JOIN users u ON p.user_id = u.id
@@ -298,7 +303,7 @@ def fetch_post_quote_data(conn, post_ids, current_user_id):
         LEFT JOIN likes
                ON likes.target_type = 'post'
               AND likes.target_id = p.id
-              AND likes.user_id = ?
+              AND likes.user_id = %s
         WHERE p.id IN ({quote_placeholders})
         ''',
         [current_user_id, current_user_id] + quote_ids,
@@ -384,7 +389,7 @@ def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cu
         JOIN users ON posts.user_id = users.id
         LEFT JOIN likes ON likes.target_type = 'post'
                        AND likes.target_id = posts.id
-                       AND likes.user_id = ?
+                       AND likes.user_id = %s
     '''
     params = [current_user_id]
 
@@ -393,7 +398,7 @@ def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cu
     # Home feed to members only. Per-author lists (profiles) exclude them.
     where_clauses = []
     if only_community_id is not None:
-        where_clauses.append('posts.community_id = ?')
+        where_clauses.append('posts.community_id = %s')
         params.append(only_community_id)
     elif user_id_filter is not None:
         where_clauses.append('posts.community_id IS NULL')
@@ -402,23 +407,25 @@ def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cu
             OR posts.community_id IN (
                 SELECT c.id FROM communities c WHERE c.type != 'private'
                 UNION
-                SELECT m.community_id FROM community_members m WHERE m.user_id = ?
+                SELECT m.community_id FROM community_members m WHERE m.user_id = %s
             ))''')
         params.append(current_user_id)
 
     if audience_filter:
-        where_clauses.append('posts.audience = ?')
+        where_clauses.append('posts.audience = %s')
         params.append(audience_filter)
     if user_id_filter is not None:
-        where_clauses.append('posts.user_id = ?')
+        where_clauses.append('posts.user_id = %s')
         params.append(user_id_filter)
     if cursor_id is not None:
-        where_clauses.append('posts.id < ?')
+        where_clauses.append('posts.id < %s')
         params.append(cursor_id)
 
     query += ' WHERE ' + ' AND '.join(where_clauses)
 
-    query += ' ORDER BY posts.created_at DESC, posts.id DESC LIMIT ?'
+    # PG-PHASE3: NULL_ORDERING — created_at is nullable; PG/Postgres NULL sort
+    # order differs from SQLite for the mixed NULL/non-NULL case.
+    query += ' ORDER BY posts.created_at DESC, posts.id DESC LIMIT %s'
     params.append(limit + 1)  # one extra row, to detect a next page
 
     cursor.execute(query, params)
@@ -430,7 +437,7 @@ def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cu
 
     if page_rows:
         post_ids = [row[0] for row in page_rows]
-        placeholders = ','.join('?' * len(post_ids))
+        placeholders = ','.join(['%s'] * len(post_ids))
         cursor.execute(f'''
             SELECT post_id, image_path
             FROM post_images
@@ -440,10 +447,11 @@ def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cu
         images_by_post = {}
         for post_id, image_path in cursor.fetchall():
             images_by_post.setdefault(post_id, []).append(image_path)
+        # PG-PHASE3: TYPE_STRICTNESS — EXISTS yields a native boolean, converted by bool() below.
         cursor.execute(f'''
             SELECT posts.id, c.slug, c.name, c.type,
                    EXISTS(SELECT 1 FROM community_members m
-                          WHERE m.community_id = c.id AND m.user_id = ?)
+                          WHERE m.community_id = c.id AND m.user_id = %s)
             FROM posts
             JOIN communities c ON c.id = posts.community_id
             WHERE posts.id IN ({placeholders})
@@ -478,11 +486,12 @@ def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cu
 
 
 def get_comments(conn, post_id, current_user_id):
+    # PG-PHASE3: NULL_ORDERING — nullable created_at sorts differently in PostgreSQL.
     """All comments on post_id, oldest first, with per-viewer
     liked_by_user. Raises PostNotFoundError if post_id doesn't exist."""
     cursor = conn.cursor()
 
-    cursor.execute('SELECT id FROM posts WHERE id = ?', (post_id,))
+    cursor.execute('SELECT id FROM posts WHERE id = %s', (post_id,))
     if not cursor.fetchone():
         raise PostNotFoundError('Post not found')
     _check_post_access(cursor, post_id, current_user_id, interact=False)
@@ -498,8 +507,9 @@ def get_comments(conn, post_id, current_user_id):
         JOIN users ON comments.user_id = users.id
         LEFT JOIN likes ON likes.target_type = 'comment'
                        AND likes.target_id = comments.id
-                       AND likes.user_id = ?
-        WHERE comments.post_id = ?
+                       AND likes.user_id = %s
+        WHERE comments.post_id = %s
+        -- PG-PHASE3: NULL_ORDERING
         ORDER BY comments.created_at ASC
     ''', (current_user_id, post_id))
     return [serialize_comment(row) for row in cursor.fetchall()]
@@ -529,13 +539,13 @@ def create_comment(conn, post_id, user_id, content, parent_comment_id, image_fil
 
     cursor = conn.cursor()
 
-    cursor.execute('SELECT id FROM posts WHERE id = ?', (post_id,))
+    cursor.execute('SELECT id FROM posts WHERE id = %s', (post_id,))
     if not cursor.fetchone():
         raise PostNotFoundError('Post not found')
     _check_post_access(cursor, post_id, user_id, interact='comment')
 
     if parent_comment_id is not None:
-        cursor.execute('SELECT post_id FROM comments WHERE id = ?', (parent_comment_id,))
+        cursor.execute('SELECT post_id FROM comments WHERE id = %s', (parent_comment_id,))
         parent_row = cursor.fetchone()
         if not parent_row:
             raise CommentNotFoundError('Parent comment not found')
@@ -557,13 +567,13 @@ def create_comment(conn, post_id, user_id, content, parent_comment_id, image_fil
 
     try:
         cursor.execute(
-            'INSERT INTO comments (post_id, user_id, content, parent_comment_id, image_path) VALUES (?, ?, ?, ?, ?)',
+            'INSERT INTO comments (post_id, user_id, content, parent_comment_id, image_path) VALUES (%s, %s, %s, %s, %s) RETURNING id',
             (post_id, user_id, comment_content, parent_comment_id, image_url)
         )
-        comment_id = cursor.lastrowid
+        comment_id = cursor.fetchone()[0]
 
         cursor.execute(
-            'UPDATE posts SET comment_count = comment_count + 1 WHERE id = ?',
+            'UPDATE posts SET comment_count = comment_count + 1 WHERE id = %s',
             (post_id,)
         )
         conn.commit()
@@ -580,7 +590,7 @@ def create_comment(conn, post_id, user_id, content, parent_comment_id, image_fil
                users.username, users.bio, comments.image_path
         FROM comments
         JOIN users ON comments.user_id = users.id
-        WHERE comments.id = ?
+        WHERE comments.id = %s
     ''', (comment_id,))
     return serialize_comment(cursor.fetchone())
 
@@ -590,6 +600,7 @@ def _toggle_like(conn, user_id, target_type, target_id, table, exists_query, not
     (likes) and same race-handling shape for both, differing only in
     target_type and which table's like_count to adjust.
     """
+    # PG-PHASE3: LOCKING READ_MODIFY_WRITE — concurrent toggles need transaction review.
     cursor = conn.cursor()
 
     cursor.execute(exists_query, (target_id,))
@@ -598,25 +609,25 @@ def _toggle_like(conn, user_id, target_type, target_id, table, exists_query, not
 
     cursor.execute('''
         SELECT id FROM likes
-        WHERE user_id = ? AND target_type = ? AND target_id = ?
+        WHERE user_id = %s AND target_type = %s AND target_id = %s
     ''', (user_id, target_type, target_id))
     existing_like = cursor.fetchone()
 
     if existing_like:
         cursor.execute('''
             DELETE FROM likes
-            WHERE user_id = ? AND target_type = ? AND target_id = ?
+            WHERE user_id = %s AND target_type = %s AND target_id = %s
         ''', (user_id, target_type, target_id))
         if cursor.rowcount > 0:
-            cursor.execute(f'UPDATE {table} SET like_count = like_count - 1 WHERE id = ?', (target_id,))
+            cursor.execute(f'UPDATE {table} SET like_count = like_count - 1 WHERE id = %s', (target_id,))
         liked = False
     else:
         try:
             cursor.execute('''
                 INSERT INTO likes (user_id, target_type, target_id)
-                VALUES (?, ?, ?)
+                VALUES (%s, %s, %s)
             ''', (user_id, target_type, target_id))
-            cursor.execute(f'UPDATE {table} SET like_count = like_count + 1 WHERE id = ?', (target_id,))
+            cursor.execute(f'UPDATE {table} SET like_count = like_count + 1 WHERE id = %s', (target_id,))
             liked = True
         except Exception:
             # Race: another request inserted this like between our SELECT
@@ -626,13 +637,13 @@ def _toggle_like(conn, user_id, target_type, target_id, table, exists_query, not
             conn.rollback()
             cursor.execute('''
                 SELECT id FROM likes
-                WHERE user_id = ? AND target_type = ? AND target_id = ?
+                WHERE user_id = %s AND target_type = %s AND target_id = %s
             ''', (user_id, target_type, target_id))
             liked = cursor.fetchone() is not None
 
     conn.commit()
 
-    cursor.execute(f'SELECT like_count FROM {table} WHERE id = ?', (target_id,))
+    cursor.execute(f'SELECT like_count FROM {table} WHERE id = %s', (target_id,))
     like_count = cursor.fetchone()[0]
 
     return liked, like_count
@@ -642,12 +653,12 @@ def toggle_post_like(conn, user_id, post_id):
     """Like/unlike a post. Returns (liked, like_count). Raises
     PostNotFoundError if post_id doesn't exist."""
     cursor = conn.cursor()
-    cursor.execute('SELECT id FROM posts WHERE id = ?', (post_id,))
+    cursor.execute('SELECT id FROM posts WHERE id = %s', (post_id,))
     if not cursor.fetchone(): raise PostNotFoundError('Post not found')
     _check_post_access(cursor, post_id, user_id, interact='like')
     return _toggle_like(
         conn, user_id, 'post', post_id, 'posts',
-        'SELECT id FROM posts WHERE id = ?',
+        'SELECT id FROM posts WHERE id = %s',
         lambda: PostNotFoundError('Post not found'),
     )
 
@@ -656,7 +667,7 @@ def toggle_comment_like(conn, user_id, comment_id):
     """Like/unlike a comment. Returns (liked, like_count). Raises
     CommentNotFoundError if comment_id doesn't exist."""
     cursor = conn.cursor()
-    cursor.execute('SELECT post_id FROM comments WHERE id = ?', (comment_id,))
+    cursor.execute('SELECT post_id FROM comments WHERE id = %s', (comment_id,))
     row = cursor.fetchone()
     if not row: raise CommentNotFoundError('Comment not found')
     try:
@@ -665,7 +676,7 @@ def toggle_comment_like(conn, user_id, comment_id):
         raise CommentNotFoundError('Comment not found')
     return _toggle_like(
         conn, user_id, 'comment', comment_id, 'comments',
-        'SELECT id FROM comments WHERE id = ?',
+        'SELECT id FROM comments WHERE id = %s',
         lambda: CommentNotFoundError('Comment not found'),
     )
 
@@ -686,7 +697,7 @@ def delete_comment(conn, user_id, comment_id):
     """
     cursor = conn.cursor()
 
-    cursor.execute('SELECT user_id, post_id FROM comments WHERE id = ?', (comment_id,))
+    cursor.execute('SELECT user_id, post_id FROM comments WHERE id = %s', (comment_id,))
     row = cursor.fetchone()
     if not row:
         raise CommentNotFoundError('Comment not found')
@@ -697,7 +708,7 @@ def delete_comment(conn, user_id, comment_id):
 
     cursor.execute('''
         WITH RECURSIVE subtree(id) AS (
-            SELECT id FROM comments WHERE id = ?
+            SELECT id FROM comments WHERE id = %s
             UNION ALL
             SELECT c.id FROM comments c JOIN subtree s ON c.parent_comment_id = s.id
         )
@@ -706,7 +717,7 @@ def delete_comment(conn, user_id, comment_id):
     subtree_ids = [r[0] for r in cursor.fetchall()]
 
     # Fetch image paths before deleting
-    placeholders = ','.join('?' * len(subtree_ids))
+    placeholders = ','.join(['%s'] * len(subtree_ids))
     cursor.execute(
         f"SELECT image_path FROM comments WHERE id IN ({placeholders})",
         subtree_ids
@@ -720,10 +731,10 @@ def delete_comment(conn, user_id, comment_id):
 
     # Deleting just the root row - ON DELETE CASCADE removes every
     # reply beneath it automatically.
-    cursor.execute('DELETE FROM comments WHERE id = ?', (comment_id,))
+    cursor.execute('DELETE FROM comments WHERE id = %s', (comment_id,))
 
     cursor.execute(
-        'UPDATE posts SET comment_count = MAX(0, comment_count - ?) WHERE id = ?',
+        'UPDATE posts SET comment_count = GREATEST(0, comment_count - %s) WHERE id = %s',
         (len(subtree_ids), post_id)
     )
     conn.commit()
@@ -746,7 +757,7 @@ def delete_post(conn, user_id, post_id):
     """
     cursor = conn.cursor()
 
-    cursor.execute('SELECT user_id FROM posts WHERE id = ?', (post_id,))
+    cursor.execute('SELECT user_id FROM posts WHERE id = %s', (post_id,))
     row = cursor.fetchone()
     if not row:
         raise PostNotFoundError('Post not found')
@@ -755,29 +766,29 @@ def delete_post(conn, user_id, post_id):
         raise PostOwnershipError('You can only delete your own posts')
 
     # Collect post images
-    cursor.execute('SELECT image_path FROM post_images WHERE post_id = ?', (post_id,))
+    cursor.execute('SELECT image_path FROM post_images WHERE post_id = %s', (post_id,))
     post_image_paths = [r[0] for r in cursor.fetchall()]
 
     # Collect comment images before deleting comments
-    cursor.execute('SELECT image_path FROM comments WHERE post_id = ? AND image_path IS NOT NULL', (post_id,))
+    cursor.execute('SELECT image_path FROM comments WHERE post_id = %s AND image_path IS NOT NULL', (post_id,))
     comment_image_paths = [r[0] for r in cursor.fetchall()]
 
-    cursor.execute('DELETE FROM post_images WHERE post_id = ?', (post_id,))
+    cursor.execute('DELETE FROM post_images WHERE post_id = %s', (post_id,))
 
     cursor.execute('''
         DELETE FROM likes
         WHERE target_type = 'comment'
-        AND target_id IN (SELECT id FROM comments WHERE post_id = ?)
+        AND target_id IN (SELECT id FROM comments WHERE post_id = %s)
     ''', (post_id,))
 
-    cursor.execute('DELETE FROM comments WHERE post_id = ?', (post_id,))
+    cursor.execute('DELETE FROM comments WHERE post_id = %s', (post_id,))
 
     cursor.execute('''
         DELETE FROM likes
-        WHERE target_type = 'post' AND target_id = ?
+        WHERE target_type = 'post' AND target_id = %s
     ''', (post_id,))
 
-    cursor.execute('DELETE FROM posts WHERE id = ?', (post_id,))
+    cursor.execute('DELETE FROM posts WHERE id = %s', (post_id,))
 
     conn.commit()
 

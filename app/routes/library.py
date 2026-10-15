@@ -7,6 +7,8 @@ that service.
 from flask import Blueprint, request, jsonify, session, send_from_directory
 from app import library_service as lib
 from app.db import get_db
+from psycopg_pool import PoolTimeout
+
 
 bp = Blueprint('library', __name__)
 
@@ -34,6 +36,8 @@ def upload_file():
         return jsonify({'file': file_data}), 201
     except lib.LibraryValidationError as e:
         return jsonify({'error': str(e)}), 400
+    except PoolTimeout:
+        raise
     except Exception:
         return jsonify({'error': 'Something went wrong. Please try again.'}), 500
     finally:
@@ -56,6 +60,8 @@ def get_files():
             department=request.args.get('department', ''),
         )
         return jsonify({'files': files}), 200
+    except PoolTimeout:
+        raise
     except Exception:
         return jsonify({'error': 'Something went wrong. Please try again.'}), 500
     finally:
@@ -68,6 +74,8 @@ def get_departments():
     conn = get_db()
     try:
         return jsonify({'departments': lib.list_departments(conn)}), 200
+    except PoolTimeout:
+        raise
     except Exception:
         return jsonify({'error': 'Something went wrong. Please try again.'}), 500
     finally:
@@ -95,6 +103,8 @@ def download_file(file_id):
         return jsonify({'error': str(e)}), 404
     except lib.LibraryAccessDeniedError as e:
         return jsonify({'error': str(e)}), 403
+    except PoolTimeout:
+        raise
     except Exception:
         return jsonify({'error': 'Something went wrong. Please try again.'}), 500
     finally:

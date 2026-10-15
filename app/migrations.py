@@ -36,6 +36,21 @@ _FILENAME_RE = re.compile(r'^(\d+)_.*\.sql$')
 _ADVISORY_LOCK_KEY = 727081801
 
 
+def _execute_sql_file(conn, sql):
+    """Execute a whole migration .sql file on psycopg 3.
+
+    psycopg's Cursor.execute() does not accept multiple statements, so split
+    on statement-terminating semicolons. The split is conservative (only
+    splits on a semicolon at end-of-line or followed by whitespace/comments)
+    and must never split quoted literals in this migration corpus.
+    """
+    statement_end = re.compile(r';\s*(?:--.*)?$', re.MULTILINE)
+    for statement in statement_end.split(sql):
+        statement = statement.strip()
+        if statement:
+            conn.execute(statement)
+
+
 def _pending_migrations():
     """[(version, filepath), ...] for every migrations/pg/NNN_*.sql file on
     disk, sorted by version. Files that don't match the NNN_name.sql naming
@@ -84,7 +99,7 @@ def run_migrations(conn):
             # One transaction per file: the DDL and its schema_migrations row
             # commit together, or neither does.
             try:
-                conn.execute(sql)
+                _execute_sql_file(conn, sql)
                 conn.execute(
                     'INSERT INTO schema_migrations (version, filename) VALUES (%s, %s)',
                     (version, os.path.basename(path)),

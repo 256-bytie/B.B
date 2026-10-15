@@ -76,10 +76,10 @@ def create_post():
 
         # Insert post
         cursor.execute(
-            'INSERT INTO posts (user_id, content, audience) VALUES (?, ?, ?)',
+            'INSERT INTO posts (user_id, content, audience) VALUES (%s, %s, %s) RETURNING id',
             (session['user_id'], content, audience)
         )
-        post_id = cursor.lastrowid
+        post_id = cursor.fetchone()[0]
 
         # Save and record images
         for position, file in enumerate(files):
@@ -95,7 +95,7 @@ def create_post():
                 # Record in database (store relative path for serving)
                 image_url = f"/static/uploads/{unique_filename}"
                 cursor.execute(
-                    'INSERT INTO post_images (post_id, image_path, position) VALUES (?, ?, ?)',
+                    'INSERT INTO post_images (post_id, image_path, position) VALUES (%s, %s, %s)',
                     (post_id, image_url, position)
                 )
 
@@ -109,14 +109,14 @@ def create_post():
                    users.username, users.bio
             FROM posts
             JOIN users ON posts.user_id = users.id
-            WHERE posts.id = ?
+            WHERE posts.id = %s
         ''', (post_id,))
         row = cursor.fetchone()
 
         # Fetch images for this post
         cursor.execute('''
             SELECT image_path FROM post_images
-            WHERE post_id = ?
+            WHERE post_id = %s
             ORDER BY position ASC
         ''', (post_id,))
         image_rows = cursor.fetchall()
@@ -203,25 +203,26 @@ def get_posts():
             JOIN users ON posts.user_id = users.id
             LEFT JOIN likes ON likes.target_type = 'post'
                            AND likes.target_id = posts.id
-                           AND likes.user_id = ?
+                           AND likes.user_id = %s
         '''
         params = [current_user_id]
 
         where_clauses = []
         if audience_filter:
-            where_clauses.append('posts.audience = ?')
+            where_clauses.append('posts.audience = %s')
             params.append(audience_filter)
         if user_id_filter is not None:
-            where_clauses.append('posts.user_id = ?')
+            where_clauses.append('posts.user_id = %s')
             params.append(user_id_filter)
         if cursor_id is not None:
-            where_clauses.append('posts.id < ?')
+            where_clauses.append('posts.id < %s')
             params.append(cursor_id)
 
         if where_clauses:
             query += ' WHERE ' + ' AND '.join(where_clauses)
 
-        query += ' ORDER BY posts.created_at DESC, posts.id DESC LIMIT ?'
+        # PG-PHASE3: NULL_ORDERING TIMESTAMP_TEXT — legacy unregistered blueprint.
+        query += ' ORDER BY posts.created_at DESC, posts.id DESC LIMIT %s'
         # Fetch one extra row to detect whether there's a next page.
         params.append(limit + 1)
 
@@ -235,7 +236,7 @@ def get_posts():
         # Fetch images for just this page of posts, not all matching rows
         if page_rows:
             post_ids = [row[0] for row in page_rows]
-            placeholders = ','.join('?' * len(post_ids))
+            placeholders = ','.join(['%s'] * len(post_ids))
             db_cursor.execute(f'''
                 SELECT post_id, image_path
                 FROM post_images
@@ -275,7 +276,7 @@ def get_comments(post_id):
         cursor = conn.cursor()
 
         # Verify post exists
-        cursor.execute('SELECT id FROM posts WHERE id = ?', (post_id,))
+        cursor.execute('SELECT id FROM posts WHERE id = %s', (post_id,))
         if not cursor.fetchone():
             conn.close()
             return jsonify({'error': 'Post not found'}), 404
@@ -294,8 +295,9 @@ def get_comments(post_id):
             JOIN users ON comments.user_id = users.id
             LEFT JOIN likes ON likes.target_type = 'comment'
                            AND likes.target_id = comments.id
-                           AND likes.user_id = ?
-            WHERE comments.post_id = ?
+                           AND likes.user_id = %s
+            WHERE comments.post_id = %s
+            -- PG-PHASE3: NULL_ORDERING TIMESTAMP_TEXT
             ORDER BY comments.created_at ASC
         ''', (current_user_id, post_id))
         rows = cursor.fetchall()
@@ -332,7 +334,7 @@ def create_comment(post_id):
         cursor = conn.cursor()
 
         # Verify post exists
-        cursor.execute('SELECT id FROM posts WHERE id = ?', (post_id,))
+        cursor.execute('SELECT id FROM posts WHERE id = %s', (post_id,))
         if not cursor.fetchone():
             conn.close()
             return jsonify({'error': 'Post not found'}), 404
@@ -340,7 +342,7 @@ def create_comment(post_id):
         # If parent_comment_id is provided, validate it
         if parent_comment_id is not None:
             cursor.execute(
-                'SELECT post_id FROM comments WHERE id = ?',
+                'SELECT post_id FROM comments WHERE id = %s',
                 (parent_comment_id,)
             )
             parent_row = cursor.fetchone()
@@ -356,13 +358,13 @@ def create_comment(post_id):
 
         # Insert comment and increment post comment_count in transaction
         cursor.execute(
-            'INSERT INTO comments (post_id, user_id, content, parent_comment_id) VALUES (?, ?, ?, ?)',
+            'INSERT INTO comments (post_id, user_id, content, parent_comment_id) VALUES (%s, %s, %s, %s) RETURNING id',
             (post_id, session['user_id'], content, parent_comment_id)
         )
-        comment_id = cursor.lastrowid
+        comment_id = cursor.fetchone()[0]
 
         cursor.execute(
-            'UPDATE posts SET comment_count = comment_count + 1 WHERE id = ?',
+            'UPDATE posts SET comment_count = comment_count + 1 WHERE id = %s',
             (post_id,)
         )
 
@@ -376,7 +378,7 @@ def create_comment(post_id):
                    users.username, users.bio
             FROM comments
             JOIN users ON comments.user_id = users.id
-            WHERE comments.id = ?
+            WHERE comments.id = %s
         ''', (comment_id,))
         row = cursor.fetchone()
         conn.close()
@@ -390,6 +392,7 @@ def create_comment(post_id):
 
 @bp.route('/api/posts/<int:post_id>/like', methods=['POST'])
 def like_post(post_id):
+    # PG-PHASE3: LOCKING READ_MODIFY_WRITE — legacy unregistered toggle path.
     """Toggle like on a post"""
     if 'user_id' not in session:
         return jsonify({'error': 'Authentication required'}), 401
@@ -399,7 +402,7 @@ def like_post(post_id):
         cursor = conn.cursor()
 
         # Verify post exists
-        cursor.execute('SELECT id FROM posts WHERE id = ?', (post_id,))
+        cursor.execute('SELECT id FROM posts WHERE id = %s', (post_id,))
         if not cursor.fetchone():
             conn.close()
             return jsonify({'error': 'Post not found'}), 404
@@ -409,7 +412,7 @@ def like_post(post_id):
         # Check if like exists
         cursor.execute('''
             SELECT id FROM likes
-            WHERE user_id = ? AND target_type = 'post' AND target_id = ?
+            WHERE user_id = %s AND target_type = 'post' AND target_id = %s
         ''', (user_id, post_id))
         existing_like = cursor.fetchone()
 
@@ -418,12 +421,12 @@ def like_post(post_id):
             # Only decrement if we actually deleted a row (handles race where another thread already deleted)
             cursor.execute('''
                 DELETE FROM likes
-                WHERE user_id = ? AND target_type = 'post' AND target_id = ?
+                WHERE user_id = %s AND target_type = 'post' AND target_id = %s
             ''', (user_id, post_id))
             rows_deleted = cursor.rowcount
             if rows_deleted > 0:
                 cursor.execute('''
-                    UPDATE posts SET like_count = like_count - 1 WHERE id = ?
+                    UPDATE posts SET like_count = like_count - 1 WHERE id = %s
                 ''', (post_id,))
             liked = False
         else:
@@ -431,11 +434,11 @@ def like_post(post_id):
             try:
                 cursor.execute('''
                     INSERT INTO likes (user_id, target_type, target_id)
-                    VALUES (?, 'post', ?)
+                    VALUES (%s, 'post', %s)
                 ''', (user_id, post_id))
                 # Only increment if OUR insert succeeded
                 cursor.execute('''
-                    UPDATE posts SET like_count = like_count + 1 WHERE id = ?
+                    UPDATE posts SET like_count = like_count + 1 WHERE id = %s
                 ''', (post_id,))
                 liked = True
             except Exception:
@@ -445,7 +448,7 @@ def like_post(post_id):
                 conn.rollback()
                 cursor.execute('''
                     SELECT id FROM likes
-                    WHERE user_id = ? AND target_type = 'post' AND target_id = ?
+                    WHERE user_id = %s AND target_type = 'post' AND target_id = %s
                 ''', (user_id, post_id))
                 existing_like = cursor.fetchone()
                 liked = existing_like is not None
@@ -453,7 +456,7 @@ def like_post(post_id):
         conn.commit()
 
         # Fetch updated like_count
-        cursor.execute('SELECT like_count FROM posts WHERE id = ?', (post_id,))
+        cursor.execute('SELECT like_count FROM posts WHERE id = %s', (post_id,))
         like_count = cursor.fetchone()[0]
         conn.close()
 
@@ -465,6 +468,7 @@ def like_post(post_id):
 
 @bp.route('/api/comments/<int:comment_id>/like', methods=['POST'])
 def like_comment(comment_id):
+    # PG-PHASE3: LOCKING READ_MODIFY_WRITE — legacy unregistered toggle path.
     """Toggle like on a comment"""
     if 'user_id' not in session:
         return jsonify({'error': 'Authentication required'}), 401
@@ -474,7 +478,7 @@ def like_comment(comment_id):
         cursor = conn.cursor()
 
         # Verify comment exists
-        cursor.execute('SELECT id FROM comments WHERE id = ?', (comment_id,))
+        cursor.execute('SELECT id FROM comments WHERE id = %s', (comment_id,))
         if not cursor.fetchone():
             conn.close()
             return jsonify({'error': 'Comment not found'}), 404
@@ -484,7 +488,7 @@ def like_comment(comment_id):
         # Check if like exists
         cursor.execute('''
             SELECT id FROM likes
-            WHERE user_id = ? AND target_type = 'comment' AND target_id = ?
+            WHERE user_id = %s AND target_type = 'comment' AND target_id = %s
         ''', (user_id, comment_id))
         existing_like = cursor.fetchone()
 
@@ -493,12 +497,12 @@ def like_comment(comment_id):
             # Only decrement if we actually deleted a row (handles race where another thread already deleted)
             cursor.execute('''
                 DELETE FROM likes
-                WHERE user_id = ? AND target_type = 'comment' AND target_id = ?
+                WHERE user_id = %s AND target_type = 'comment' AND target_id = %s
             ''', (user_id, comment_id))
             rows_deleted = cursor.rowcount
             if rows_deleted > 0:
                 cursor.execute('''
-                    UPDATE comments SET like_count = like_count - 1 WHERE id = ?
+                    UPDATE comments SET like_count = like_count - 1 WHERE id = %s
                 ''', (comment_id,))
             liked = False
         else:
@@ -506,11 +510,11 @@ def like_comment(comment_id):
             try:
                 cursor.execute('''
                     INSERT INTO likes (user_id, target_type, target_id)
-                    VALUES (?, 'comment', ?)
+                    VALUES (%s, 'comment', %s)
                 ''', (user_id, comment_id))
                 # Only increment if OUR insert succeeded
                 cursor.execute('''
-                    UPDATE comments SET like_count = like_count + 1 WHERE id = ?
+                    UPDATE comments SET like_count = like_count + 1 WHERE id = %s
                 ''', (comment_id,))
                 liked = True
             except Exception:
@@ -520,7 +524,7 @@ def like_comment(comment_id):
                 conn.rollback()
                 cursor.execute('''
                     SELECT id FROM likes
-                    WHERE user_id = ? AND target_type = 'comment' AND target_id = ?
+                    WHERE user_id = %s AND target_type = 'comment' AND target_id = %s
                 ''', (user_id, comment_id))
                 existing_like = cursor.fetchone()
                 liked = existing_like is not None
@@ -528,7 +532,7 @@ def like_comment(comment_id):
         conn.commit()
 
         # Fetch updated like_count
-        cursor.execute('SELECT like_count FROM comments WHERE id = ?', (comment_id,))
+        cursor.execute('SELECT like_count FROM comments WHERE id = %s', (comment_id,))
         like_count = cursor.fetchone()[0]
         conn.close()
 
@@ -550,7 +554,7 @@ def delete_comment(comment_id):
 
         # Fetch comment with user_id and post_id
         cursor.execute(
-            'SELECT user_id, post_id FROM comments WHERE id = ?',
+            'SELECT user_id, post_id FROM comments WHERE id = %s',
             (comment_id,)
         )
         comment_row = cursor.fetchone()
@@ -567,15 +571,15 @@ def delete_comment(comment_id):
             return jsonify({'error': 'Forbidden'}), 403
 
         # Delete comment, associated likes, and decrement post comment_count
-        cursor.execute('DELETE FROM comments WHERE id = ?', (comment_id,))
+        cursor.execute('DELETE FROM comments WHERE id = %s', (comment_id,))
 
         cursor.execute(
-            'DELETE FROM likes WHERE target_type = ? AND target_id = ?',
+            'DELETE FROM likes WHERE target_type = %s AND target_id = %s',
             ('comment', comment_id)
         )
 
         cursor.execute(
-            'UPDATE posts SET comment_count = MAX(0, comment_count - 1) WHERE id = ?',
+            'UPDATE posts SET comment_count = GREATEST(0, comment_count - 1) WHERE id = %s',
             (post_id,)
         )
 

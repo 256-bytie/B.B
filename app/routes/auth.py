@@ -4,6 +4,8 @@ import time
 from flask import Blueprint, request, jsonify, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from app.db import get_db
+from psycopg_pool import PoolTimeout
+
 
 bp = Blueprint('auth', __name__)
 
@@ -52,14 +54,14 @@ def signup():
     if len(password) < 6:
         return jsonify({'error': 'Password must be at least 6 characters'}), 400
 
+    conn = None
     try:
         conn = get_db()
         cursor = conn.cursor()
 
         # Check if email already exists
-        cursor.execute('SELECT id FROM users WHERE email = ?', (email,))
+        cursor.execute('SELECT id FROM users WHERE email = %s', (email,))
         if cursor.fetchone():
-            conn.close()
             return jsonify({'error': 'Email already registered'}), 409
 
         # Hash password and insert user
@@ -70,26 +72,25 @@ def signup():
         username = base_username
 
         # Check if username is taken (case-insensitive)
-        cursor.execute('SELECT id FROM users WHERE LOWER(username) = LOWER(?)', (username,))
+        cursor.execute('SELECT id FROM users WHERE LOWER(username) = LOWER(%s)', (username,))
         if cursor.fetchone():
             # If taken, we'll append a unique suffix after getting the user_id
             # First insert without username
             cursor.execute(
-                'INSERT INTO users (full_name, email, password_hash) VALUES (?, ?, ?)',
+                'INSERT INTO users (full_name, email, password_hash) VALUES (%s, %s, %s) RETURNING id',
                 (full_name, email, password_hash)
             )
-            user_id = cursor.lastrowid
+            user_id = cursor.fetchone()[0]
             username = f"{base_username}{user_id}"
-            cursor.execute('UPDATE users SET username = ? WHERE id = ?', (username, user_id))
+            cursor.execute('UPDATE users SET username = %s WHERE id = %s', (username, user_id))
         else:
             cursor.execute(
-                'INSERT INTO users (full_name, email, password_hash, username) VALUES (?, ?, ?, ?)',
+                'INSERT INTO users (full_name, email, password_hash, username) VALUES (%s, %s, %s, %s) RETURNING id',
                 (full_name, email, password_hash, username)
             )
-            user_id = cursor.lastrowid
+            user_id = cursor.fetchone()[0]
 
         conn.commit()
-        conn.close()
 
         # Set session. `accounts` tracks every user_id that has successfully
         # authenticated in this browser session (via signup or login) so the
@@ -119,8 +120,13 @@ def signup():
             }
         }), 201
 
+    except PoolTimeout:
+        raise
     except Exception as e:
         return jsonify({'error': f'Database error: {str(e)}'}), 500
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 @bp.route('/api/login', methods=['POST'])
@@ -148,18 +154,18 @@ def login():
         if now - ts < LOGIN_RATE_LIMIT_WINDOW
     ]
 
+    conn = None
     try:
         conn = get_db()
         cursor = conn.cursor()
 
         cursor.execute(
-            'SELECT id, full_name, email, password_hash, profile_picture, cover_image, username, bio FROM users WHERE email = ?',
+            'SELECT id, full_name, email, password_hash, profile_picture, cover_image, username, bio FROM users WHERE email = %s',
             (email,)
         )
         user = cursor.fetchone()
 
         if not user:
-            conn.close()
             # Failed attempt: check rate limit before recording
             if len(login_rate_limiter[rate_key]) >= LOGIN_RATE_LIMIT_MAX:
                 return jsonify({'error': 'Too many login attempts. Please try again later.'}), 429
@@ -170,7 +176,6 @@ def login():
 
         # Verify password
         if not check_password_hash(password_hash, password):
-            conn.close()
             # Failed attempt: check rate limit before recording
             if len(login_rate_limiter[rate_key]) >= LOGIN_RATE_LIMIT_MAX:
                 return jsonify({'error': 'Too many login attempts. Please try again later.'}), 429
@@ -208,8 +213,13 @@ def login():
             }
         }), 200
 
+    except PoolTimeout:
+        raise
     except Exception as e:
         return jsonify({'error': f'Database error: {str(e)}'}), 500
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 @bp.route('/api/logout', methods=['POST'])
@@ -233,70 +243,71 @@ def get_session():
         return jsonify({'logged_in': False, 'csrf_token': csrf_token}), 200
 
     conn = get_db()
-    cursor = conn.cursor()
+    try:
+        cursor = conn.cursor()
 
-    # Fetch current user data from DB
-    cursor.execute(
-        'SELECT id, full_name, email, profile_picture, cover_image, username, bio FROM users WHERE id = ?',
-        (session['user_id'],)
-    )
-    current_user_row = cursor.fetchone()
-
-    if not current_user_row:
-        # User was deleted - clear session
-        conn.close()
-        session.clear()
-        # Regenerate token after clearing session
-        csrf_token = _ensure_csrf_token()
-        return jsonify({'logged_in': False, 'csrf_token': csrf_token}), 200
-
-    user_id, full_name, email, profile_picture, cover_image, username, bio = current_user_row
-
-    # Build accounts list
-    account_ids = session.get('accounts', [])
-    if user_id not in account_ids:
-        account_ids = account_ids + [user_id]
-
-    accounts = []
-    for account_id in account_ids:
+        # Fetch current user data from DB
         cursor.execute(
-            'SELECT id, full_name, email, profile_picture, username FROM users WHERE id = ?',
-            (account_id,)
+            'SELECT id, full_name, email, profile_picture, cover_image, username, bio FROM users WHERE id = %s',
+            (session['user_id'],)
         )
-        row = cursor.fetchone()
-        if row:
-            row_id, row_full_name, row_email, row_profile_picture, row_username = row
-            accounts.append({
-                'id': row_id,
-                'full_name': row_full_name,
-                # Bug fix: this used to read the email's local-part
-                # (row_email.split('@')[0]) unconditionally, ignoring the
-                # username column entirely - so an edited username never
-                # showed up here regardless of how fresh the fetch was.
-                # Matches the same fallback convention used everywhere else
-                # (see session.user.username || session.user.email.split('@')[0]
-                # in profile-own.js) so a user who never set a custom
-                # username still gets the same default they'd see elsewhere.
-                'handle': row_username or row_email.split('@')[0],
-                'profile_picture': row_profile_picture,
-                'username': row_username
-            })
-    conn.close()
+        current_user_row = cursor.fetchone()
 
-    return jsonify({
-        'logged_in': True,
-        'csrf_token': csrf_token,
-        'user': {
-            'id': user_id,
-            'email': email,
-            'full_name': full_name,
-            'profile_picture': profile_picture,
-            'cover_image': cover_image,
-            'username': username,
-            'bio': bio
-        },
-        'accounts': accounts
-    }), 200
+        if not current_user_row:
+            # User was deleted - clear session
+            session.clear()
+            # Regenerate token after clearing session
+            csrf_token = _ensure_csrf_token()
+            return jsonify({'logged_in': False, 'csrf_token': csrf_token}), 200
+
+        user_id, full_name, email, profile_picture, cover_image, username, bio = current_user_row
+
+        # Build accounts list
+        account_ids = session.get('accounts', [])
+        if user_id not in account_ids:
+            account_ids = account_ids + [user_id]
+
+        accounts = []
+        for account_id in account_ids:
+            cursor.execute(
+                'SELECT id, full_name, email, profile_picture, username FROM users WHERE id = %s',
+                (account_id,)
+            )
+            row = cursor.fetchone()
+            if row:
+                row_id, row_full_name, row_email, row_profile_picture, row_username = row
+                accounts.append({
+                    'id': row_id,
+                    'full_name': row_full_name,
+                    # Bug fix: this used to read the email's local-part
+                    # (row_email.split('@')[0]) unconditionally, ignoring the
+                    # username column entirely - so an edited username never
+                    # showed up here regardless of how fresh the fetch was.
+                    # Matches the same fallback convention used everywhere else
+                    # (see session.user.username || session.user.email.split('@')[0]
+                    # in profile-own.js) so a user who never set a custom
+                    # username still gets the same default they'd see elsewhere.
+                    'handle': row_username or row_email.split('@')[0],
+                    'profile_picture': row_profile_picture,
+                    'username': row_username
+                })
+
+        return jsonify({
+            'logged_in': True,
+            'csrf_token': csrf_token,
+            'user': {
+                'id': user_id,
+                'email': email,
+                'full_name': full_name,
+                'profile_picture': profile_picture,
+                'cover_image': cover_image,
+                'username': username,
+                'bio': bio
+            },
+            'accounts': accounts
+        }), 200
+    finally:
+        conn.close()
 
 
 @bp.route('/api/session/switch', methods=['POST'])
@@ -327,13 +338,15 @@ def switch_account():
         return jsonify({'error': 'That account is not signed in on this device'}), 403
 
     conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute(
-        'SELECT id, full_name, email, profile_picture, cover_image, username, bio FROM users WHERE id = ?',
-        (target_id,)
-    )
-    row = cursor.fetchone()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT id, full_name, email, profile_picture, cover_image, username, bio FROM users WHERE id = %s',
+            (target_id,)
+        )
+        row = cursor.fetchone()
+    finally:
+        conn.close()
 
     if row is None:
         # Account existed when it was added to this session but has since

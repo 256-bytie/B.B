@@ -1,6 +1,6 @@
 """Direct (1:1) messaging logic: conversations, messages, read cursors.
 
-Deliberately Flask-free (plain sqlite3 connection in, plain values out),
+Deliberately Flask-free (a plain psycopg connection in, plain values out),
 matching app/wallet.py / app/post_service.py / app/community_service.py.
 app/routes/chat.py is the thin HTTP layer on top.
 
@@ -9,7 +9,7 @@ Model
 - `conversations` canonicalizes a pair as (user_low_id, user_high_id) with
   a UNIQUE constraint, so a duplicate DM for the same two users is
   impossible at the database level and get-or-create races collapse into
-  one row (send/get-or-create run under BEGIN IMMEDIATE, same pattern as
+  one row (send/get-or-create run under an implicit psycopg transaction, same pattern as
   wallet.claim_monthly_reward).
 - `messages.id` is monotonic and is the ONLY ordering/cursor key
   (timestamps are not). Pages are ascending (oldest first).
@@ -31,6 +31,8 @@ multi-worker deployments need a shared broker before they are safe.
 """
 import threading
 import time
+
+import psycopg.errors
 
 DEFAULT_MESSAGES_LIMIT = 50
 MAX_MESSAGES_LIMIT = 100
@@ -108,7 +110,7 @@ def _pair_ids(user_a, user_b):
 def _fetch_conversation_row(cursor, conversation_id):
     cursor.execute(
         'SELECT id, user_low_id, user_high_id, created_at '
-        'FROM conversations WHERE id = ?',
+        'FROM conversations WHERE id = %s',
         (conversation_id,)
     )
     return cursor.fetchone()
@@ -127,7 +129,7 @@ def _require_member(cursor, conversation_id, user_id):
 def _user_public_row(cursor, user_id):
     cursor.execute(
         'SELECT id, full_name, email, profile_picture, cover_image, '
-        'username, bio FROM users WHERE id = ?',
+        'username, bio FROM users WHERE id = %s',
         (user_id,)
     )
     return cursor.fetchone()
@@ -136,7 +138,7 @@ def _user_public_row(cursor, user_id):
 def _last_read(cursor, conversation_id, user_id):
     cursor.execute(
         'SELECT last_read_message_id FROM conversation_reads '
-        'WHERE conversation_id = ? AND user_id = ?',
+        'WHERE conversation_id = %s AND user_id = %s',
         (conversation_id, user_id)
     )
     row = cursor.fetchone()
@@ -151,13 +153,13 @@ def _message_rows(cursor, conversation_id, after_id=None, before_id=None,
     is fetched by taking the tail of a descending query and reversing, so
     `before` pages further back from the newest.
     """
-    where = 'm.conversation_id = ?'
+    where = 'm.conversation_id = %s'
     params = [conversation_id]
     if after_id is not None:
-        where += ' AND m.id > ?'
+        where += ' AND m.id > %s'
         params.append(after_id)
     if before_id is not None:
-        where += ' AND m.id < ?'
+        where += ' AND m.id < %s'
         params.append(before_id)
     order = 'ASC' if ascending else 'DESC'
     sql = (
@@ -165,7 +167,7 @@ def _message_rows(cursor, conversation_id, after_id=None, before_id=None,
         f'FROM messages m WHERE {where} ORDER BY m.id {order}'
     )
     if limit is not None:
-        sql += ' LIMIT ?'
+        sql += ' LIMIT %s'
         params.append(limit)
     return cursor.execute(sql, params).fetchall()
 
@@ -179,7 +181,7 @@ def _serialize_conversation_pair(cursor, conv_row, viewer_id):
     cursor.execute(
         'SELECT m.id, m.sender_id, m.body, m.created_at '
         'FROM conversation_state s JOIN messages m ON m.id = s.last_message_id '
-        'WHERE s.conversation_id = ?',
+        'WHERE s.conversation_id = %s',
         (conversation_id,)
     )
     last_message = cursor.fetchone()
@@ -190,7 +192,7 @@ def _serialize_conversation_pair(cursor, conv_row, viewer_id):
             and last_message[1] != viewer_id:
         unread = cursor.execute(
             'SELECT COUNT(*) FROM messages '
-            'WHERE conversation_id = ? AND id > ? AND sender_id != ?',
+            'WHERE conversation_id = %s AND id > %s AND sender_id != %s',
             (conversation_id, last_read, viewer_id)
         ).fetchone()[0]
 
@@ -208,7 +210,7 @@ def list_conversations(cursor, viewer_id):
         'SELECT c.id, c.user_low_id, c.user_high_id, c.created_at '
         'FROM conversations c '
         'LEFT JOIN conversation_state s ON s.conversation_id = c.id '
-        'WHERE c.user_low_id = ? OR c.user_high_id = ? '
+        'WHERE c.user_low_id = %s OR c.user_high_id = %s '
         'ORDER BY COALESCE(s.last_message_id, 0) DESC, c.id DESC',
         (viewer_id, viewer_id)
     )
@@ -219,10 +221,9 @@ def list_conversations(cursor, viewer_id):
 def get_or_create_conversation(cursor, viewer_id, other_user_id):
     """Get or create the DM between viewer_id and other_user_id.
 
-    Returns (conversation_id, created). Concurrency-safe: runs inside the
-    caller's BEGIN IMMEDIATE transaction, and the UNIQUE(user_low_id,
-    user_high_id) constraint backstops any race — a losing INSERT simply
-    re-reads the winner's row.
+    Returns (conversation_id, created). Runs inside the caller's implicit
+    transaction. The unique pair constraint prevents duplicate rows;
+    PostgreSQL retry behavior after a losing insert is deferred to Phase 3.
 
     Raises ChatValidationError for a self-DM or invalid id,
     UserNotFoundError for an unknown user.
@@ -240,7 +241,7 @@ def get_or_create_conversation(cursor, viewer_id, other_user_id):
     low, high = _pair_ids(viewer_id, other_user_id)
 
     cursor.execute(
-        'SELECT id FROM conversations WHERE user_low_id = ? AND user_high_id = ?',
+        'SELECT id FROM conversations WHERE user_low_id = %s AND user_high_id = %s',
         (low, high)
     )
     existing = cursor.fetchone()
@@ -249,13 +250,14 @@ def get_or_create_conversation(cursor, viewer_id, other_user_id):
 
     try:
         cursor.execute(
-            'INSERT INTO conversations (user_low_id, user_high_id) VALUES (?, ?)',
+            'INSERT INTO conversations (user_low_id, user_high_id) VALUES (%s, %s) RETURNING id',
             (low, high)
         )
-    except Exception:
+    except psycopg.errors.UniqueViolation:
+        # PG-PHASE3: LOCKING READ_MODIFY_WRITE — retry needs a savepoint or rollback before SELECT.
         # Lost a get-or-create race: the pair now exists, return it.
         cursor.execute(
-            'SELECT id FROM conversations WHERE user_low_id = ? AND user_high_id = ?',
+            'SELECT id FROM conversations WHERE user_low_id = %s AND user_high_id = %s',
             (low, high)
         )
         row = cursor.fetchone()
@@ -263,10 +265,10 @@ def get_or_create_conversation(cursor, viewer_id, other_user_id):
             raise
         return row[0], False
 
-    conversation_id = cursor.lastrowid
+    conversation_id = cursor.fetchone()[0]
     cursor.execute(
         'INSERT INTO conversation_state (conversation_id, last_message_id) '
-        'VALUES (?, 0)',
+        'VALUES (%s, 0)',
         (conversation_id,)
     )
     return conversation_id, True
@@ -275,7 +277,7 @@ def get_or_create_conversation(cursor, viewer_id, other_user_id):
 def conversation_exists_for_pair(cursor, user_a, user_b):
     low, high = _pair_ids(user_a, user_b)
     cursor.execute(
-        'SELECT id FROM conversations WHERE user_low_id = ? AND user_high_id = ?',
+        'SELECT id FROM conversations WHERE user_low_id = %s AND user_high_id = %s',
         (low, high)
     )
     return cursor.fetchone() is not None
@@ -312,7 +314,8 @@ def send_message(conn, conversation_id, sender_id, body, client_id=None):
         elif len(client_id) > 255:
             client_id = client_id[:255]
 
-    conn.execute('BEGIN IMMEDIATE')
+    # PG-PHASE3: LOCKING — psycopg opens a transaction on the first statement;
+    # the SQLite write-lock analog is deferred.
     try:
         cursor = conn.cursor()
         row = _require_member(cursor, conversation_id, sender_id)
@@ -322,8 +325,8 @@ def send_message(conn, conversation_id, sender_id, body, client_id=None):
         if client_id is not None:
             cursor.execute(
                 'SELECT id, conversation_id, sender_id, body, created_at '
-                'FROM messages WHERE conversation_id = ? AND sender_id = ? '
-                'AND client_id = ?',
+                'FROM messages WHERE conversation_id = %s AND sender_id = %s '
+                'AND client_id = %s',
                 (conversation_id, sender_id, client_id)
             )
             existing = cursor.fetchone()
@@ -333,13 +336,13 @@ def send_message(conn, conversation_id, sender_id, body, client_id=None):
 
         cursor.execute(
             'INSERT INTO messages (conversation_id, sender_id, body, client_id) '
-            'VALUES (?, ?, ?, ?)',
+            'VALUES (%s, %s, %s, %s) RETURNING id',
             (conversation_id, sender_id, body, client_id)
         )
-        message_id = cursor.lastrowid
+        message_id = cursor.fetchone()[0]
         cursor.execute(
             'INSERT INTO conversation_state (conversation_id, last_message_id) '
-            'VALUES (?, ?) '
+            'VALUES (%s, %s) '
             'ON CONFLICT(conversation_id) DO UPDATE SET last_message_id = excluded.last_message_id',
             (conversation_id, message_id)
         )
@@ -390,7 +393,7 @@ def get_message(conn, conversation_id, message_id, viewer_id):
         raise ConversationNotFoundError('Conversation not found')
     cursor.execute(
         'SELECT id, conversation_id, sender_id, body, created_at '
-        'FROM messages WHERE id = ? AND conversation_id = ?',
+        'FROM messages WHERE id = %s AND conversation_id = %s',
         (message_id, conversation_id)
     )
     message = cursor.fetchone()
@@ -415,7 +418,7 @@ def mark_read(cursor, conversation_id, viewer_id, up_to_message_id):
         raise ConversationNotFoundError('Conversation not found')
 
     cursor.execute(
-        'SELECT COALESCE(MAX(id), 0) FROM messages WHERE conversation_id = ?',
+        'SELECT COALESCE(MAX(id), 0) FROM messages WHERE conversation_id = %s',
         (conversation_id,)
     )
     last_message_id = cursor.fetchone()[0]
@@ -427,7 +430,7 @@ def mark_read(cursor, conversation_id, viewer_id, up_to_message_id):
 
     cursor.execute(
         'INSERT INTO conversation_reads (conversation_id, user_id, last_read_message_id) '
-        'VALUES (?, ?, ?) '
+        'VALUES (%s, %s, %s) '
         'ON CONFLICT(conversation_id, user_id) '
         'DO UPDATE SET last_read_message_id = excluded.last_read_message_id',
         (conversation_id, viewer_id, new_cursor)
@@ -449,8 +452,8 @@ def list_updates(cursor, viewer_id, after_id, limit=DEFAULT_UPDATES_LIMIT):
     cursor.execute(
         'SELECT m.id, m.conversation_id, m.sender_id, m.body, m.created_at '
         'FROM messages m JOIN conversations c ON c.id = m.conversation_id '
-        'WHERE (c.user_low_id = ? OR c.user_high_id = ?) AND m.id > ? '
-        'ORDER BY m.id ASC LIMIT ?',
+        'WHERE (c.user_low_id = %s OR c.user_high_id = %s) AND m.id > %s '
+        'ORDER BY m.id ASC LIMIT %s',
         (viewer_id, viewer_id, after_id, limit)
     )
     rows = cursor.fetchall()
@@ -462,7 +465,7 @@ def list_updates(cursor, viewer_id, after_id, limit=DEFAULT_UPDATES_LIMIT):
         cursor.execute(
             'SELECT 1 FROM messages m JOIN conversations c '
             'ON c.id = m.conversation_id '
-            'WHERE (c.user_low_id = ? OR c.user_high_id = ?) AND m.id > ? '
+            'WHERE (c.user_low_id = %s OR c.user_high_id = %s) AND m.id > %s '
             'LIMIT 1',
             (viewer_id, viewer_id, rows[-1][0])
         )
@@ -478,7 +481,7 @@ def latest_message_id(cursor, viewer_id):
     cursor.execute(
         'SELECT COALESCE(MAX(m.id), 0) FROM messages m '
         'JOIN conversations c ON c.id = m.conversation_id '
-        'WHERE c.user_low_id = ? OR c.user_high_id = ?',
+        'WHERE c.user_low_id = %s OR c.user_high_id = %s',
         (viewer_id, viewer_id)
     )
     return cursor.fetchone()[0]

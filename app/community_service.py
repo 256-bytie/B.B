@@ -1,12 +1,13 @@
 """Community domain logic (communities, membership, posts).
 
 Flask-free, same shape as app/wallet.py / app/post_service.py: a plain
-sqlite3 connection in, plain values out. app/routes/communities.py is the
+psycopg connection in, plain values out. app/routes/communities.py is the
 thin HTTP layer on top.
 
 """
 import re
-import sqlite3
+
+import psycopg.errors
 
 from app.serializers import serialize_community, serialize_user_public
 from app.community_access import viewer_role, can_view, can_join
@@ -70,7 +71,7 @@ def _unique_slug(cursor, name):
     n = 1
     while True:
         if candidate not in RESERVED_SLUGS:
-            cursor.execute('SELECT 1 FROM communities WHERE slug = ?', (candidate,))
+            cursor.execute('SELECT 1 FROM communities WHERE slug = %s', (candidate,))
             if cursor.fetchone() is None:
                 return candidate
         n += 1
@@ -83,7 +84,7 @@ def _fetch_community_row(cursor, slug):
                (SELECT COUNT(*) FROM community_members m WHERE m.community_id = c.id),
                c.icon_image, c.cover_image
         FROM communities c
-        WHERE slug = ?
+        WHERE slug = %s
     ''', (slug,))
     return cursor.fetchone()
 
@@ -113,7 +114,7 @@ def get_community(conn, slug, viewer_id):
     role = _role(cursor, row[0], viewer_id)
     level = None
     if role is not None:
-        cursor.execute('SELECT notification_level FROM community_members WHERE community_id = ? AND user_id = ?',
+        cursor.execute('SELECT notification_level FROM community_members WHERE community_id = %s AND user_id = %s',
                        (row[0], viewer_id))
         level = cursor.fetchone()[0]
     return serialize_community(row[:9], icon_bg, role, row[9], row[10], level)
@@ -132,29 +133,29 @@ def list_community_members(conn, slug, viewer_id):
     '''
 
     cursor.execute(user_columns + '''
-        WHERE m.community_id = ? AND m.role = 'creator'
+        WHERE m.community_id = %s AND m.role = 'creator'
         LIMIT 1
     ''', (community_id,))
     admin_row = cursor.fetchone()
 
     cursor.execute(user_columns + '''
-        WHERE m.community_id = ? AND m.role = 'moderator'
-        ORDER BY m.joined_at ASC, m.rowid ASC
+        WHERE m.community_id = %s AND m.role = 'moderator'
+        ORDER BY m.joined_at ASC, m.seq ASC
     ''', (community_id,))
     moderators = [serialize_user_public(row) for row in cursor.fetchall()]
 
     first_row = None
     if viewer_id is not None:
         cursor.execute(user_columns + '''
-            WHERE m.community_id = ? AND m.user_id = ?
+            WHERE m.community_id = %s AND m.user_id = %s
             LIMIT 1
         ''', (community_id, viewer_id))
         first_row = cursor.fetchone()
 
     if first_row is None:
         cursor.execute(user_columns + '''
-            WHERE m.community_id = ?
-            ORDER BY RANDOM()
+            WHERE m.community_id = %s
+            ORDER BY random()
             LIMIT 1
         ''', (community_id,))
         first_row = cursor.fetchone()
@@ -163,8 +164,8 @@ def list_community_members(conn, slug, viewer_id):
     if first_row is not None:
         all_members.append(serialize_user_public(first_row))
         cursor.execute(user_columns + '''
-            WHERE m.community_id = ? AND m.user_id != ?
-            ORDER BY m.joined_at DESC, m.rowid DESC
+            WHERE m.community_id = %s AND m.user_id != %s
+            ORDER BY m.joined_at DESC, m.seq DESC
             LIMIT 3
         ''', (community_id, first_row[0]))
         all_members.extend(serialize_user_public(row) for row in cursor.fetchall())
@@ -199,23 +200,27 @@ def list_all_community_members(conn, slug, viewer_id, q=None, limit=30, offset=0
     if term:
         escaped = term.replace('!', '!!').replace('%', '!%').replace('_', '!_')
         like = '%' + escaped + '%'
-        search_sql = " AND (lower(u.full_name) LIKE ? ESCAPE '!' OR lower(u.username) LIKE ? ESCAPE '!')"
+        # PG-PHASE3: LIKE_CASE — SQLite ASCII LIKE is case-insensitive; PG LIKE
+        # is case-sensitive.
+        search_sql = " AND (lower(u.full_name) LIKE %s ESCAPE '!' OR lower(u.username) LIKE %s ESCAPE '!')"
         search_params = [like, like]
 
     admin = None
     moderators = []
     if offset == 0:
-        cursor.execute(user_columns + "WHERE m.community_id = ? AND m.role = 'creator'" + search_sql + ' LIMIT 1',
+        cursor.execute(user_columns + "WHERE m.community_id = %s AND m.role = 'creator'" + search_sql + ' LIMIT 1',
                        [community_id] + search_params)
         row = cursor.fetchone()
         admin = serialize_user_public(row) if row else None
-        cursor.execute(user_columns + "WHERE m.community_id = ? AND m.role = 'moderator'" + search_sql +
-                       ' ORDER BY m.joined_at ASC, m.rowid ASC', [community_id] + search_params)
+        cursor.execute(user_columns + "WHERE m.community_id = %s AND m.role = 'moderator'" + search_sql +
+                       ' ORDER BY m.joined_at ASC, m.seq ASC', [community_id] + search_params)
         moderators = [serialize_user_public(r) for r in cursor.fetchall()]
 
+    # PG-PHASE3: TYPE_STRICTNESS — the boolean (m.user_id = %s) ordering
+    # expression is kept mechanical; final boolean/int ordering is Phase 3.
     cursor.execute(
-        user_columns + 'WHERE m.community_id = ?' + search_sql +
-        ' ORDER BY (m.user_id = ?) DESC, m.joined_at DESC, m.rowid DESC LIMIT ? OFFSET ?',
+        user_columns + 'WHERE m.community_id = %s' + search_sql +
+        ' ORDER BY (m.user_id = %s) DESC, m.joined_at DESC, m.seq DESC LIMIT %s OFFSET %s',
         [community_id] + search_params + [viewer_id if viewer_id is not None else -1, limit + 1, offset]
     )
     rows = cursor.fetchall()
@@ -244,7 +249,7 @@ def update_community_image(conn, slug, user_id, kind, file_storage):
     old_url = row[9 if kind == 'icon' else 10]
     new_url = user_service._save_upload(file_storage)
     try:
-        cursor.execute(f'UPDATE communities SET {column} = ? WHERE id = ?', (new_url, row[0]))
+        cursor.execute(f'UPDATE communities SET {column} = %s WHERE id = %s', (new_url, row[0]))
         conn.commit()
     except Exception:
         delete_if_local(new_url, user_service.UPLOAD_FOLDER)
@@ -276,22 +281,24 @@ def create_community(conn, creator_id, name, description, topic, community_type)
     cursor = conn.cursor()
     # The slug check-then-insert can race with a concurrent create of the
     # same name; the UNIQUE constraint catches it and we pick again.
+    # PG-PHASE3: LOCKING READ_MODIFY_WRITE — slug allocation can race.
     for _ in range(5):
         slug = _unique_slug(cursor, name)
         try:
             cursor.execute('''
                 INSERT INTO communities (slug, name, description, topic, type, icon_emoji, creator_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
             ''', (slug, name, description, topic, community_type, icon_emoji, creator_id))
             break
-        except sqlite3.IntegrityError:
+        except psycopg.errors.UniqueViolation:
             conn.rollback()
     else:
         raise CommunityValidationError('Could not allocate a name for this community. Try again.')
 
     cursor.execute(
-        "INSERT INTO community_members (community_id, user_id, role) VALUES (?, ?, 'creator')",
-        (cursor.lastrowid, creator_id)
+        "INSERT INTO community_members (community_id, user_id, role) VALUES (%s, %s, 'creator')",
+        (cursor.fetchone()[0], creator_id)
     )
     conn.commit()
     return get_community(conn, slug, creator_id)
@@ -305,7 +312,7 @@ def join_community(conn, slug, user_id):
     if not can_join(row[5], role):
         raise CommunityPermissionError('This community is invite-only')
     cursor.execute(
-        "INSERT OR IGNORE INTO community_members (community_id, user_id, role) VALUES (?, ?, 'member')",
+        "INSERT INTO community_members (community_id, user_id, role) VALUES (%s, %s, 'member') ON CONFLICT (community_id, user_id) DO NOTHING",
         (row[0], user_id)
     )
     conn.commit()
@@ -320,7 +327,7 @@ def leave_community(conn, slug, user_id):
     if viewer_role(cursor, row[0], user_id) == 'creator':
         raise CommunityValidationError("The creator can't leave their own community")
     cursor.execute(
-        'DELETE FROM community_members WHERE community_id = ? AND user_id = ?',
+        'DELETE FROM community_members WHERE community_id = %s AND user_id = %s',
         (row[0], user_id)
     )
     conn.commit()
@@ -338,7 +345,7 @@ def set_notification_level(conn, slug, user_id, level):
     if viewer_role(cursor, row[0], user_id) is None:
         raise CommunityPermissionError('Join this community to manage notifications')
     cursor.execute(
-        'UPDATE community_members SET notification_level = ? WHERE community_id = ? AND user_id = ?',
+        'UPDATE community_members SET notification_level = %s WHERE community_id = %s AND user_id = %s',
         (level, row[0], user_id)
     )
     conn.commit()
@@ -349,11 +356,11 @@ def add_member(conn, slug, actor_id, username):
     cursor = conn.cursor(); row = _require_visible_community(cursor, slug, actor_id)
     if viewer_role(cursor, row[0], actor_id) != 'creator':
         raise CommunityPermissionError('Only the creator can add members')
-    cursor.execute('SELECT id, username FROM users WHERE lower(username) = lower(?)', (username or '',))
+    cursor.execute('SELECT id, username FROM users WHERE lower(username) = lower(%s)', (username or '',))
     target = cursor.fetchone()
     if not target: raise CommunityValidationError('No user with that username')
-    cursor.execute("INSERT OR IGNORE INTO community_members (community_id,user_id,role) VALUES (?,?,'member')", (row[0], target[0]))
-    cursor.execute('SELECT COUNT(*) FROM community_members WHERE community_id = ?', (row[0],))
+    cursor.execute("INSERT INTO community_members (community_id,user_id,role) VALUES (%s,%s,'member') ON CONFLICT (community_id, user_id) DO NOTHING", (row[0], target[0]))
+    cursor.execute('SELECT COUNT(*) FROM community_members WHERE community_id = %s', (row[0],))
     conn.commit()
     return {'username': target[1], 'role': 'member', 'member_count': cursor.fetchone()[0]}
 
@@ -361,14 +368,14 @@ def remove_member(conn, slug, actor_id, username):
     cursor = conn.cursor(); row = _require_visible_community(cursor, slug, actor_id)
     if viewer_role(cursor, row[0], actor_id) != 'creator':
         raise CommunityPermissionError('Only the creator can remove members')
-    cursor.execute('SELECT id FROM users WHERE lower(username) = lower(?)', (username or '',)); target = cursor.fetchone()
-    cursor.execute('SELECT creator_id FROM communities WHERE id = ?', (row[0],))
+    cursor.execute('SELECT id FROM users WHERE lower(username) = lower(%s)', (username or '',)); target = cursor.fetchone()
+    cursor.execute('SELECT creator_id FROM communities WHERE id = %s', (row[0],))
     creator_id = cursor.fetchone()[0]
     if target and target[0] == creator_id: raise CommunityValidationError("The creator can't be removed")
     if not target: raise CommunityValidationError('That user is not a member')
-    cursor.execute("DELETE FROM community_members WHERE community_id = ? AND user_id = ? AND role != 'creator'", (row[0], target[0]))
+    cursor.execute("DELETE FROM community_members WHERE community_id = %s AND user_id = %s AND role != 'creator'", (row[0], target[0]))
     if cursor.rowcount == 0: raise CommunityValidationError('That user is not a member')
-    cursor.execute('SELECT COUNT(*) FROM community_members WHERE community_id = ?', (row[0],)); count = cursor.fetchone()[0]; conn.commit()
+    cursor.execute('SELECT COUNT(*) FROM community_members WHERE community_id = %s', (row[0],)); count = cursor.fetchone()[0]; conn.commit()
     return {'member_count': count}
 
 
@@ -381,8 +388,8 @@ def list_my_communities(conn, user_id):
                m.role, c.icon_image, c.cover_image
         FROM community_members m
         JOIN communities c ON c.id = m.community_id
-        WHERE m.user_id = ?
-        ORDER BY m.joined_at DESC, m.rowid DESC
+        WHERE m.user_id = %s
+        ORDER BY m.joined_at DESC, m.seq DESC
     ''', (user_id,))
     return [
         serialize_community(row[:9], topic_style(row[4])[1], row[9], row[10], row[11])
@@ -456,7 +463,7 @@ def list_communities(conn, viewer_id, q, limit, cursor_id):
                (SELECT COUNT(*) FROM community_members m WHERE m.community_id = c.id),
                vm.role, c.icon_image, c.cover_image
         FROM communities c
-        LEFT JOIN community_members vm ON vm.community_id = c.id AND vm.user_id = ?
+        LEFT JOIN community_members vm ON vm.community_id = c.id AND vm.user_id = %s
         WHERE c.type != 'private'
     '''
     params = [viewer_id]
@@ -468,15 +475,17 @@ def list_communities(conn, viewer_id, q, limit, cursor_id):
             # Escape LIKE special chars: %, _, and the escape char itself
             escaped = q_trimmed.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
             pattern = f'%{escaped}%'
-            query += ' AND (c.name LIKE ? ESCAPE ? OR c.slug LIKE ? ESCAPE ? OR c.description LIKE ? ESCAPE ?)'
+            # PG-PHASE3: LIKE_CASE — SQLite ASCII LIKE is case-insensitive; PG LIKE
+            # is case-sensitive.
+            query += ' AND (c.name LIKE %s ESCAPE %s OR c.slug LIKE %s ESCAPE %s OR c.description LIKE %s ESCAPE %s)'
             params.extend([pattern, '\\', pattern, '\\', pattern, '\\'])
 
     # Apply keyset cursor
     if cursor_id is not None:
-        query += ' AND c.id < ?'
+        query += ' AND c.id < %s'
         params.append(cursor_id)
 
-    query += ' ORDER BY c.id DESC LIMIT ?'
+    query += ' ORDER BY c.id DESC LIMIT %s'
     params.append(limit + 1)
 
     cursor.execute(query, params)

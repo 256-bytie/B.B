@@ -14,6 +14,8 @@ from flask import Blueprint, request, jsonify, session
 
 from app.db import get_db
 from app import chat_service as chat
+from psycopg_pool import PoolTimeout
+
 
 bp = Blueprint('chat', __name__)
 
@@ -60,8 +62,8 @@ def get_conversations():
 
 @bp.route('/api/chat/conversations', methods=['POST'])
 def create_conversation():
-    """Get-or-create the DM between the session user and ?user_id / JSON
-    body {"user_id": ...}. 201 when created, 200 when it already existed."""
+    """Get-or-create the DM between the session user and JSON body {"user_id": ...}. 201 when
+    created, 200 when it already existed."""
     auth_error = _require_login()
     if auth_error:
         return auth_error
@@ -71,7 +73,7 @@ def create_conversation():
 
     conn = get_db()
     try:
-        conn.execute('BEGIN IMMEDIATE')
+        # PG-PHASE3: LOCKING — psycopg opens a transaction on the first statement.
         try:
             cursor = conn.cursor()
             conversation_id, created = chat.get_or_create_conversation(
@@ -88,6 +90,8 @@ def create_conversation():
         except chat.UserNotFoundError as e:
             conn.rollback()
             return jsonify({'error': str(e)}), 404
+        except PoolTimeout:
+            raise
         except Exception:
             conn.rollback()
             raise
@@ -99,8 +103,8 @@ def create_conversation():
 @bp.route('/api/chat/conversations/<int:conversation_id>/messages', methods=['GET'])
 def get_messages(conversation_id):
     """Ascending page of one conversation's messages; newest page by
-    default, ?before=<message_id> pages further back, ?limit= default 50
-    / max 100."""
+    default; the optional `before` query parameter pages further back and
+    `limit` (default 50, max 100) controls page size."""
     auth_error = _require_login()
     if auth_error:
         return auth_error
@@ -134,9 +138,9 @@ def get_messages(conversation_id):
 
 @bp.route('/api/chat/conversations/<int:conversation_id>/messages', methods=['POST'])
 def send_message(conversation_id):
-    """Send a message: {"body": str, "client_id": str?}. Same client_id
-    from the same sender in the same conversation returns the existing
-    message with 200 instead of inserting again."""
+    """Send a message: {"body": str, "client_id": str or omitted}. Same
+    client_id from the same sender in the same conversation returns the
+    existing message with 200 instead of inserting again."""
     auth_error = _require_login()
     if auth_error:
         return auth_error
@@ -159,8 +163,12 @@ def send_message(conversation_id):
         return jsonify({'error': str(e)}), 400
     except chat.ConversationNotFoundError as e:
         return jsonify({'error': str(e)}), 404
+    except PoolTimeout:
+        raise
     except Exception as e:
         return jsonify({'error': f'Database error: {str(e)}'}), 500
+    finally:
+        conn.close()
 
 
 @bp.route('/api/chat/conversations/<int:conversation_id>/read', methods=['POST'])
@@ -194,16 +202,13 @@ def mark_read(conversation_id):
 def get_updates():
     """Poll for new messages across all of the viewer's conversations.
 
-    ?after=<message_id>  resume cursor (default 0 = everything)
-    ?limit=              message page size (default 100, max 200)
-    ?wait_seconds=       long-poll: hold up to this many seconds waiting
-                         for something new (default 0, max 25). Returns
-                         early as soon as a new message/conversation is
-                         signalled.
-    ?conv_after=<id>     narrow the returned conversation list to
-                         conversations created after this id (the full
-                         list is returned by default so the client can
-                         refresh previews/unread counts in the same tick)
+    Query parameters:
+      after: resume cursor (default 0 = everything)
+      limit: message page size (default 100, max 200)
+      wait_seconds: long-poll up to this many seconds for something new
+                    (default 0, max 25); returns early when signalled
+      conv_after: narrow to conversations created after this id (full
+                  list by default so previews/unread counts refresh)
 
     A held request never holds a DB connection or transaction open: the
     wait happens on a condition variable, and each re-check opens its own

@@ -8,6 +8,8 @@ service, and maps results/exceptions to JSON responses.
 from flask import Blueprint, request, jsonify, session
 from app.db import get_db
 from app import search_service as srch
+from psycopg_pool import PoolTimeout
+
 
 bp = Blueprint('search', __name__)
 
@@ -30,8 +32,8 @@ def search():
         per-section caps so the combined view stays scannable.
       - cursor: post id keyset cursor, only meaningful for type=posts.
 
-    Response: {"query": q, "people": [...]?, "posts": [...]?,
-    "topics": [...]?, "next_cursor": id-or-null?} - each section key is
+    Response: {"query": q, "people": [...], "posts": [...],
+    "topics": [...], "next_cursor": id-or-null} - each section key is
     present only when that type was requested (all three for type=all).
     """
     auth_error = _require_login()
@@ -47,13 +49,18 @@ def search():
     limit = srch.clamp_limit(request.args.get('limit'))
     cursor_id = srch.parse_cursor(request.args.get('cursor'))
 
+    conn = None
     try:
         conn = get_db()
         result = srch.run_search(conn, q, search_type, session['user_id'], limit, cursor_id)
-        conn.close()
         return jsonify({'query': q, **result}), 200
+    except PoolTimeout:
+        raise
     except Exception as e:
         return jsonify({'error': f'Database error: {str(e)}'}), 500
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 @bp.route('/api/search/trending', methods=['GET'])
@@ -69,13 +76,18 @@ def trending_topics():
 
     limit = srch.clamp_limit(request.args.get('limit'), default=6, max_limit=20)
 
+    conn = None
     try:
         conn = get_db()
         topics = srch.get_trending(conn, limit)
-        conn.close()
         return jsonify({'topics': topics}), 200
+    except PoolTimeout:
+        raise
     except Exception as e:
         return jsonify({'error': f'Database error: {str(e)}'}), 500
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 @bp.route('/api/search/suggestions', methods=['GET'])
@@ -94,13 +106,18 @@ def suggestions():
     if not q:
         return jsonify({'suggestions': []}), 200
 
+    conn = None
     try:
         conn = get_db()
         items = srch.get_suggestions(conn, q, session['user_id'])
-        conn.close()
         return jsonify({'suggestions': items}), 200
+    except PoolTimeout:
+        raise
     except Exception as e:
         return jsonify({'error': f'Database error: {str(e)}'}), 500
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 @bp.route('/api/search/history', methods=['GET'])
@@ -110,13 +127,18 @@ def get_search_history():
     if auth_error:
         return auth_error
 
+    conn = None
     try:
         conn = get_db()
         history = srch.get_history(conn, session['user_id'])
-        conn.close()
         return jsonify({'history': history}), 200
+    except PoolTimeout:
+        raise
     except Exception as e:
         return jsonify({'error': f'Database error: {str(e)}'}), 500
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 @bp.route('/api/search/history', methods=['POST'])
@@ -131,15 +153,20 @@ def add_search_history():
 
     data = request.get_json() or {}
 
+    conn = None
     try:
         conn = get_db()
         srch.add_history(conn, session['user_id'], data.get('query'))
-        conn.close()
         return jsonify({'ok': True}), 201
     except srch.SearchValidationError as e:
         return jsonify({'error': str(e)}), 400
+    except PoolTimeout:
+        raise
     except Exception as e:
         return jsonify({'error': f'Database error: {str(e)}'}), 500
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 @bp.route('/api/search/history', methods=['DELETE'])
@@ -149,13 +176,18 @@ def clear_search_history():
     if auth_error:
         return auth_error
 
+    conn = None
     try:
         conn = get_db()
         srch.clear_history(conn, session['user_id'])
-        conn.close()
         return jsonify({'ok': True}), 200
+    except PoolTimeout:
+        raise
     except Exception as e:
         return jsonify({'error': f'Database error: {str(e)}'}), 500
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 @bp.route('/api/search/history/<int:history_id>', methods=['DELETE'])
@@ -165,13 +197,18 @@ def delete_search_history_item(history_id):
     if auth_error:
         return auth_error
 
+    conn = None
     try:
         conn = get_db()
         deleted = srch.delete_history_item(conn, session['user_id'], history_id)
-        conn.close()
 
         if not deleted:
             return jsonify({'error': 'Search history entry not found'}), 404
         return jsonify({'ok': True}), 200
+    except PoolTimeout:
+        raise
     except Exception as e:
         return jsonify({'error': f'Database error: {str(e)}'}), 500
+    finally:
+        if conn is not None:
+            conn.close()

@@ -105,4 +105,8 @@ here because Docker is already available.
 
 ## Progress log
 
-(empty — phases append here)
+- Phase 2: PostgreSQL application SQL/pooling conversion and throwaway smoke
+  gate completed. See `docs/PG_PHASE2.md` for exact checks, dynamic SQL review,
+  and explicitly deferred Phase 3 differences. Re-run with
+  `bash scripts/pg_test_env.sh -- python -B tests/test_pg_phase2.py` after
+  supplying the standard PostgreSQL credential environment variables.
