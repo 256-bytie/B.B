@@ -1,6 +1,6 @@
 """Library file domain logic: validation, storage, and file-record queries.
 
-Deliberately independent of Flask (plain sqlite3 connection in, plain
+Deliberately independent of Flask (a plain psycopg connection in, plain
 values out), matching app/wallet.py's shape, so it can be exercised
 directly and isn't tangled up with request parsing. The one exception is
 accepting a werkzeug-style file object (anything with .filename,
@@ -79,13 +79,14 @@ def create_file(conn, user_id, title, category, department, course, level, file_
         cursor.execute('''
             INSERT INTO library_files
             (user_id, title, category, department, course, level, file_path, file_type, file_size, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved')
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'approved')
+            RETURNING id
         ''', (
             user_id, title, category,
             department or None, course or None, level or None,
             file_url, file_type, file_size,
         ))
-        file_id = cursor.lastrowid
+        file_id = cursor.fetchone()[0]
         conn.commit()
 
         cursor.execute('''
@@ -96,7 +97,7 @@ def create_file(conn, user_id, title, category, department, course, level, file_
                    library_files.created_at, users.full_name
             FROM library_files
             JOIN users ON library_files.user_id = users.id
-            WHERE library_files.id = ?
+            WHERE library_files.id = %s
         ''', (file_id,))
         row = cursor.fetchone()
     except Exception:
@@ -123,27 +124,27 @@ def list_files(conn, current_user_id, search='', category='', department=''):
                library_files.created_at, users.full_name
         FROM library_files
         JOIN users ON library_files.user_id = users.id
-        WHERE (library_files.status = 'approved' OR library_files.user_id = ?)
+        WHERE (library_files.status = 'approved' OR library_files.user_id = %s)
     '''
     params = [current_user_id]
 
     search = (search or '').strip()
     if search:
-        query += ' AND (library_files.title LIKE ? OR library_files.course LIKE ?)'
+        query += ' AND (library_files.title ILIKE %s OR library_files.course ILIKE %s)'
         pattern = f'%{search}%'
         params.extend([pattern, pattern])
 
     category = (category or '').strip()
     if category:
-        query += ' AND library_files.category = ?'
+        query += ' AND library_files.category = %s'
         params.append(category)
 
     department = (department or '').strip()
     if department:
-        query += ' AND library_files.department = ?'
+        query += ' AND library_files.department = %s'
         params.append(department)
 
-    query += ' ORDER BY library_files.created_at DESC LIMIT 50'
+    query += ' ORDER BY library_files.created_at DESC NULLS LAST LIMIT 50'
 
     cursor = conn.cursor()
     cursor.execute(query, params)
@@ -181,7 +182,7 @@ def prepare_download(conn, requesting_user_id, file_id):
         SELECT id, user_id, title, category, department, course, level,
                file_path, file_type, file_size, status, download_count, created_at
         FROM library_files
-        WHERE id = ?
+        WHERE id = %s
     ''', (file_id,))
     row = cursor.fetchone()
 
@@ -202,7 +203,7 @@ def prepare_download(conn, requesting_user_id, file_id):
         cursor.execute('''
             UPDATE library_files
             SET download_count = download_count + 1
-            WHERE id = ?
+            WHERE id = %s
         ''', (file_id,))
         conn.commit()
     except Exception:

@@ -5,6 +5,8 @@ from flask import Flask, send_from_directory, request, jsonify, session, render_
 from flask_cors import CORS
 from flask_session import Session
 
+from psycopg_pool import PoolTimeout
+
 
 def create_app():
     """Create and configure the Flask application."""
@@ -66,9 +68,9 @@ def create_app():
     # Set maximum upload size (50MB) - raised for library file uploads
     app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
-    # Print database path
-    from app.db import get_db_path
-    print(f"[beebo] Using database: {get_db_path()}")
+    # Print the target database (host/dbname only, never credentials).
+    from app.db import get_db_host, get_db_name
+    print(f"[beebo] Using database: {get_db_host()}/{get_db_name()}")
 
     # Ensure upload directory exists
     UPLOAD_FOLDER = 'static/uploads'
@@ -84,6 +86,11 @@ def create_app():
     app.register_blueprint(wallet.bp)
     app.register_blueprint(communities.bp)
     app.register_blueprint(chat.bp)
+
+    # Fast-fail on pool exhaustion instead of hanging the request.
+    @app.errorhandler(PoolTimeout)
+    def handle_pool_timeout(error):
+        return jsonify({'error': 'Service temporarily unavailable'}), 503
 
     # CSRF protection: validate token on mutating requests
     @app.before_request

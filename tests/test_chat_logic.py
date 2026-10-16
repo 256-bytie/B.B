@@ -2,20 +2,18 @@
 """Unit tests for app/chat_service.py (conversations, messages, read
 cursors, realtime signalling).
 
-Runs against a throwaway temporary database - never beebo.db - and needs
+Runs against a throwaway PostgreSQL database - never beebo.db - and needs
 no running server:  python3 test_chat_logic.py
 """
 import os
-import sqlite3
+import psycopg
 import sys
-import tempfile
 import threading
 import time
 import unittest
 
-_TMP = tempfile.NamedTemporaryFile(suffix='.db', delete=False)
-_TMP.close()
-os.environ['DB_PATH'] = _TMP.name  # must be set before importing app.db
+from pg_support import isolated_database
+isolated_database()
 
 from app.db import init_db, get_db  # noqa: E402
 from app import chat_service as chat  # noqa: E402
@@ -29,9 +27,7 @@ class ChatLogicTests(unittest.TestCase):
     def setUp(self):
         self.conn = get_db()
         c = self.conn.cursor()
-        for table in ('conversation_state', 'conversation_reads', 'messages',
-                      'conversations', 'users'):
-            c.execute(f'DELETE FROM {table}')
+        c.execute('TRUNCATE users RESTART IDENTITY CASCADE')
         # Use explicit small ids so pair ordering (low/high) is predictable.
         c.execute("INSERT INTO users (id, full_name, email, password_hash, username) "
                   "VALUES (1,'A','a@x.com','x','a')")
@@ -39,6 +35,7 @@ class ChatLogicTests(unittest.TestCase):
                   "VALUES (2,'B','b@x.com','x','b')")
         c.execute("INSERT INTO users (id, full_name, email, password_hash, username) "
                   "VALUES (3,'C','c@x.com','x','c')")
+        self.conn.execute("SELECT setval(pg_get_serial_sequence('users', 'id'), (SELECT MAX(id) FROM users))")
         self.conn.commit()
         self.c = self.conn.cursor()
 
@@ -90,7 +87,6 @@ class ChatLogicTests(unittest.TestCase):
             conn = self.fresh_conn()
             barrier.wait()  # maximize interleaving
             try:
-                conn.execute('BEGIN IMMEDIATE')
                 cid, created = chat.get_or_create_conversation(conn.cursor(), uid, 1 if uid == 2 else 2)
                 conn.commit()
                 results.append((cid, created))
@@ -387,11 +383,11 @@ class ChatLogicTests(unittest.TestCase):
     def test_schema_rejects_duplicate_pair(self):
         chat.get_or_create_conversation(self.c, 1, 2)
         self.conn.commit()
-        with self.assertRaises(sqlite3.IntegrityError):
+        with self.assertRaises(psycopg.IntegrityError):
             self.c.execute('INSERT INTO conversations (user_low_id, user_high_id) VALUES (2, 1)')
 
     def test_schema_rejects_low_not_less_than_high(self):
-        with self.assertRaises(sqlite3.IntegrityError):
+        with self.assertRaises(psycopg.IntegrityError):
             self.c.execute('INSERT INTO conversations (user_low_id, user_high_id) VALUES (2, 2)')
 
     def test_cascade_on_user_delete(self):

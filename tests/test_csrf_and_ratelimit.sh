@@ -1,4 +1,5 @@
 #!/bin/bash
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/test_guard.sh" || exit 1
 
 # Test script for Phase 5: CSRF protection and login rate limiting
 
@@ -34,7 +35,7 @@ cleanup() {
 trap cleanup EXIT
 
 # Clean up test users from previous runs
-sqlite3 beebo.db "DELETE FROM users WHERE email IN ('csrftest@example.com', 'csrftest2@example.com', 'ratetest@example.com', 'different@example.com');" 2>/dev/null || true
+pg_psql -c "DELETE FROM users WHERE email IN ('csrftest@example.com', 'csrftest2@example.com', 'ratetest@example.com', 'different@example.com');" 2>/dev/null || true
 
 info "Starting CSRF and Rate Limit Tests"
 echo ""

@@ -1,6 +1,6 @@
 """User profile, follow, and highlight domain logic.
 
-Deliberately independent of Flask (plain sqlite3 connection in, plain
+Deliberately independent of Flask (a plain psycopg connection in, plain
 values out), matching app/wallet.py, app/library_service.py, and
 app/search_service.py's shape. The one exception, as in
 library_service.py, is accepting a werkzeug-style file object
@@ -13,9 +13,12 @@ import os
 import re
 import time
 import uuid
+
+import psycopg.errors
+
 from werkzeug.utils import secure_filename
 
-from app.serializers import serialize_user_public
+from app.serializers import timestamp_text, serialize_user_public
 from app.upload_utils import delete_if_local
 
 UPLOAD_FOLDER = 'static/uploads'
@@ -67,25 +70,25 @@ def get_public_profile(conn, target_user_id, viewer_user_id):
     """
     cursor = conn.cursor()
     cursor.execute(
-        'SELECT id, full_name, email, profile_picture, cover_image, username, bio FROM users WHERE id = ?',
+        'SELECT id, full_name, email, profile_picture, cover_image, username, bio FROM users WHERE id = %s',
         (target_user_id,)
     )
     row = cursor.fetchone()
     if row is None:
         raise UserNotFoundError('User not found')
 
-    cursor.execute('SELECT COUNT(*) FROM posts WHERE user_id = ? AND community_id IS NULL', (target_user_id,))
+    cursor.execute('SELECT COUNT(*) FROM posts WHERE user_id = %s AND community_id IS NULL', (target_user_id,))
     post_count = cursor.fetchone()[0]
 
-    cursor.execute('SELECT COUNT(*) FROM follows WHERE followee_id = ?', (target_user_id,))
+    cursor.execute('SELECT COUNT(*) FROM follows WHERE followee_id = %s', (target_user_id,))
     follower_count = cursor.fetchone()[0]
-    cursor.execute('SELECT COUNT(*) FROM follows WHERE follower_id = ?', (target_user_id,))
+    cursor.execute('SELECT COUNT(*) FROM follows WHERE follower_id = %s', (target_user_id,))
     following_count = cursor.fetchone()[0]
 
     is_following = False
     if viewer_user_id is not None:
         cursor.execute(
-            'SELECT id FROM follows WHERE follower_id = ? AND followee_id = ?',
+            'SELECT id FROM follows WHERE follower_id = %s AND followee_id = %s',
             (viewer_user_id, target_user_id)
         )
         is_following = cursor.fetchone() is not None
@@ -131,41 +134,27 @@ def toggle_follow(conn, follower_id, followee_id):
 
     cursor = conn.cursor()
 
-    cursor.execute('SELECT id FROM users WHERE id = ?', (followee_id,))
+    cursor.execute('SELECT id FROM users WHERE id = %s FOR UPDATE', (followee_id,))
     if not cursor.fetchone():
         raise UserNotFoundError('User not found')
 
     cursor.execute(
-        'SELECT id FROM follows WHERE follower_id = ? AND followee_id = ?',
+        'DELETE FROM follows WHERE follower_id = %s AND followee_id = %s RETURNING id',
         (follower_id, followee_id)
     )
-    existing = cursor.fetchone()
-
-    if existing:
-        cursor.execute('DELETE FROM follows WHERE id = ?', (existing[0],))
+    if cursor.fetchone() is not None:
         following = False
     else:
-        try:
-            cursor.execute(
-                'INSERT INTO follows (follower_id, followee_id) VALUES (?, ?)',
-                (follower_id, followee_id)
-            )
-            following = True
-        except Exception:
-            # Race: another request inserted this pair between our SELECT
-            # and INSERT. Roll back the failed insert, re-check current
-            # state, treat as "already following" rather than erroring.
-            conn.rollback()
-            cursor.execute(
-                'SELECT id FROM follows WHERE follower_id = ? AND followee_id = ?',
-                (follower_id, followee_id)
-            )
-            existing = cursor.fetchone()
-            following = existing is not None
+        cursor.execute(
+            'INSERT INTO follows (follower_id, followee_id) VALUES (%s, %s) '
+            'ON CONFLICT (follower_id, followee_id) DO NOTHING RETURNING id',
+            (follower_id, followee_id)
+        )
+        following = True
 
     conn.commit()
 
-    cursor.execute('SELECT COUNT(*) FROM follows WHERE followee_id = ?', (followee_id,))
+    cursor.execute('SELECT COUNT(*) FROM follows WHERE followee_id = %s', (followee_id,))
     follower_count = cursor.fetchone()[0]
 
     return following, follower_count
@@ -175,18 +164,18 @@ def get_highlights(conn, user_id):
     """All highlights for user_id, oldest first. Raises
     UserNotFoundError if user_id doesn't exist."""
     cursor = conn.cursor()
-    cursor.execute('SELECT id FROM users WHERE id = ?', (user_id,))
+    cursor.execute('SELECT id FROM users WHERE id = %s', (user_id,))
     if not cursor.fetchone():
         raise UserNotFoundError('User not found')
 
     cursor.execute('''
         SELECT id, title, kind, media_url, created_at
         FROM highlights
-        WHERE user_id = ?
-        ORDER BY created_at ASC
+        WHERE user_id = %s
+        ORDER BY created_at ASC NULLS FIRST
     ''', (user_id,))
     return [
-        {'id': r[0], 'title': r[1], 'kind': r[2], 'cover': r[3], 'created_at': r[4]}
+        {'id': r[0], 'title': r[1], 'kind': r[2], 'cover': r[3], 'created_at': timestamp_text(r[4])}
         for r in cursor.fetchall()
     ]
 
@@ -229,13 +218,13 @@ def update_profile_picture(conn, user_id, file_storage):
     _validate_image_file(file_storage)
 
     cursor = conn.cursor()
-    cursor.execute('SELECT profile_picture FROM users WHERE id = ?', (user_id,))
+    cursor.execute('SELECT profile_picture FROM users WHERE id = %s', (user_id,))
     row = cursor.fetchone()
     old_url = row[0] if row else None
 
     image_url = _save_upload(file_storage)
 
-    cursor.execute('UPDATE users SET profile_picture = ? WHERE id = ?', (image_url, user_id))
+    cursor.execute('UPDATE users SET profile_picture = %s WHERE id = %s', (image_url, user_id))
     conn.commit()
 
     delete_if_local(old_url, UPLOAD_FOLDER)
@@ -250,13 +239,13 @@ def update_profile_cover(conn, user_id, file_storage):
     _validate_image_file(file_storage)
 
     cursor = conn.cursor()
-    cursor.execute('SELECT cover_image FROM users WHERE id = ?', (user_id,))
+    cursor.execute('SELECT cover_image FROM users WHERE id = %s', (user_id,))
     row = cursor.fetchone()
     old_url = row[0] if row else None
 
     image_url = _save_upload(file_storage)
 
-    cursor.execute('UPDATE users SET cover_image = ? WHERE id = ?', (image_url, user_id))
+    cursor.execute('UPDATE users SET cover_image = %s WHERE id = %s', (image_url, user_id))
     conn.commit()
 
     delete_if_local(old_url, UPLOAD_FOLDER)
@@ -292,17 +281,21 @@ def update_profile(conn, user_id, full_name, username, bio):
 
     cursor = conn.cursor()
     cursor.execute(
-        'SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id != ?',
+        'SELECT id FROM users WHERE LOWER(username) = LOWER(%s) AND id != %s',
         (username, user_id)
     )
     if cursor.fetchone():
         raise UsernameTakenError('That username is already taken.')
 
-    cursor.execute(
-        'UPDATE users SET full_name = ?, username = ?, bio = ? WHERE id = ?',
-        (full_name, username, bio, user_id)
-    )
-    conn.commit()
+    try:
+        cursor.execute(
+            'UPDATE users SET full_name = %s, username = %s, bio = %s WHERE id = %s',
+            (full_name, username, bio, user_id)
+        )
+        conn.commit()
+    except psycopg.errors.UniqueViolation:
+        conn.rollback()
+        raise UsernameTakenError('That username is already taken.')
 
     return {'full_name': full_name, 'username': username, 'bio': bio}
 
@@ -349,20 +342,20 @@ def create_highlight(conn, user_id, file_storage, title):
 
     cursor = conn.cursor()
     cursor.execute(
-        'INSERT INTO highlights (user_id, title, kind, media_url) VALUES (?, ?, ?, ?)',
+        'INSERT INTO highlights (user_id, title, kind, media_url) VALUES (%s, %s, %s, %s) RETURNING id',
         (user_id, title, kind, media_url)
     )
-    highlight_id = cursor.lastrowid
+    highlight_id = cursor.fetchone()[0]
     conn.commit()
 
     cursor.execute('''
         SELECT id, title, kind, media_url, created_at
         FROM highlights
-        WHERE id = ?
+        WHERE id = %s
     ''', (highlight_id,))
     row = cursor.fetchone()
 
-    return {'id': row[0], 'title': row[1], 'kind': row[2], 'cover': row[3], 'created_at': row[4]}
+    return {'id': row[0], 'title': row[1], 'kind': row[2], 'cover': row[3], 'created_at': timestamp_text(row[4])}
 
 
 def delete_highlight(conn, user_id, highlight_id):
@@ -370,7 +363,7 @@ def delete_highlight(conn, user_id, highlight_id):
     UserNotFoundError if it doesn't exist, HighlightOwnershipError if it
     belongs to someone else."""
     cursor = conn.cursor()
-    cursor.execute('SELECT user_id, media_url FROM highlights WHERE id = ?', (highlight_id,))
+    cursor.execute('SELECT user_id, media_url FROM highlights WHERE id = %s', (highlight_id,))
     row = cursor.fetchone()
 
     if not row:
@@ -380,7 +373,7 @@ def delete_highlight(conn, user_id, highlight_id):
     if owner_id != user_id:
         raise HighlightOwnershipError('You can only delete your own highlights')
 
-    cursor.execute('DELETE FROM highlights WHERE id = ?', (highlight_id,))
+    cursor.execute('DELETE FROM highlights WHERE id = %s', (highlight_id,))
     conn.commit()
 
     delete_if_local(media_url, UPLOAD_FOLDER)

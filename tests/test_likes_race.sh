@@ -1,8 +1,11 @@
 #!/bin/bash
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/test_guard.sh" || exit 1
 
 # Race condition regression tests for like_post and like_comment.
 # These tests hit whatever server is running on localhost:5050.
-# Before running: start the server with DB_PATH=beebo_test.db (see CLAUDE.md Testing section).
+
+RACE_DIR=$(mktemp -d)
+trap 'rm -rf "$RACE_DIR"' EXIT
 
 echo "=== Testing Like Race Conditions ==="
 echo ""
@@ -10,7 +13,6 @@ echo ""
 # Cleanup from previous runs
 rm -f cookies_test_user.txt
 
-DB_PATH="${DB_PATH:-beebo_test.db}"
 
 # 1. Sign up a test user
 echo "1. Creating test user..."
@@ -36,15 +38,15 @@ echo ""
 
 # 3. Concurrent like requests on post (5 simultaneous requests)
 echo "3. Firing 5 concurrent POST /api/posts/$POST_ID/like requests..."
-RESP1=$(curl -s -X POST http://localhost:5050/api/posts/$POST_ID/like -H "X-CSRF-Token: $CSRF_TOKEN" -b cookies_test_user.txt) &
+curl -s -X POST http://localhost:5050/api/posts/$POST_ID/like -H "X-CSRF-Token: $CSRF_TOKEN" -b cookies_test_user.txt > "$RACE_DIR/RESP1" &
 PID1=$!
-RESP2=$(curl -s -X POST http://localhost:5050/api/posts/$POST_ID/like -H "X-CSRF-Token: $CSRF_TOKEN" -b cookies_test_user.txt) &
+curl -s -X POST http://localhost:5050/api/posts/$POST_ID/like -H "X-CSRF-Token: $CSRF_TOKEN" -b cookies_test_user.txt > "$RACE_DIR/RESP2" &
 PID2=$!
-RESP3=$(curl -s -X POST http://localhost:5050/api/posts/$POST_ID/like -H "X-CSRF-Token: $CSRF_TOKEN" -b cookies_test_user.txt) &
+curl -s -X POST http://localhost:5050/api/posts/$POST_ID/like -H "X-CSRF-Token: $CSRF_TOKEN" -b cookies_test_user.txt > "$RACE_DIR/RESP3" &
 PID3=$!
-RESP4=$(curl -s -X POST http://localhost:5050/api/posts/$POST_ID/like -H "X-CSRF-Token: $CSRF_TOKEN" -b cookies_test_user.txt) &
+curl -s -X POST http://localhost:5050/api/posts/$POST_ID/like -H "X-CSRF-Token: $CSRF_TOKEN" -b cookies_test_user.txt > "$RACE_DIR/RESP4" &
 PID4=$!
-RESP5=$(curl -s -X POST http://localhost:5050/api/posts/$POST_ID/like -H "X-CSRF-Token: $CSRF_TOKEN" -b cookies_test_user.txt) &
+curl -s -X POST http://localhost:5050/api/posts/$POST_ID/like -H "X-CSRF-Token: $CSRF_TOKEN" -b cookies_test_user.txt > "$RACE_DIR/RESP5" &
 PID5=$!
 
 wait $PID1
@@ -52,6 +54,12 @@ wait $PID2
 wait $PID3
 wait $PID4
 wait $PID5
+RESP1=$(cat "$RACE_DIR/RESP1")
+RESP2=$(cat "$RACE_DIR/RESP2")
+RESP3=$(cat "$RACE_DIR/RESP3")
+RESP4=$(cat "$RACE_DIR/RESP4")
+RESP5=$(cat "$RACE_DIR/RESP5")
+
 
 echo "   All requests completed"
 echo ""
@@ -114,7 +122,7 @@ echo ""
 
 # 5. Check database: should have exactly 1 like row
 echo "5. Checking database for like row count..."
-LIKE_ROW_COUNT=$(sqlite3 $DB_PATH "SELECT COUNT(*) FROM likes WHERE user_id=$USER_ID AND target_type='post' AND target_id=$POST_ID;")
+LIKE_ROW_COUNT=$(pg_psql -c "SELECT COUNT(*) FROM likes WHERE user_id=$USER_ID AND target_type='post' AND target_id=$POST_ID;") || exit 1
 echo "   Likes table row count: $LIKE_ROW_COUNT"
 
 if [ "$LIKE_ROW_COUNT" = "1" ]; then
@@ -128,7 +136,7 @@ echo ""
 
 # 6. Check denormalized counter matches actual row count
 echo "6. Checking denormalized like_count..."
-POST_LIKE_COUNT=$(sqlite3 $DB_PATH "SELECT like_count FROM posts WHERE id=$POST_ID;")
+POST_LIKE_COUNT=$(pg_psql -c "SELECT like_count FROM posts WHERE id=$POST_ID;") || exit 1
 echo "   posts.like_count: $POST_LIKE_COUNT"
 echo "   Actual likes rows: $LIKE_ROW_COUNT"
 
@@ -152,15 +160,15 @@ echo ""
 
 # 8. Concurrent like requests on comment (5 simultaneous requests)
 echo "8. Firing 5 concurrent POST /api/comments/$COMMENT_ID/like requests..."
-CRESP1=$(curl -s -X POST http://localhost:5050/api/comments/$COMMENT_ID/like -H "X-CSRF-Token: $CSRF_TOKEN" -b cookies_test_user.txt) &
+curl -s -X POST http://localhost:5050/api/comments/$COMMENT_ID/like -H "X-CSRF-Token: $CSRF_TOKEN" -b cookies_test_user.txt > "$RACE_DIR/CRESP1" &
 CPID1=$!
-CRESP2=$(curl -s -X POST http://localhost:5050/api/comments/$COMMENT_ID/like -H "X-CSRF-Token: $CSRF_TOKEN" -b cookies_test_user.txt) &
+curl -s -X POST http://localhost:5050/api/comments/$COMMENT_ID/like -H "X-CSRF-Token: $CSRF_TOKEN" -b cookies_test_user.txt > "$RACE_DIR/CRESP2" &
 CPID2=$!
-CRESP3=$(curl -s -X POST http://localhost:5050/api/comments/$COMMENT_ID/like -H "X-CSRF-Token: $CSRF_TOKEN" -b cookies_test_user.txt) &
+curl -s -X POST http://localhost:5050/api/comments/$COMMENT_ID/like -H "X-CSRF-Token: $CSRF_TOKEN" -b cookies_test_user.txt > "$RACE_DIR/CRESP3" &
 CPID3=$!
-CRESP4=$(curl -s -X POST http://localhost:5050/api/comments/$COMMENT_ID/like -H "X-CSRF-Token: $CSRF_TOKEN" -b cookies_test_user.txt) &
+curl -s -X POST http://localhost:5050/api/comments/$COMMENT_ID/like -H "X-CSRF-Token: $CSRF_TOKEN" -b cookies_test_user.txt > "$RACE_DIR/CRESP4" &
 CPID4=$!
-CRESP5=$(curl -s -X POST http://localhost:5050/api/comments/$COMMENT_ID/like -H "X-CSRF-Token: $CSRF_TOKEN" -b cookies_test_user.txt) &
+curl -s -X POST http://localhost:5050/api/comments/$COMMENT_ID/like -H "X-CSRF-Token: $CSRF_TOKEN" -b cookies_test_user.txt > "$RACE_DIR/CRESP5" &
 CPID5=$!
 
 wait $CPID1
@@ -168,6 +176,12 @@ wait $CPID2
 wait $CPID3
 wait $CPID4
 wait $CPID5
+CRESP1=$(cat "$RACE_DIR/CRESP1")
+CRESP2=$(cat "$RACE_DIR/CRESP2")
+CRESP3=$(cat "$RACE_DIR/CRESP3")
+CRESP4=$(cat "$RACE_DIR/CRESP4")
+CRESP5=$(cat "$RACE_DIR/CRESP5")
+
 
 echo "   All requests completed"
 echo ""
@@ -230,7 +244,7 @@ echo ""
 
 # 10. Check database: should have exactly 1 comment-like row
 echo "10. Checking database for comment-like row count..."
-COMMENT_LIKE_ROW_COUNT=$(sqlite3 $DB_PATH "SELECT COUNT(*) FROM likes WHERE user_id=$USER_ID AND target_type='comment' AND target_id=$COMMENT_ID;")
+COMMENT_LIKE_ROW_COUNT=$(pg_psql -c "SELECT COUNT(*) FROM likes WHERE user_id=$USER_ID AND target_type='comment' AND target_id=$COMMENT_ID;") || exit 1
 echo "    Likes table row count: $COMMENT_LIKE_ROW_COUNT"
 
 if [ "$COMMENT_LIKE_ROW_COUNT" = "1" ]; then
@@ -244,7 +258,7 @@ echo ""
 
 # 11. Check denormalized counter for comment
 echo "11. Checking denormalized like_count for comment..."
-COMMENT_LIKE_COUNT=$(sqlite3 $DB_PATH "SELECT like_count FROM comments WHERE id=$COMMENT_ID;")
+COMMENT_LIKE_COUNT=$(pg_psql -c "SELECT like_count FROM comments WHERE id=$COMMENT_ID;") || exit 1
 echo "    comments.like_count: $COMMENT_LIKE_COUNT"
 echo "    Actual likes rows: $COMMENT_LIKE_ROW_COUNT"
 

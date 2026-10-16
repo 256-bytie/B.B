@@ -1,7 +1,7 @@
 """Global search domain logic: people/posts/topics search, typeahead
 suggestions, trending topics, and per-user search history.
 
-Deliberately independent of Flask (plain sqlite3 connection/cursor in,
+Deliberately independent of Flask (a plain psycopg connection/cursor in,
 plain values out), matching app/wallet.py and app/library_service.py's
 shape. See app/routes/search.py for the HTTP layer and request-param
 parsing.
@@ -18,7 +18,7 @@ enough for this to matter, _search_posts is the one place to swap in
 FTS5.
 """
 import re
-from app.serializers import serialize_post, serialize_user_public
+from app.serializers import timestamp_text, serialize_post, serialize_user_public
 from app import post_service
 
 VALID_TYPES = {'all', 'people', 'posts', 'topics'}
@@ -98,17 +98,17 @@ def _search_people(cursor, q, current_user_id, limit):
     cursor.execute('''
         SELECT id, full_name, email, profile_picture, cover_image, username, bio
         FROM users
-        WHERE id != ?
-          AND (username LIKE ? OR full_name LIKE ? OR bio LIKE ?)
+        WHERE id != %s
+          AND (username ILIKE %s OR full_name ILIKE %s OR bio ILIKE %s)
         ORDER BY
             CASE
-                WHEN LOWER(username) = LOWER(?) THEN 0
-                WHEN LOWER(username) LIKE LOWER(?) THEN 1
-                WHEN LOWER(full_name) LIKE LOWER(?) THEN 2
+                WHEN LOWER(username) = LOWER(%s) THEN 0
+                WHEN LOWER(username) LIKE LOWER(%s) THEN 1
+                WHEN LOWER(full_name) LIKE LOWER(%s) THEN 2
                 ELSE 3
             END,
-            full_name COLLATE NOCASE
-        LIMIT ?
+            lower(full_name), id
+        LIMIT %s
     ''', (current_user_id, like, like, like, q, prefix, prefix, limit))
     return [serialize_user_public(row) for row in cursor.fetchall()]
 
@@ -130,15 +130,15 @@ def _search_posts(cursor, q, current_user_id, limit, cursor_id):
         JOIN users ON posts.user_id = users.id
         LEFT JOIN likes ON likes.target_type = 'post'
                        AND likes.target_id = posts.id
-                       AND likes.user_id = ?
-        WHERE posts.content LIKE ?
+                       AND likes.user_id = %s
+        WHERE posts.content ILIKE %s
           AND posts.community_id IS NULL
     '''
     params = [current_user_id, like]
     if cursor_id is not None:
-        query += ' AND posts.id < ?'
+        query += ' AND posts.id < %s'
         params.append(cursor_id)
-    query += ' ORDER BY posts.created_at DESC, posts.id DESC LIMIT ?'
+    query += ' ORDER BY posts.created_at DESC NULLS LAST, posts.id DESC LIMIT %s'
     params.append(limit + 1)
 
     cursor.execute(query, params)
@@ -149,11 +149,11 @@ def _search_posts(cursor, q, current_user_id, limit, cursor_id):
 
     if page_rows:
         post_ids = [row[0] for row in page_rows]
-        placeholders = ','.join('?' * len(post_ids))
+        placeholders = ','.join(['%s'] * len(post_ids))
         cursor.execute(f'''
             SELECT post_id, image_path FROM post_images
             WHERE post_id IN ({placeholders})
-            ORDER BY post_id, position ASC
+            ORDER BY post_id, position ASC NULLS FIRST
         ''', post_ids)
         images_by_post = {}
         for post_id, image_path in cursor.fetchall():
@@ -185,7 +185,7 @@ def _hashtag_counts(cursor):
     posts.content directly - filtered to rows that contain '#' first so
     the regex only runs over candidate rows, not the whole table.
     """
-    cursor.execute("SELECT content FROM posts WHERE content LIKE '%#%' AND community_id IS NULL")
+    cursor.execute("SELECT content FROM posts WHERE content ILIKE '%#%' AND community_id IS NULL")
     counts = {}
     for (content,) in cursor.fetchall():
         for tag in HASHTAG_RE.findall(content):
@@ -252,10 +252,10 @@ def get_suggestions(conn, q, current_user_id):
     cursor.execute('''
         SELECT full_name, username, email
         FROM users
-        WHERE id != ? AND (username LIKE ? OR full_name LIKE ?)
+        WHERE id != %s AND (username ILIKE %s OR full_name ILIKE %s)
         ORDER BY
-            CASE WHEN LOWER(username) LIKE LOWER(?) THEN 0 ELSE 1 END,
-            full_name COLLATE NOCASE
+            CASE WHEN LOWER(username) LIKE LOWER(%s) THEN 0 ELSE 1 END,
+            lower(full_name), id
         LIMIT 5
     ''', (current_user_id, like, like, prefix))
     for full_name, username, email in cursor.fetchall():
@@ -281,11 +281,11 @@ def get_history(conn, user_id):
     cursor = conn.cursor()
     cursor.execute('''
         SELECT id, query, created_at FROM search_history
-        WHERE user_id = ?
-        ORDER BY created_at DESC, id DESC
-        LIMIT ?
+        WHERE user_id = %s
+        ORDER BY created_at DESC NULLS LAST, id DESC
+        LIMIT %s
     ''', (user_id, MAX_HISTORY_PER_USER))
-    return [{'id': r[0], 'query': r[1], 'created_at': r[2]} for r in cursor.fetchall()]
+    return [{'id': r[0], 'query': r[1], 'created_at': timestamp_text(r[2])} for r in cursor.fetchall()]
 
 
 def add_history(conn, user_id, query):
@@ -301,20 +301,20 @@ def add_history(conn, user_id, query):
 
     cursor = conn.cursor()
     cursor.execute(
-        'DELETE FROM search_history WHERE user_id = ? AND LOWER(query) = LOWER(?)',
+        'DELETE FROM search_history WHERE user_id = %s AND LOWER(query) = LOWER(%s)',
         (user_id, query)
     )
     cursor.execute(
-        'INSERT INTO search_history (user_id, query) VALUES (?, ?)',
+        'INSERT INTO search_history (user_id, query) VALUES (%s, %s)',
         (user_id, query)
     )
     cursor.execute('''
         DELETE FROM search_history
-        WHERE user_id = ? AND id NOT IN (
+        WHERE user_id = %s AND id NOT IN (
             SELECT id FROM search_history
-            WHERE user_id = ?
-            ORDER BY created_at DESC, id DESC
-            LIMIT ?
+            WHERE user_id = %s
+            ORDER BY created_at DESC NULLS LAST, id DESC
+            LIMIT %s
         )
     ''', (user_id, user_id, MAX_HISTORY_PER_USER))
     conn.commit()
@@ -322,7 +322,7 @@ def add_history(conn, user_id, query):
 
 def clear_history(conn, user_id):
     """Delete every search-history row for a user."""
-    conn.execute('DELETE FROM search_history WHERE user_id = ?', (user_id,))
+    conn.execute('DELETE FROM search_history WHERE user_id = %s', (user_id,))
     conn.commit()
 
 
@@ -332,7 +332,7 @@ def delete_history_item(conn, user_id, history_id):
     belonged to someone else - the route maps that to 404)."""
     cursor = conn.cursor()
     cursor.execute(
-        'DELETE FROM search_history WHERE id = ? AND user_id = ?',
+        'DELETE FROM search_history WHERE id = %s AND user_id = %s',
         (history_id, user_id)
     )
     deleted = cursor.rowcount > 0

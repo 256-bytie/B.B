@@ -11,7 +11,7 @@ re-verified against the current tree.
 
 ## Stack & Run
 
-- Backend: Flask + raw `sqlite3` (no ORM), split into an application
+- Backend: Flask + psycopg/psycopg-pool against PostgreSQL (no ORM), split into an application
   factory + blueprints under `app/` (not a single file):
   - `app/__init__.py` — `create_app()`: CORS, server-side sessions
     (`flask_session`, filesystem-backed, `./flask_session/`), CSRF
@@ -26,7 +26,7 @@ re-verified against the current tree.
   - `app.py` (project root, 6 lines) — thin entry point only:
     `create_app()` + `init_db()` + `app.run(...)`. All real logic lives
     under `app/`.
-- DB: `beebo.db` (SQLite, committed in repo during dev; **never** the
+- DB: PostgreSQL selected by required `DATABASE_URL`; `beebo.db` and `migrations/*.sql` are legacy source artifacts and **never** the
   target of a test run — see Testing). Tables: `users`, `posts`,
   `post_images`, `comments`, `likes`, `follows`, `highlights`,
   `search_history`, `library_files`, `credit_transactions`. Schema created idempotently in
@@ -71,7 +71,7 @@ re-verified against the current tree.
 | Concern | Location |
 |---|---|
 | App factory, CORS, sessions, CSRF, static/page routes | `app/__init__.py` |
-| DB schema / migrations | `app/db.py` (`init_db`) |
+| DB schema / migrations | PostgreSQL `migrations/pg/*.sql`; SQLite `app/db.py` is legacy |
 | Row → JSON shaping (posts/comments/users/library files) | `app/serializers.py` |
 | Auth: signup/login/logout/session/account-switch | `app/routes/auth.py` |
 | Post create (JSON + multipart w/ images) | `app/routes/posts.py:18` |
@@ -314,6 +314,8 @@ one batched `IN (...)` query against `post_images`, not N+1.
   (`style.css:~585`) rather than a JS-driven `src` swap — keep any future
   theme-dependent asset on this pattern, not a JS branch.
 
+**Phase 7 migration:** PostgreSQL quarantine mode preserves full excluded rows in `backups/quarantine_<timestamp>.json`, excludes dependency closure, and repairs only affected surviving counters.
+
 ## Bug / fix log
 
 **Problem:** Post images displayed correctly in the Home feed but were
@@ -376,63 +378,62 @@ of their titles. Not individually re-verified in this update — if one
 contradicts this file, this file wins (it was checked against the live
 tree; they may not have been).
 
+## Non-obvious decisions worth preserving
+
+- Direct-message sends take a per-conversation `FOR UPDATE` lock so message ids commit in order; clients and read markers rely on that monotonic order.
+- Wallet mutations take a per-user lock to serialize balance and ledger updates.
+- PostgreSQL stores `timestamptz` and normalizes timestamps to UTC.
+- Usernames use a `lower(username)` unique index for case-insensitive uniqueness.
+- `community_members.seq` replaces SQLite rowid ordering.
+- PostgreSQL text searches intentionally use `ILIKE`; nullable sort keys specify explicit NULL ordering.
+- The quarantine flag exists because unrecoverable missing-user rows must be preserved for audit while keeping enforced foreign keys valid.
+
 ## Testing
 
-**IMPORTANT:** `beebo.db` contains production data and must NEVER be the
-target of a test run. `beebo_test.db` exists in the repo for this reason.
-Always use an isolated test database via `DB_PATH`.
+Tests use throwaway PostgreSQL databases named `beebo_test_*`. Install
+`requirements.txt` and provide `PGHOST`, `PGPORT`, `PGUSER`, and `PGPASSWORD`
+for a PostgreSQL 16 role allowed to create databases. SQL probes use `psql`
+on the host, or `docker exec` in `PG_TEST_CONTAINER` (default `beebo-pg`).
 
 ### Safe test workflow
 
 ```bash
-# 1. Start the server against an isolated test database (not beebo.db)
-DB_PATH=beebo_test.db python app.py &
-
-# 2. In another terminal, run whichever test suite(s) apply
-./test_comments.sh
-./test_comments2.sh
-./test_comment_changes.sh
-./test_comment_delete.sh
-./test_follows.sh
-./test_highlights.sh
-./test_highlights_video.sh
-./test_csrf_and_ratelimit.sh
-./test_pagination.sh
-./test_likes_race.sh
-./test_session_migration.sh
-./test_spa_routes.sh
-./test_file_cleanup.sh
-./test_wallet.sh
-./test_communities.sh
-./tests/test_chat.sh
-python3 tests/test_wallet_logic.py   # no server needed; uses its own temp DB
-python3 tests/test_chat_logic.py     # no server needed; uses its own temp DB
-# or: ./run_all_tests.sh
-
-# 3. Clean up the test db when done (safe to delete - it's not beebo.db)
-rm -f beebo_test.db
+./scripts/run_all_tests.sh
+python3 -B tests/test_chat_logic.py
+python3 -B tests/test_community_members.py
+python3 -B tests/test_wallet_logic.py
 ```
 
-More `test_*.sh` scripts exist now than the old doc listed (CSRF,
-pagination, race conditions, session migration, SPA routes, file cleanup)
-— reflecting the CSRF/pagination/session hardening work since. `ls
-test_*.sh` for the current full list rather than trusting any hardcoded
-list, including this one.
+The full runner discovers every `tests/test_*.sh` and `tests/test_*.py`,
+runs in a temporary workspace, and creates an isolated database per test.
+It starts each shell test's server with `DATABASE_URL` and `BEEBO_TEST=1`,
+stops the server on EXIT, then drops the database even on failure. Logs
+remain in the printed temporary directory. Python unit tests provision
+and drop their own database through `scripts/pg_test_env.sh`.
+
+For an individual shell test, source `scripts/pg_test_env.sh`, start
+`BEEBO_TEST=1 python3 -B app.py`, then run `bash tests/test_chat.sh` in the
+same shell environment. Stop the server before exiting the shell; the
+harness drops the database on EXIT.
 
 ### What NOT to do
 
-Never run any `test_*.sh` script against a server started without
-`DB_PATH` set. The default database is `beebo.db`, which contains real
-user data. Running tests against it will reset the schema and wipe all
-accounts.
+Never point tests at a database whose name does not start with
+`beebo_test`. Every entry point checks the target before queries or HTTP
+requests. Never bypass that guard or target a production server. The
+full runner refuses an occupied port 5050 instead of using another server.
+
+The obsolete SQLite schema-comparison script lives in
+`_archive/pg_schema_diff.py`; it depends on removed migration internals
+and is excluded from this PostgreSQL suite.
 
 ### Verification
 
-```bash
-sqlite3 beebo.db "SELECT 'users:', COUNT(*) FROM users; SELECT 'posts:', COUNT(*) FROM posts;"
-```
-Row counts should be identical before/after a test run — tests should not
-touch `beebo.db` at all.
+`./scripts/run_all_tests.sh` must report zero failures. Tests never touch
+any database not named `beebo_test*`. Check PostgreSQL's `\l` afterward:
+no `beebo_test_*` databases should remain. A manual run with
+`DATABASE_URL` targeting `beebo_prod_check` must exit nonzero with a
+refusal before any query.
 
 ## Repo hygiene (as of this update — not architecture, just noise)
 

@@ -1,6 +1,6 @@
 """Credit wallet logic: balance, monthly free credits, and the ledger.
 
-Deliberately Flask-free (plain sqlite3 connection in, plain values out) so
+Deliberately Flask-free (a plain psycopg connection in, plain values out) so
 it can be exercised directly and reused by any route that later needs to
 grant or spend credits - see app/routes/wallet.py for the HTTP layer.
 
@@ -11,9 +11,7 @@ of truth: a user's balance is the SUM of their rows, never a separately
 stored counter, so the number on screen can't drift from the history
 listed under it.
 
-All timestamps are naive UTC, stored as 'YYYY-MM-DD HH:MM:SS' (the same
-shape SQLite's CURRENT_TIMESTAMP produces). Callers may inject `now` to
-make time-dependent behavior testable.
+Callers may inject `now` to make time-dependent behavior testable.
 """
 import calendar
 from datetime import datetime, timezone
@@ -47,16 +45,18 @@ class InsufficientCreditsError(Exception):
 # ---- time helpers ----
 
 def utcnow():
-    """Current time as a naive UTC datetime."""
-    return datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
+    """Current time as an aware UTC datetime."""
+    return datetime.now(timezone.utc).replace(microsecond=0)
 
 
 def to_db_ts(dt):
-    return dt.strftime(_DB_TS_FORMAT)
+    return from_db_ts(dt)
 
 
 def from_db_ts(value):
-    return datetime.strptime(value, _DB_TS_FORMAT)
+    if isinstance(value, datetime):
+        return (value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)).replace(microsecond=0)
+    return datetime.strptime(value, _DB_TS_FORMAT).replace(tzinfo=timezone.utc)
 
 
 def add_one_month(dt):
@@ -71,7 +71,7 @@ def add_one_month(dt):
 
 def get_balance(conn, user_id):
     row = conn.execute(
-        'SELECT COALESCE(SUM(amount), 0) FROM credit_transactions WHERE user_id = ?',
+        'SELECT COALESCE(SUM(amount), 0) FROM credit_transactions WHERE user_id = %s',
         (user_id,)
     ).fetchone()
     return int(row[0])
@@ -81,27 +81,36 @@ def record_transaction(conn, user_id, amount, kind, reason, description, now=Non
     """Append one ledger entry and return its id. Does NOT commit.
 
     Spends (amount < 0) are refused if they would overdraw the balance.
-    That check is only race-free when the caller already holds a write
-    lock for the surrounding transaction (BEGIN IMMEDIATE), as
-    claim_monthly_reward does.
+    A user row lock serializes the balance check and insert until the
+    caller commits or rolls back.
     """
-    if not isinstance(amount, int) or amount == 0:
+    # Take a per-user lock to ensure overdraft check + insert are atomic.
+    cursor = conn.cursor()
+    cursor.execute(
+        'SELECT 1 FROM users WHERE id = %s FOR UPDATE',
+        (user_id,)
+    )
+    if cursor.fetchone() is None:
+        raise ValueError(f'User {user_id} not found')
+
+    if not isinstance(amount, int) or isinstance(amount, bool) or amount == 0:
         raise ValueError('amount must be a non-zero integer')
     if amount < 0 and get_balance(conn, user_id) + amount < 0:
         raise InsufficientCreditsError('Not enough credits')
 
     cursor = conn.execute(
         'INSERT INTO credit_transactions (user_id, amount, kind, reason, description, created_at) '
-        'VALUES (?, ?, ?, ?, ?, ?)',
+        'VALUES (%s, %s, %s, %s, %s, %s) RETURNING id',
         (user_id, amount, kind, reason, description, to_db_ts(now or utcnow()))
     )
-    return cursor.lastrowid
+    row = cursor.fetchone()
+    return row[0]
 
 
 def get_transaction(conn, user_id, transaction_id):
     return conn.execute(
         'SELECT id, amount, kind, reason, description, created_at '
-        'FROM credit_transactions WHERE id = ? AND user_id = ?',
+        'FROM credit_transactions WHERE id = %s AND user_id = %s',
         (transaction_id, user_id)
     ).fetchone()
 
@@ -116,15 +125,15 @@ def list_transactions(conn, user_id, limit=DEFAULT_TX_LIMIT, before_id=None):
     """
     limit = max(1, min(int(limit), MAX_TX_LIMIT))
     params = [user_id]
-    where = 'user_id = ?'
+    where = 'user_id = %s'
     if before_id is not None:
-        where += ' AND id < ?'
+        where += ' AND id < %s'
         params.append(int(before_id))
     params.append(limit + 1)
 
     rows = conn.execute(
         'SELECT id, amount, kind, reason, description, created_at '
-        f'FROM credit_transactions WHERE {where} ORDER BY id DESC LIMIT ?',
+        f'FROM credit_transactions WHERE {where} ORDER BY id DESC LIMIT %s',
         params
     ).fetchall()
 
@@ -143,14 +152,14 @@ def get_monthly_reward_status(conn, user_id, now=None):
     Aug 15 unlocks the next on Sep 15. A user who has never claimed can
     claim immediately.
 
-    Returns a dict of naive-UTC datetimes:
+    Returns a dict of aware-UTC datetimes:
         {'amount', 'claimable', 'next_claim_at', 'last_claimed_at'}
     where next_claim_at is None whenever the reward is claimable now.
     """
-    now = now or utcnow()
+    now = from_db_ts(now) if now is not None else utcnow()
     row = conn.execute(
         'SELECT created_at FROM credit_transactions '
-        'WHERE user_id = ? AND reason = ? ORDER BY id DESC LIMIT 1',
+        'WHERE user_id = %s AND reason = %s ORDER BY id DESC LIMIT 1',
         (user_id, REASON_MONTHLY_REWARD)
     ).fetchone()
 
@@ -176,14 +185,21 @@ def get_monthly_reward_status(conn, user_id, now=None):
 def claim_monthly_reward(conn, user_id, now=None):
     """Grant the monthly free credits if they're claimable; return the new ledger row id.
 
-    The eligibility check and the insert run inside one BEGIN IMMEDIATE
-    transaction, so two simultaneous claims (double-tap, two tabs) can't
-    both pass the check: the second waits for the first's commit, then
-    sees the fresh entry and is refused. Raises AlreadyClaimedError.
+    The eligibility check and insert share an implicit transaction.
+    A user row lock serializes eligibility checks and inserts.
+    Raises AlreadyClaimedError when a prior claim is visible.
     """
-    now = now or utcnow()
-    conn.execute('BEGIN IMMEDIATE')
+    now = from_db_ts(now) if now is not None else utcnow()
+    # Take a per-user lock: eligibility check + insert must be atomic.
     try:
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT 1 FROM users WHERE id = %s FOR UPDATE',
+            (user_id,)
+        )
+        if cursor.fetchone() is None:
+            raise ValueError(f'User {user_id} not found')
+
         status = get_monthly_reward_status(conn, user_id, now)
         if not status['claimable']:
             conn.rollback()

@@ -1,8 +1,8 @@
 #!/bin/bash
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/test_guard.sh" || exit 1
 
 # Tests for the Communities API (app/routes/communities.py).
 # Run against a server started with an isolated DB (never beebo.db):
-#   DB_PATH=beebo_test.db python app.py &
 #   ./tests/test_communities.sh
 # Uses unique per-run emails/names, so it's safe to re-run against the
 # same test database.

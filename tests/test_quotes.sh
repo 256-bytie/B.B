@@ -1,7 +1,7 @@
 #!/bin/bash
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/test_guard.sh" || exit 1
 set -euo pipefail
 
-# Run with DB_PATH=beebo_test.db against a local server on port 5050.
 BASE_URL="http://127.0.0.1:5050"
 RUN_ID="$(date +%s)$$"
 JAR_A="/tmp/quote_a_${RUN_ID}.jar"

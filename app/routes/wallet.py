@@ -10,6 +10,8 @@ from flask import Blueprint, request, jsonify, session
 from app.db import get_db
 from app import wallet
 from app.serializers import serialize_credit_transaction, serialize_monthly_reward
+from psycopg_pool import PoolTimeout
+
 
 bp = Blueprint('wallet', __name__)
 
@@ -46,7 +48,7 @@ def get_wallet():
 def get_wallet_transactions():
     """Newest-first, keyset-paginated transaction history.
 
-    ?limit= clamps silently to [1, 50] (default 20); ?cursor=<id> returns
+    `limit` clamps silently to [1, 50] (default 20); `cursor` returns
     entries older than that id. Response: {transactions, next_cursor}.
     """
     if 'user_id' not in session:

@@ -1,4 +1,13 @@
 """Shared serialization functions for converting DB rows to JSON dicts."""
+from datetime import datetime, timezone
+
+
+def timestamp_text(value):
+    if isinstance(value, datetime):
+        value = value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+        return value.strftime('%Y-%m-%d %H:%M:%S')
+    return value
+
 
 
 def serialize_post(
@@ -45,7 +54,7 @@ def serialize_post(
         'user_id': user_id,
         'content': content,
         'audience': audience,
-        'created_at': created_at,
+        'created_at': timestamp_text(created_at),
         'comment_count': comment_count,
         'like_count': like_count,
         'view_count': view_count,
@@ -106,7 +115,7 @@ def serialize_comment(row, liked_by_user=None, disliked_by_user=None):
         'username': username,
         'bio': bio,
         'content': content,
-        'created_at': created_at,
+        'created_at': timestamp_text(created_at),
         'like_count': like_count,
         'parent_comment_id': parent_comment_id,
         'image': image_path
@@ -151,7 +160,7 @@ def serialize_chat_message(row):
         'conversation_id': conversation_id,
         'sender_id': sender_id,
         'body': body,
-        'created_at': created_at,
+        'created_at': timestamp_text(created_at),
     }
 
 
@@ -178,7 +187,7 @@ def serialize_conversation(conv_row, other_user_row, last_message_row,
             'id': last_message_row[0],
             'sender_id': last_message_row[1],
             'body': last_message_row[2],
-            'created_at': last_message_row[3],
+            'created_at': timestamp_text(last_message_row[3]),
         }
     return {
         'id': conversation_id,
@@ -215,7 +224,7 @@ def serialize_library_file(row, uploader_name=None):
         'status': status,
         'uploader_id': user_id,
         'uploader_name': uploader_name or '',
-        'created_at': created_at,
+        'created_at': timestamp_text(created_at),
         'download_count': download_count
     }
 
@@ -227,7 +236,7 @@ def _iso_utc(value):
     if value is None:
         return None
     if hasattr(value, 'strftime'):
-        return value.strftime('%Y-%m-%dT%H:%M:%SZ')
+        return timestamp_text(value).replace(' ', 'T') + 'Z'
     return str(value).replace(' ', 'T') + 'Z'
 
 

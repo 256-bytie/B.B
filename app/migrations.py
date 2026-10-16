@@ -1,74 +1,122 @@
-"""Lightweight SQL migration runner.
+"""PostgreSQL migration runner.
 
-Applies numbered .sql files from migrations/ in ascending order, tracking
-what's already run in the schema_migrations table so each file executes
-at most once per database.
+Applies numbered .sql files from migrations/pg/ in ascending order, tracking
+what's already run in the schema_migrations table so each file executes at
+most once per database.
 
-This does NOT replace the table definitions already in init_db() (see
-app/db.py) — those keep working exactly as before, including their
-ad-hoc PRAGMA table_info() + ALTER TABLE patches for pre-existing
-databases. migrations/001_baseline.sql re-declares that same schema
-using CREATE TABLE/INDEX IF NOT EXISTS, so running it against a database
-init_db() already built is a safe no-op; its real job is to seed
-schema_migrations with a starting point.
+Migration files are the source of truth for the schema: app/db.py's init_db()
+just opens a connection and calls run_migrations(); there is no separate
+inline CREATE TABLE path (the SQLite-era init_db() CREATE TABLE blocks were
+removed). The legacy SQLite files under migrations/*.sql are kept as history
+only and are never read by this runner.
 
-Going forward, a schema change is a new numbered file in migrations/
-(e.g. 002_add_post_visibility.sql) instead of another conditional
-ALTER TABLE spliced into init_db().
+Concurrency: a session-level pg_advisory_lock is taken for the whole run so
+two processes migrating the same database at once serialize (the second waits,
+then sees every version already applied and does nothing). Each file is
+applied inside its own transaction together with its schema_migrations row;
+Postgres DDL is transactional, so a failing file rolls back completely and a
+later re-run picks up where it left off.
 
-Usage: run_migrations(conn) — call once at startup, after init_db().
+Usage: run_migrations(conn) — call once at startup. `conn` is a psycopg 3
+connection (autocommit disabled).
 """
 import os
 import re
 
-MIGRATIONS_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'migrations'
+PG_MIGRATIONS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    'migrations',
+    'pg',
 )
 
 _FILENAME_RE = re.compile(r'^(\d+)_.*\.sql$')
 
+# Arbitrary, stable bigint used to key the advisory lock. Picking a fixed
+# value (rather than hashtext of a string) keeps it obvious in pg_locks.
+_ADVISORY_LOCK_KEY = 727081801
+
+
+def _execute_sql_file(conn, sql):
+    """Execute a whole migration .sql file on psycopg 3.
+
+    psycopg's Cursor.execute() does not accept multiple statements, so split
+    on statement-terminating semicolons. The split is conservative (only
+    splits on a semicolon at end-of-line or followed by whitespace/comments)
+    and must never split quoted literals in this migration corpus.
+    """
+    statement_end = re.compile(r';\s*(?:--.*)?$', re.MULTILINE)
+    for statement in statement_end.split(sql):
+        statement = statement.strip()
+        if statement:
+            conn.execute(statement)
+
 
 def _pending_migrations():
-    """[(version, filepath), ...] for every migrations/NNN_*.sql file on
-    disk, sorted by version. Files that don't match the NNN_name.sql
-    naming pattern are ignored (e.g. a stray README)."""
-    if not os.path.isdir(MIGRATIONS_DIR):
+    """[(version, filepath), ...] for every migrations/pg/NNN_*.sql file on
+    disk, sorted by version. Files that don't match the NNN_name.sql naming
+    pattern are ignored (e.g. a stray README)."""
+    if not os.path.isdir(PG_MIGRATIONS_DIR):
         return []
     found = []
-    for name in os.listdir(MIGRATIONS_DIR):
+    for name in os.listdir(PG_MIGRATIONS_DIR):
         m = _FILENAME_RE.match(name)
         if m:
-            found.append((int(m.group(1)), os.path.join(MIGRATIONS_DIR, name)))
+            found.append((int(m.group(1)), os.path.join(PG_MIGRATIONS_DIR, name)))
     return sorted(found, key=lambda pair: pair[0])
 
 
 def run_migrations(conn):
-    """Apply any migrations/*.sql files not yet recorded in
+    """Apply any migrations/pg/*.sql files not yet recorded in
     schema_migrations, in ascending version order.
 
-    Each file is executed and recorded in its own commit, so if one
-    fails, every version before it stays applied and re-running the
-    process later picks up where it left off instead of redoing work.
+    The schema_migrations table is created first (outside the lock it would
+    race, so it is created under the same advisory lock as everything else).
     """
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS schema_migrations (
-            version INTEGER PRIMARY KEY,
-            filename TEXT NOT NULL,
-            applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
+    # Serialize concurrent runners. Session-level advisory locks are held for
+    # the lifetime of the session (or until explicitly unlocked), independent
+    # of transaction boundaries, so this survives the per-file commits below.
+    with conn.cursor() as cur:
+        cur.execute('SELECT pg_advisory_lock(%s)', (_ADVISORY_LOCK_KEY,))
     conn.commit()
-
-    applied = {row[0] for row in conn.execute('SELECT version FROM schema_migrations')}
-
-    for version, path in _pending_migrations():
-        if version in applied:
-            continue
-        with open(path, 'r') as f:
-            sql = f.read()
-        conn.executescript(sql)
-        conn.execute(
-            'INSERT INTO schema_migrations (version, filename) VALUES (?, ?)',
-            (version, os.path.basename(path))
-        )
+    try:
+        with conn.cursor() as cur:
+            cur.execute('''
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    version integer PRIMARY KEY,
+                    filename text NOT NULL,
+                    applied_at timestamptz DEFAULT now()
+                )
+            ''')
         conn.commit()
+
+        applied = _applied_versions(conn)
+
+        for version, path in _pending_migrations():
+            if version in applied:
+                continue
+            with open(path, 'r') as f:
+                sql = f.read()
+            # One transaction per file: the DDL and its schema_migrations row
+            # commit together, or neither does.
+            try:
+                _execute_sql_file(conn, sql)
+                conn.execute(
+                    'INSERT INTO schema_migrations (version, filename) VALUES (%s, %s)',
+                    (version, os.path.basename(path)),
+                )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+    finally:
+        with conn.cursor() as cur:
+            cur.execute('SELECT pg_advisory_unlock(%s)', (_ADVISORY_LOCK_KEY,))
+        conn.commit()
+
+
+def _applied_versions(conn):
+    with conn.cursor() as cur:
+        cur.execute('SELECT version FROM schema_migrations')
+        versions = {row[0] for row in cur.fetchall()}
+    conn.rollback()  # end the read transaction; no writes here
+    return versions

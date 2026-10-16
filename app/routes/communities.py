@@ -7,6 +7,8 @@ Mutating routes go through the global csrf_protect() in app/__init__.py.
 from flask import Blueprint, request, jsonify, session
 from app.db import get_db
 from app import community_service as communities
+from psycopg_pool import PoolTimeout
+
 
 bp = Blueprint('communities', __name__)
 
@@ -44,6 +46,8 @@ def _call(fn, *args, success_status=200):
         return jsonify({'error': str(e)}), 403
     except communities.CommunityNotFoundError as e:
         return jsonify({'error': str(e)}), 404
+    except PoolTimeout:
+        raise
     except Exception as e:
         return jsonify({'error': f'Database error: {str(e)}'}), 500
     finally:

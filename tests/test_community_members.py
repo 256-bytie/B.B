@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for GET /api/communities/<slug>/members.
 
-Uses a temporary database and Flask test client; never touches beebo.db.
+Uses a throwaway PostgreSQL database and Flask test client; never touches beebo.db.
 """
 import atexit
 import os
@@ -13,7 +13,8 @@ _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _REPO_ROOT)
 _TEMP_ROOT = tempfile.TemporaryDirectory(prefix='beebo-community-members-')
 atexit.register(_TEMP_ROOT.cleanup)
-os.environ['DB_PATH'] = os.path.join(_TEMP_ROOT.name, 'test.db')
+from pg_support import isolated_database
+isolated_database()
 os.environ['SECRET_KEY'] = 'community-members-test-key'
 sys.dont_write_bytecode = True
 
@@ -38,15 +39,13 @@ class CommunityMembersApiTests(unittest.TestCase):
 
     def setUp(self):
         conn = get_db()
-        conn.execute('DELETE FROM community_members')
-        conn.execute('DELETE FROM communities')
-        conn.execute('DELETE FROM users')
+        conn.execute('TRUNCATE users, communities RESTART IDENTITY CASCADE')
         for user_id in range(1, 7):
             conn.execute('''
                 INSERT INTO users
                     (id, full_name, email, password_hash, profile_picture,
                      cover_image, username, bio)
-                VALUES (?, ?, ?, 'test', ?, ?, ?, ?)
+                VALUES (%s, %s, %s, 'test', %s, %s, %s, %s)
             ''', (
                 user_id,
                 f'User {user_id}',
@@ -64,15 +63,17 @@ class CommunityMembersApiTests(unittest.TestCase):
             INSERT INTO community_members (community_id, user_id, role, joined_at)
             VALUES (1, 1, 'creator', '2026-01-01 00:00:00')
         ''')
+        conn.execute("SELECT setval(pg_get_serial_sequence('users', 'id'), (SELECT MAX(id) FROM users))")
+        conn.execute("SELECT setval(pg_get_serial_sequence('communities', 'id'), (SELECT MAX(id) FROM communities))")
         conn.commit()
         conn.close()
 
     def add_members(self, members):
         conn = get_db()
-        conn.execute('DELETE FROM community_members WHERE community_id = 1')
-        conn.executemany('''
+        conn.execute('TRUNCATE community_members RESTART IDENTITY CASCADE')
+        conn.cursor().executemany('''
             INSERT INTO community_members (community_id, user_id, role, joined_at)
-            VALUES (1, ?, ?, ?)
+            VALUES (1, %s, %s, %s)
         ''', members)
         conn.commit()
         conn.close()

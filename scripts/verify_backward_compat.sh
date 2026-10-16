@@ -1,4 +1,5 @@
 #!/bin/bash
+source "$(dirname "${BASH_SOURCE[0]}")/test_guard.sh" || exit 1
 
 echo "=== Verifying Backward Compatibility ==="
 echo ""
