@@ -553,15 +553,44 @@
         .overlay-replies-section {
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
+            /* The reply bar floats over the bottom of this region (see .reply-composer-bar);
+               --reply-bar-h is kept equal to its height by comments.js so the last comment
+               can still scroll clear of it. */
+            padding-bottom: var(--reply-bar-h, 76px);
         }
+        #comment-overlay .overlay-content { position: relative; }
 
         /* ---- Reply composer (comment overlay) ----
            Compact rounded pill. Idle = one row (avatar / input / media
            icons). Active (focus or draft) = tools wrap onto a second row
            with counter / expand / send on the right. Beebo tokens only:
            brand red for focus + send, neutral grays elsewhere. */
+        /* Floating bar: no background, border or blur of its own, so the thread shows
+           behind the pill's rounded edges. Taps pass through everything except the
+           pill (and the reply chip / error above it). */
         .reply-composer-bar {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 5;
             padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+            pointer-events: none;
+        }
+        .reply-composer-bar > * { pointer-events: auto; }
+        /* Chip and error sit over scrolling content now, so they need their own surface. */
+        .reply-composer-bar #overlay-reply-context {
+            padding-top: 6px;
+            padding-bottom: 6px;
+            border: 1px solid var(--bb-border-default);
+            border-radius: 14px;
+            background: var(--bb-bg-subtle);
+        }
+        .reply-composer-bar #overlay-reply-error {
+            padding-top: 4px;
+            padding-bottom: 4px;
+            border-radius: 10px;
+            background: var(--bb-bg-surface);
         }
         .reply-composer {
             display: flex;
@@ -572,6 +601,7 @@
             background: #F9FAFB;
             border: 1px solid #E5E7EB;
             border-radius: 24px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
             transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease, border-radius 160ms ease;
         }
         .reply-composer[data-active="true"] {
@@ -1712,3 +1742,26 @@ html.dark .chat-gif-chip.is-active { box-shadow: inset 0 0 0 1px rgba(232, 199, 
     -webkit-tap-highlight-color: transparent;
 }
 .hv-icon-btn:active { opacity: 0.6; }
+
+/* ---- Dark mode: reply composer (comment overlay) ----
+   The composer rules above hardcode light colors, so the pill and its parts stayed light in
+   dark mode. */
+html.dark .reply-composer {
+    background: var(--bb-bg-subtle);
+    border-color: var(--bb-border-default);
+}
+html.dark .reply-composer[data-active="true"] {
+    background: var(--bb-bg-surface);
+    border-color: rgba(218, 41, 46, 0.55);
+}
+html.dark .reply-composer-avatar { background: var(--bb-bg-muted-2); }
+html.dark .reply-composer-input { color: var(--bb-text-primary); }
+html.dark .reply-composer-input::placeholder { color: var(--bb-text-quaternary); }
+html.dark .reply-tool-btn { color: var(--bb-text-quaternary); }
+html.dark .reply-tool-btn:hover { color: #DA292E; }
+html.dark .reply-tool-btn:active { background: var(--bb-bg-muted); }
+html.dark .reply-image-thumb img { background: var(--bb-bg-muted); }
+html.dark .comment-image {
+    border-color: var(--bb-border-default);
+    background: var(--bb-bg-muted);
+}

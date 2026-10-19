@@ -1245,6 +1245,17 @@ const replyInputEl = document.getElementById('overlay-reply-input');
 const replyExpandBtn = document.getElementById('overlay-reply-expand-btn');
 const REPLY_INPUT_MAX_PX = 132; // keep in sync with .reply-composer-input max-height
 
+// The reply bar floats over the bottom of the scroll region (no background of its own), so
+// the region's bottom padding (--reply-bar-h, see .overlay-replies-section) tracks its height.
+(function trackReplyBarHeight() {
+	const bar = replyComposerEl.closest('.reply-composer-bar');
+	const overlay = document.getElementById('comment-overlay');
+	if (!bar || !overlay || !window.ResizeObserver) return;
+	new ResizeObserver(function () {
+		overlay.style.setProperty('--reply-bar-h', bar.offsetHeight + 'px');
+	}).observe(bar);
+})();
+
 function isReplyComposerExpanded() {
 	return replyComposerEl.dataset.expanded === 'true';
 }
