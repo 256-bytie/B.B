@@ -1,0 +1,45 @@
+<!-- BEGIN: Highlight Viewer -->
+<!-- Full-screen highlight/story viewer, opened by tapping a highlight circle in the
+     profile's Highlights row (see openHighlightViewer in static/js/highlight-viewer.js).
+     z-[55]: above the app chrome, below #app-toast (z-60) and the upload sheet while it is
+     raised for "add to this highlight" (see openHighlightUploadSheet in highlights.js).
+     Chrome (progress bar, header) is built/filled by JS; media is edge-to-edge. -->
+<div id="highlight-viewer-overlay" class="hidden fixed inset-0 z-[55] bg-black select-none" role="dialog" aria-modal="true" aria-label="Highlight viewer">
+	<!-- Stage: media + gesture surface (tap left = previous, tap right = next, hold = pause,
+	     swipe down = close). -->
+	<div id="highlight-viewer-stage" class="absolute inset-0 overflow-hidden">
+		<img id="highlight-viewer-img" class="hv-media hidden" alt="" draggable="false">
+		<video id="highlight-viewer-video" class="hv-media hidden" playsinline preload="auto"></video>
+	</div>
+
+	<div class="hv-chrome hv-scrim absolute top-0 left-0 right-0 pointer-events-none"></div>
+
+	<!-- Progress: one segment per item (filled by JS). -->
+	<div id="highlight-viewer-progress" class="hv-chrome hv-progress absolute left-0 right-0 flex gap-1 pointer-events-none" aria-hidden="true"></div>
+
+	<!-- Header: cover thumbnail, title + age, audio line, add + close. -->
+	<div class="hv-chrome hv-header absolute left-0 right-0 flex items-start justify-between pointer-events-none">
+		<div class="flex items-center gap-2.5 min-w-0">
+			<span id="highlight-viewer-cover" class="hv-cover shrink-0"></span>
+			<div class="min-w-0">
+				<div class="flex items-baseline gap-2 min-w-0">
+					<span id="highlight-viewer-title" class="text-white text-[15px] font-bold leading-tight truncate"></span>
+					<span id="highlight-viewer-age" class="text-white/60 text-[15px] leading-tight shrink-0"></span>
+				</div>
+				<div id="highlight-viewer-audio" class="items-center gap-1.5 mt-0.5 text-white text-[13px] leading-tight min-w-0" style="display:none">
+					<svg class="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M10 3l1.9 5.1L17 10l-5.1 1.9L10 17l-1.9-5.1L3 10l5.1-1.9z"></path><path d="M18 14l.9 2.1L21 17l-2.1.9L18 20l-.9-2.1L15 17l2.1-.9z"></path></svg>
+					<span id="highlight-viewer-audio-text" class="truncate"></span>
+				</div>
+			</div>
+		</div>
+		<div class="flex items-center gap-1 shrink-0 pointer-events-auto">
+			<button id="highlight-viewer-add-btn" type="button" class="hv-icon-btn" aria-label="Add to this highlight">
+				<svg class="w-[26px] h-[26px]" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 8v8M8 12h8"></path><path d="M19.6 6.4A9.5 9.5 0 1 0 21.5 12"></path></svg>
+			</button>
+			<button id="highlight-viewer-close-btn" type="button" class="hv-icon-btn" aria-label="Close">
+				<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+			</button>
+		</div>
+	</div>
+</div>
+<!-- END: Highlight Viewer -->

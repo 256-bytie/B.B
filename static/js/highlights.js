@@ -4,6 +4,15 @@
 // prototype already keeps other local-only state. Swapping in a real
 // /api/highlights endpoint later only means changing load/save below -
 // renderProfileHighlights() and the upload sheet stay the same.
+//
+// Record shape: { id, title, cover, kind, items: [{ id, kind, createdAt, audio? }] }
+//   - cover: small thumbnail data URL (generated at upload time).
+//   - items: the media in the highlight, oldest first. The media files themselves live in
+//     IndexedDB (putHighlightMedia / getHighlightMedia), keyed by item id, because videos and
+//     full photos do not fit localStorage. `audio` is an optional label shown in the viewer
+//     header (e.g. "Black II").
+//   - Highlights saved before `items` existed have none: a photo one is shown from its cover
+//     (see getHighlightItems); a video one has no stored media and cannot be opened.
 function getHighlightsStorageKey() {
     return (session && session.user) ? `beebo_highlights_${session.user.id}` : null;
 }
@@ -22,12 +31,131 @@ function loadUserHighlights() {
 
 function saveUserHighlights(highlights) {
     const key = getHighlightsStorageKey();
-    if (!key) return;
+    if (!key) return false;
     try {
         localStorage.setItem(key, JSON.stringify(highlights));
+        return true;
     } catch (error) {
         console.error('Error saving highlights:', error);
+        return false;
     }
+}
+
+// ---- Highlight media storage (IndexedDB) ----
+const HIGHLIGHT_MEDIA_DB = 'beebo-highlight-media';
+const HIGHLIGHT_MEDIA_STORE = 'media';
+let highlightMediaDbPromise = null;
+
+function openHighlightMediaDb() {
+    if (!highlightMediaDbPromise) {
+        highlightMediaDbPromise = new Promise(function(resolve, reject) {
+            if (!window.indexedDB) { reject(new Error('IndexedDB unavailable')); return; }
+            const req = window.indexedDB.open(HIGHLIGHT_MEDIA_DB, 1);
+            req.onupgradeneeded = function() { req.result.createObjectStore(HIGHLIGHT_MEDIA_STORE); };
+            req.onsuccess = function() { resolve(req.result); };
+            req.onerror = function() { reject(req.error); };
+        }).catch(function(error) {
+            highlightMediaDbPromise = null; // allow a retry next time
+            throw error;
+        });
+    }
+    return highlightMediaDbPromise;
+}
+
+async function putHighlightMedia(id, blob) {
+    const db = await openHighlightMediaDb();
+    return new Promise(function(resolve, reject) {
+        const tx = db.transaction(HIGHLIGHT_MEDIA_STORE, 'readwrite');
+        tx.objectStore(HIGHLIGHT_MEDIA_STORE).put(blob, id);
+        tx.oncomplete = function() { resolve(); };
+        tx.onerror = tx.onabort = function() { reject(tx.error); };
+    });
+}
+
+async function getHighlightMedia(id) {
+    const db = await openHighlightMediaDb();
+    return new Promise(function(resolve, reject) {
+        const req = db.transaction(HIGHLIGHT_MEDIA_STORE, 'readonly').objectStore(HIGHLIGHT_MEDIA_STORE).get(id);
+        req.onsuccess = function() { resolve(req.result || null); };
+        req.onerror = function() { reject(req.error); };
+    });
+}
+
+// The items to play for a highlight. Pre-`items` photo highlights become one legacy item
+// whose picture is the stored cover; pre-`items` video highlights have nothing to play.
+function getHighlightItems(h) {
+    if (Array.isArray(h.items)) return h.items;
+    if (h.kind === 'photo' && h.cover) {
+        return [{ id: 'legacy-' + h.id, kind: 'photo', createdAt: parseInt(h.id, 10) || Date.now(), legacy: true }];
+    }
+    return [];
+}
+
+// Same as getHighlightItems but writes the legacy item into h.items so more can be appended.
+function ensureHighlightItems(h) {
+    if (!Array.isArray(h.items)) h.items = getHighlightItems(h);
+    return h.items;
+}
+
+// -> { url, revoke } for the viewer, or null when the media is gone.
+async function loadHighlightItemMedia(h, item) {
+    if (item.legacy) return h.cover ? { url: h.cover, revoke: null } : null;
+    const blob = await getHighlightMedia(item.id);
+    if (!blob) return null;
+    const url = URL.createObjectURL(blob);
+    return { url: url, revoke: function() { URL.revokeObjectURL(url); } };
+}
+
+// Small square JPEG thumbnail for the profile circle and the viewer header.
+// Photos: scaled from the file. Videos: a frame near the start. '' when it can't be made
+// (the circle then falls back to its video icon).
+const HIGHLIGHT_COVER_PX = 192;
+
+function drawHighlightCover(source, w, h) {
+    const size = Math.min(HIGHLIGHT_COVER_PX, w, h);
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const crop = Math.min(w, h);
+    canvas.getContext('2d').drawImage(source, (w - crop) / 2, (h - crop) / 2, crop, crop, 0, 0, size, size);
+    return canvas.toDataURL('image/jpeg', 0.8);
+}
+
+function makeHighlightCover(file, kind) {
+    return new Promise(function(resolve) {
+        const url = URL.createObjectURL(file);
+        let done = false;
+        const finish = function(value) {
+            if (done) return;
+            done = true;
+            clearTimeout(timer);
+            URL.revokeObjectURL(url);
+            resolve(value);
+        };
+        const timer = setTimeout(function() { finish(''); }, 5000);
+        try {
+            if (kind === 'photo') {
+                const img = new Image();
+                img.onload = function() {
+                    try { finish(drawHighlightCover(img, img.naturalWidth, img.naturalHeight)); } catch (e) { finish(''); }
+                };
+                img.onerror = function() { finish(''); };
+                img.src = url;
+            } else {
+                const video = document.createElement('video');
+                video.muted = true;
+                video.playsInline = true;
+                video.preload = 'auto';
+                video.onloadeddata = function() { video.currentTime = Math.min(0.1, (video.duration || 0.2) / 2); };
+                video.onseeked = function() {
+                    try { finish(drawHighlightCover(video, video.videoWidth, video.videoHeight)); } catch (e) { finish(''); }
+                };
+                video.onerror = function() { finish(''); };
+                video.src = url;
+            }
+        } catch (error) {
+            finish('');
+        }
+    });
 }
 
 // Renders the #profile-highlights-row from actual highlight data.
@@ -70,20 +198,31 @@ function renderProfileHighlights(highlights) {
     }
 
     const newBtn = document.getElementById('profile-highlight-new-btn');
-    if (newBtn) newBtn.addEventListener('click', openHighlightUploadSheet);
+    if (newBtn) newBtn.addEventListener('click', function() { openHighlightUploadSheet(); });
 
     row.querySelectorAll('.profile-highlight-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
-            showToast('Coming soon');
+            openHighlightViewer(btn.dataset.highlightId);
         });
     });
 }
 
 // ---- Highlight Upload Bottom Sheet ----
-function openHighlightUploadSheet() {
+// Opened by the "New" circle (creates a highlight) or, with a highlight id, by the plus
+// button in the viewer (appends to that highlight - "add mode"). In add mode the sheet is
+// raised above the viewer and the viewer is paused until endHighlightAddMode().
+let highlightAddTargetId = null;
+let highlightAddBusy = false; // a picked file is being processed
+
+function openHighlightUploadSheet(targetHighlightId) {
     const sheet = document.getElementById('highlight-upload-sheet');
     const backdrop = document.getElementById('highlight-upload-backdrop');
     if (!sheet || !backdrop) return;
+
+    highlightAddTargetId = typeof targetHighlightId === 'string' ? targetHighlightId : null;
+    // Above the viewer (z-55), below the toast (z-60).
+    sheet.style.zIndex = highlightAddTargetId ? '57' : '';
+    backdrop.style.zIndex = highlightAddTargetId ? '56' : '';
 
     sheet.style.transform = '';
     sheet.classList.remove('hidden');
@@ -97,9 +236,28 @@ function closeHighlightUploadSheet() {
     if (sheet) {
         sheet.classList.add('hidden');
         sheet.style.transform = '';
+        sheet.style.zIndex = '';
     }
-    if (backdrop) backdrop.classList.add('hidden');
-    document.body.classList.remove('overlay-open');
+    if (backdrop) {
+        backdrop.classList.add('hidden');
+        backdrop.style.zIndex = '';
+    }
+    // The viewer, when open behind the sheet, keeps the page scroll-locked itself.
+    const viewer = document.getElementById('highlight-viewer-overlay');
+    if (!viewer || viewer.classList.contains('hidden')) document.body.classList.remove('overlay-open');
+}
+
+// Leaves add mode and lets the viewer play again.
+function endHighlightAddMode() {
+    highlightAddTargetId = null;
+    highlightAddBusy = false;
+    if (typeof hvResume === 'function') hvResume('add');
+}
+
+// Backdrop tap / Cancel: close the sheet without picking anything.
+function cancelHighlightUpload() {
+    closeHighlightUploadSheet();
+    endHighlightAddMode();
 }
 
 const HIGHLIGHT_MEDIA_MAX_SIZE = 25 * 1024 * 1024; // 25MB, generous for photo or short video
@@ -108,41 +266,59 @@ async function handleHighlightMediaSelected(event, kind) {
     const file = event.target.files && event.target.files[0];
     event.target.value = ''; // allow re-selecting the same file later
 
-    if (!file) return;
+    if (!file) { endHighlightAddMode(); return; }
 
     const expectedPrefix = kind === 'photo' ? 'image/' : 'video/';
     if (!file.type.startsWith(expectedPrefix)) {
         showToast(kind === 'photo' ? 'Please choose an image file.' : 'Please choose a video file.');
+        endHighlightAddMode();
         return;
     }
     if (file.size > HIGHLIGHT_MEDIA_MAX_SIZE) {
         showToast('File must be under 25MB.');
+        endHighlightAddMode();
         return;
     }
 
     closeHighlightUploadSheet();
+    highlightAddBusy = true;
+    const targetId = highlightAddTargetId;
 
     try {
-        // Cover thumbnail: the media itself for photos, otherwise just the
-        // circle background - stored as a data URL so it survives reloads
-        // without a backend endpoint (see loadUserHighlights/saveUserHighlights).
-        const cover = kind === 'photo' ? await readFileAsDataUrl(file) : '';
         const highlights = loadUserHighlights();
-        const title = (window.prompt('Name this highlight', 'Highlights') || 'Highlights').trim().slice(0, 20) || 'Highlights';
+        const target = targetId ? highlights.find(function(h) { return h.id === targetId; }) : null;
+        if (targetId && !target) throw new Error('Highlight not found');
 
-        highlights.push({
-            id: `${Date.now()}`,
-            title: title,
-            cover: cover,
-            kind: kind
-        });
+        // The media itself goes to IndexedDB (see putHighlightMedia); the highlight keeps a
+        // small item record plus a thumbnail cover.
+        const itemId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        await putHighlightMedia(itemId, file);
+        const item = { id: itemId, kind: kind, createdAt: Date.now() };
 
-        saveUserHighlights(highlights);
+        if (target) {
+            ensureHighlightItems(target).push(item);
+            if (!target.cover) target.cover = await makeHighlightCover(file, kind);
+        } else {
+            const cover = await makeHighlightCover(file, kind);
+            const title = (window.prompt('Name this highlight', 'Highlights') || 'Highlights').trim().slice(0, 20) || 'Highlights';
+            highlights.push({
+                id: `${Date.now()}`,
+                title: title,
+                cover: cover,
+                kind: kind,
+                items: [item]
+            });
+        }
+
+        if (!saveUserHighlights(highlights)) throw new Error('Could not save highlights');
         renderProfileHighlights(highlights);
-        showToast('Highlight added');
+        if (target && typeof refreshHighlightViewer === 'function') refreshHighlightViewer(targetId);
+        showToast(target ? 'Added to highlight' : 'Highlight added');
     } catch (error) {
         console.error('Error adding highlight:', error);
         showToast('Failed to add highlight. Please try again.');
+    } finally {
+        endHighlightAddMode();
     }
 }
 
@@ -162,9 +338,24 @@ function readFileAsDataUrl(file) {
     const photoInput = document.getElementById('highlight-photo-input');
     const videoInput = document.getElementById('highlight-video-input');
 
+    // The file picker was dismissed without a choice: leave add mode so the viewer resumes.
+    // `cancel` is not fired everywhere, so the window regaining focus is a fallback.
+    function watchPickerCancel() {
+        window.addEventListener('focus', function onFocus() {
+            window.removeEventListener('focus', onFocus);
+            setTimeout(function() {
+                if (highlightAddTargetId && !highlightAddBusy) endHighlightAddMode();
+            }, 1200);
+        });
+    }
+    [photoInput, videoInput].forEach(function(input) {
+        if (input) input.addEventListener('cancel', function() { if (!highlightAddBusy) endHighlightAddMode(); });
+    });
+
     if (photoBtn && photoInput) {
         photoBtn.addEventListener('click', function() {
             closeHighlightUploadSheet();
+            watchPickerCancel();
             photoInput.click();
         });
         photoInput.addEventListener('change', function(e) { handleHighlightMediaSelected(e, 'photo'); });
@@ -172,11 +363,12 @@ function readFileAsDataUrl(file) {
     if (videoBtn && videoInput) {
         videoBtn.addEventListener('click', function() {
             closeHighlightUploadSheet();
+            watchPickerCancel();
             videoInput.click();
         });
         videoInput.addEventListener('change', function(e) { handleHighlightMediaSelected(e, 'video'); });
     }
-    if (cancelBtn) cancelBtn.addEventListener('click', closeHighlightUploadSheet);
+    if (cancelBtn) cancelBtn.addEventListener('click', cancelHighlightUpload);
 })();
 
 // ---- Collapsible Status/Highlight section (down-arrow beside Settings) ----

@@ -121,7 +121,7 @@ function chatApplyConversationItem(item) {
 	conv.avatar = item.user.profile_picture || null;
 	const lm = item.last_message;
 	if (lm) {
-		conv.preview = lm.body;
+		conv.preview = chatPreviewText(lm.body);
 		conv.time = chatFormatListTime(lm.created_at);
 		conv.lastMessageId = lm.id;
 		conv.activity = chatParseUtc(lm.created_at);
@@ -451,7 +451,7 @@ async function chatPostMessage(conv, entry) {
 			chatSettle(entry, msg);
 		}
 		chatBumpCursor(msg.id);
-		conv.preview = msg.body;
+		conv.preview = chatPreviewText(msg.body);
 		conv.time = chatFormatListTime(msg.created_at);
 		conv.lastMessageId = Math.max(conv.lastMessageId || 0, msg.id);
 		conv.activity = chatParseUtc(msg.created_at);

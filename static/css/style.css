@@ -607,6 +607,12 @@
             overflow-y: auto;
             overscroll-behavior: contain;
         }
+        .reply-composer-input:focus,
+        .reply-composer-input:focus-visible {
+            outline: none;
+            box-shadow: none;
+            border-color: transparent;
+        }
         .reply-composer-input::placeholder { color: #9CA3AF; }
         /* Attached-image preview: its own full-width first row inside the
            pill (order:-1 lifts it above the avatar/input row). */
@@ -1399,3 +1405,310 @@ html.dark .quote-card-unavailable {
 @media (prefers-reduced-motion: reduce) {
     .chat-row-menu:not(.hidden) { animation: none; }
 }
+
+/* ---- Chat GIF picker (templates/partials/chat_gif_picker.html, static/js/chat-gif.js) ----
+   Docked under the composer; the thread above shrinks to make room. Colors use
+   the --bb-* theme variables so dark mode follows automatically. */
+.chat-gif-picker {
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 auto;
+    height: min(46dvh, 400px);
+    min-height: 0;
+    background: var(--bb-bg-subtle);
+    border-top: 1px solid var(--bb-border-default);
+    border-radius: 24px 24px 0 0;
+    box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.06);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    animation: chatGifRise 180ms ease-out;
+}
+.chat-gif-picker[hidden] { display: none; }
+@keyframes chatGifRise {
+    from { transform: translateY(16px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+/* The picker supplies the bottom safe-area itself while open. */
+#chat-conversation-view[data-gif-open="true"] #chat-conv-composer {
+    padding-bottom: 10px !important;
+}
+.chat-gif-handle-zone {
+    flex: 0 0 auto;
+    padding: 10px 0 12px;
+    touch-action: none;
+}
+.chat-gif-handle {
+    width: 44px;
+    height: 5px;
+    margin: 0 auto;
+    border-radius: 9999px;
+    background: var(--bb-bg-muted-2);
+}
+.chat-gif-search {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 46px;
+    margin: 0 14px;
+    padding: 0 7px 0 16px; /* the sticker button sits 7px from the right end */
+    border-radius: 9999px;
+    background: var(--bb-bg-muted);
+    color: var(--bb-text-quaternary);
+}
+.chat-gif-search-icon { display: block; width: 22px; height: 22px; flex: 0 0 auto; }
+/* Tailwind's forms plugin (injected after this sheet) styles every text input with a white
+   background, border, padding and a blue focus ring. Selectors here are one step more
+   specific than its [type='text'] rules, so the input stays transparent and the pill reads
+   as one uniform surface. */
+.chat-gif-search input.chat-gif-search-input[type="text"],
+.chat-gif-search input.chat-gif-search-input[type="text"]:focus,
+.chat-gif-search input.chat-gif-search-input[type="text"]:focus-visible {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    outline: none;
+    box-shadow: none;
+    background: transparent;
+    appearance: none;
+    -webkit-appearance: none;
+    font: inherit;
+    font-size: 16px; /* 16px stops iOS zoom-on-focus */
+    line-height: 1.25;
+    color: var(--bb-text-primary);
+}
+.chat-gif-search-input::placeholder { color: var(--bb-text-quaternary); }
+/* GIF <-> sticker switch at the far end of the search pill. It shows the icon of the
+   mode you would switch TO: sticker icon in GIF mode, GIF icon in sticker mode. */
+.chat-gif-mode-btn {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 9999px;
+    background: transparent;
+    color: var(--bb-text-quaternary);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 100ms ease;
+}
+.chat-gif-mode-icon { display: block; width: 22px; height: 22px; }
+.chat-gif-picker[data-mode="gif"] .chat-gif-mode-icon-gif,
+.chat-gif-picker[data-mode="sticker"] .chat-gif-mode-icon-sticker { display: none; }
+.chat-gif-mode-btn:active { transform: scale(0.92); }
+.chat-gif-mode-btn:focus-visible { outline: 2px solid #9ca3af; outline-offset: 1px; }
+.chat-gif-chips[hidden] { display: none; }
+.chat-gif-chips {
+    flex: 0 0 auto;
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 0 14px;
+    overflow-x: auto;
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+.chat-gif-chips::-webkit-scrollbar { display: none; }
+.chat-gif-chip {
+    flex: 0 0 auto;
+    height: 36px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 9999px;
+    background: var(--bb-bg-muted);
+    color: var(--bb-text-quaternary);
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 36px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: transform 100ms ease;
+}
+.chat-gif-chip:active { transform: scale(0.96); }
+.chat-gif-chip.is-active {
+    background: #2b2a28;
+    color: #e8c77b;
+}
+html.dark .chat-gif-chip.is-active { box-shadow: inset 0 0 0 1px rgba(232, 199, 123, 0.35); }
+.chat-gif-scroll {
+    flex: 1 1 0;
+    min-height: 0;
+    margin-top: 12px;
+    padding: 0 14px 14px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+.chat-gif-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+}
+.chat-gif-tile {
+    position: relative;
+    display: block;
+    aspect-ratio: 3 / 2;
+    padding: 0;
+    border: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--bb-bg-muted-2);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 100ms ease;
+}
+.chat-gif-tile:active { transform: scale(0.97); }
+.chat-gif-tile:focus-visible { outline: 2px solid #9ca3af; outline-offset: 2px; }
+.chat-gif-tile img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    -webkit-user-drag: none;
+}
+/* Sticker mode: square, background-less tiles in a 4-column tray (no chips, no GIF badge). */
+.chat-gif-picker[data-mode="sticker"] .chat-gif-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px 6px;
+}
+.chat-gif-tile.chat-sticker-tile {
+    aspect-ratio: 1 / 1;
+    padding: 4px;
+    background: transparent;
+}
+.chat-gif-tile.chat-sticker-tile img { object-fit: contain; }
+.chat-gif-badge {
+    position: absolute;
+    left: 6px;
+    bottom: 6px;
+    padding: 3px 8px;
+    border-radius: 9999px;
+    background: rgba(30, 30, 32, 0.62);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 0.02em;
+    pointer-events: none;
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+}
+.chat-gif-status {
+    padding: 28px 12px;
+    text-align: center;
+    font-size: 15px;
+    color: var(--bb-text-quaternary);
+}
+.chat-gif-status[hidden] { display: none; }
+.chat-gif-status button {
+    margin-top: 10px;
+    padding: 8px 16px;
+    border: 0;
+    border-radius: 9999px;
+    background: var(--bb-bg-muted);
+    color: var(--bb-text-primary);
+    font-size: 14px;
+    font-weight: 600;
+}
+/* GIF inside a chat bubble. A bare GIF (no reply/forward header) has no bubble
+   chrome; the image keeps the bubble's rounded shape. */
+.chat-msg-gif { background: transparent; }
+.chat-gif-msg-img {
+    display: block;
+    width: 220px;
+    max-width: 100%;
+    aspect-ratio: 4 / 3; /* placeholder until the file loads; see chatGifImgLoaded */
+    border-radius: 18px;
+    object-fit: cover;
+    background: var(--bb-bg-muted);
+    -webkit-user-drag: none;
+}
+.chat-gif-msg-img.is-loaded { aspect-ratio: auto; height: auto; background: transparent; }
+.chat-gif-msg-missing { display: block; padding: 8px 6px; font-size: 14px; font-style: italic; opacity: 0.8; }
+/* Sticker inside a chat bubble: transparent, natural proportions, no bubble when bare. */
+.chat-sticker-msg-img {
+    display: block;
+    width: 150px;
+    max-width: 100%;
+    aspect-ratio: 1 / 1; /* reserves the slot until the file loads; see chatGifImgLoaded */
+    object-fit: contain;
+    background: transparent;
+    -webkit-user-drag: none;
+}
+.chat-sticker-msg-img.is-loaded { aspect-ratio: auto; height: auto; }
+@media (prefers-reduced-motion: reduce) {
+    .chat-gif-picker { animation: none; }
+    .chat-gif-chip, .chat-gif-tile, .chat-gif-mode-btn { transition: none; }
+}
+
+/* ---- Highlight viewer (templates/partials/highlight_viewer.html, static/js/highlight-viewer.js) ---- */
+#highlight-viewer-overlay {
+    touch-action: none; /* pointer events drive tap / hold / swipe; the browser must not scroll */
+    overscroll-behavior: contain;
+}
+#highlight-viewer-overlay.hv-snap-back { transition: transform 180ms ease, opacity 180ms ease; }
+.hv-media {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain; /* default for photos far from the screen's shape */
+    background: #000;
+    -webkit-user-drag: none;
+}
+.hv-media.is-cover { object-fit: cover; } /* set by JS when the media is close to portrait screen shape: edge-to-edge */
+.hv-chrome { transition: opacity 150ms ease; }
+#highlight-viewer-overlay[data-holding="true"] .hv-chrome { opacity: 0; } /* hold to pause hides the chrome */
+.hv-scrim {
+    height: calc(env(safe-area-inset-top, 0px) + 130px);
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0));
+}
+.hv-progress {
+    top: calc(env(safe-area-inset-top, 0px) + 8px);
+    padding: 0 8px;
+}
+.hv-seg {
+    flex: 1 1 0;
+    height: 2px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.35);
+    overflow: hidden;
+}
+.hv-seg > i { display: block; width: 0; height: 100%; background: #ffffff; }
+.hv-header {
+    top: calc(env(safe-area-inset-top, 0px) + 22px);
+    padding: 0 8px 0 11px;
+}
+.hv-cover {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 9999px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 14px;
+}
+.hv-cover img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.hv-icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: 0;
+    background: transparent;
+    color: #ffffff;
+    -webkit-tap-highlight-color: transparent;
+}
+.hv-icon-btn:active { opacity: 0.6; }

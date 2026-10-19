@@ -3,3 +3,6 @@ backups/
 flask_session/
 __pycache__/
 *.pyc
+doodle.txt
+tools/
+server.log

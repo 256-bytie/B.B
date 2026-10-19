@@ -205,7 +205,7 @@
 			document.activeElement.blur();
 		}
 
-		document.getElementById('chat-message-sheet-preview').textContent = msg.text;
+		document.getElementById('chat-message-sheet-preview').textContent = chatPreviewText(msg.text);
 		const mine = msg.reactions && msg.reactions.me;
 		actionSheetEl.querySelectorAll('.chat-sheet-react').forEach(function (btn) {
 			const on = btn.dataset.emoji === mine;
@@ -338,7 +338,7 @@
 		const msg = target.msg;
 		actionSheet.close();
 		target = null;
-		setChatReplyTarget({ from: msg.from, text: msg.text });
+		setChatReplyTarget({ from: msg.from, text: chatPreviewText(msg.text) });
 		const input = document.getElementById('chat-conv-input');
 		if (input) input.focus();
 	}
@@ -371,7 +371,7 @@
 		if (!dest) return;
 		const time = new Date().toTimeString().slice(0, 5);
 		chatThreadFor(dest).push({ from: 'me', text: target.msg.text, time: time, status: 'sent', forwarded: true });
-		dest.preview = target.msg.text;
+		dest.preview = chatPreviewText(target.msg.text);
 		dest.time = time;
 		btn.disabled = true;
 		btn.textContent = 'Sent';

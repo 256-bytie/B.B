@@ -346,6 +346,7 @@ function openChatConversation(id) {
 	if (!conv) return;
 	chatActiveConversationId = id;
 	clearChatReplyTarget(); // a pending reply never carries into another thread
+	closeChatGifPicker(); // never carry an open picker into another thread
 	conv.unread = 0; // opening a thread reads it
 
 	refreshChatConversationHeader(conv);
@@ -364,6 +365,7 @@ function openChatConversation(id) {
 
 function closeChatConversation() {
 	if (typeof closeChatMessageSheet === 'function') closeChatMessageSheet();
+	closeChatGifPicker();
 	clearChatReplyTarget();
 	chatActiveConversationId = null;
 	showView('chat'); // initChatView re-renders the list with updated previews
@@ -407,10 +409,21 @@ function chatBubbleHtml(msg, conv, index) {
 	const attrs = `data-chat-msg-index="${index}" tabindex="0" aria-haspopup="dialog"`;
 	const lead = chatBubbleLeadHtml(msg, conv, mine);
 	const chip = chatReactionChipHtml(msg, mine);
+	// GIF and sticker messages (body "[gif:<id>]" / "[sticker:<file>]", see chat-gif.js)
+	// render as an image. Without a reply/forward header they drop the bubble chrome;
+	// with one they keep the bubble.
+	const gifId = chatParseGif(msg.text);
+	const stickerId = gifId ? null : chatParseSticker(msg.text);
+	const mediaHtml = gifId ? chatGifImgHtml(gifId) : (stickerId ? chatStickerImgHtml(stickerId) : '');
+	const bareMedia = !!mediaHtml && !lead;
+	const content = mediaHtml || text;
+	const bubbleSize = mediaHtml ? 'p-2' : 'px-4 py-2.5';
+	const mineBubbleCls = bareMedia ? 'chat-msg-gif' : `bg-brand-red text-white text-[16px] leading-[1.45] rounded-[22px] ${bubbleSize} break-words`;
+	const themBubbleCls = bareMedia ? 'chat-msg-gif' : `bg-gray-100 text-gray-900 text-[16px] leading-[1.45] rounded-[22px] ${bubbleSize} break-words`;
 	if (mine) {
 		return `
 		<div class="flex flex-col items-end">
-			<div class="chat-msg-bubble max-w-[78%] bg-brand-red text-white text-[16px] leading-[1.45] rounded-[22px] px-4 py-3 break-words" ${attrs}>${lead}${text}</div>
+			<div class="chat-msg-bubble max-w-[78%] ${mineBubbleCls}" ${attrs}>${lead}${content}</div>
 			${chip}
 			${conv.remote ? chatRemoteMetaHtml(msg, time) : `<div class="flex items-center gap-1.5 mt-1.5 text-[13px] text-gray-500"><span>${time}</span>${chatStatusIconHtml(msg.status, 'w-[18px] h-[18px]')}</div>`}
 		</div>`;
@@ -419,7 +432,7 @@ function chatBubbleHtml(msg, conv, index) {
 		<div class="flex items-start gap-3">
 			<img src="${escapeHtml(chatAvatarUrl(conv.handle, conv.avatar))}" alt="" class="w-10 h-10 rounded-full object-cover bg-gray-100 shrink-0">
 			<div class="min-w-0 max-w-[78%]">
-				<div class="chat-msg-bubble bg-gray-100 text-gray-900 text-[16px] leading-[1.45] rounded-[22px] px-4 py-3 break-words" ${attrs}>${lead}${text}</div>
+				<div class="chat-msg-bubble ${themBubbleCls}" ${attrs}>${lead}${content}</div>
 				${chip}
 				<p class="mt-1.5 text-[13px] text-gray-500">${time}</p>
 			</div>
@@ -474,7 +487,7 @@ function renderChatReplyBar() {
 // An emptied thread leaves a blank preview/time.
 function chatSyncListRowToThread(conv) {
 	const last = chatLastMessage(conv);
-	conv.preview = last ? last.text : '';
+	conv.preview = last ? chatPreviewText(last.text) : '';
 	conv.time = last ? last.time : '';
 }
 
@@ -485,25 +498,34 @@ function sendChatMessage() {
 	const text = input.value.trim();
 	const conv = chatConversations.find(m => m.id === chatActiveConversationId);
 	if (!text || !conv) return;
+	input.value = '';
+	chatDispatchMessage(text);
+	input.focus();
+}
+
+// Appends `text` to the active conversation as a sent message (real DMs go through
+// chat-sync.js; groups stay client-side). Shared by the composer and the GIF
+// picker (chat-gif.js), so neither touches the other's draft. Returns false when
+// there is no active conversation.
+function chatDispatchMessage(text) {
+	const conv = chatConversations.find(m => m.id === chatActiveConversationId);
+	if (!text || !conv) return false;
 
 	if (conv.remote) { // real DM: server-backed, optimistic with failure/retry (chat-sync.js)
-		input.value = '';
 		clearChatReplyTarget();
 		chatSendRemote(conv, text);
-		input.focus();
-		return;
+		return true;
 	}
 
 	const time = new Date().toTimeString().slice(0, 5);
 	const msg = { from: 'me', text, time, status: 'sent' };
 	if (chatReplyTarget) msg.replyTo = { from: chatReplyTarget.from, text: chatReplyTarget.text };
 	chatThreadFor(conv).push(msg);
-	conv.preview = text;
+	conv.preview = chatPreviewText(text);
 	conv.time = time;
 
-	input.value = '';
 	clearChatReplyTarget();
 	renderChatConversation();
 	scrollChatConversationToBottom();
-	input.focus();
+	return true;
 }

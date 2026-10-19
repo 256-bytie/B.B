@@ -1,0 +1,32 @@
+<!-- BEGIN: Chat GIF Picker -->
+<!-- Opened by the GIF icon in the chat composer (static/js/chat-gif.js). Two modes, set
+     by data-mode: "gif" (search + category chips + GIFs from static/gifs/) and "sticker"
+     (search + stickers from static/stickers/, no chips). Docked
+     under the composer inside #chat-conversation-view (flex column), so the
+     thread shrinks above it and the composer stays visible. Hidden via the
+     `hidden` attribute. Chips and tiles are rendered by JS from each
+     folder's manifest.json. -->
+<section id="chat-gif-picker" class="chat-gif-picker" data-mode="gif" aria-label="GIF and sticker picker" hidden>
+	<div id="chat-gif-handle" class="chat-gif-handle-zone" aria-hidden="true">
+		<div class="chat-gif-handle"></div>
+	</div>
+
+	<div class="chat-gif-search">
+		<svg class="chat-gif-search-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+		<input id="chat-gif-search-input" class="chat-gif-search-input" type="text" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Search GIFs" aria-label="Search GIFs">
+		<!-- Switches GIFs <-> stickers. It always shows the OTHER mode's icon: the sticker icon
+		     while GIFs are showing, the GIF icon while stickers are showing (CSS, by data-mode). -->
+		<button id="chat-gif-mode-btn" class="chat-gif-mode-btn" type="button" aria-label="Switch to stickers">
+			<svg class="chat-gif-mode-icon chat-gif-mode-icon-sticker" fill="currentColor" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M168,32H88A56.06,56.06,0,0,0,32,88v80a56.06,56.06,0,0,0,56,56h48a8.07,8.07,0,0,0,2.53-.41c26.23-8.75,76.31-58.83,85.06-85.06A8.07,8.07,0,0,0,224,136V88A56.06,56.06,0,0,0,168,32ZM48,168V88A40,40,0,0,1,88,48h80a40,40,0,0,1,40,40v40H184a56.06,56.06,0,0,0-56,56v24H88A40,40,0,0,1,48,168Zm96,35.14V184a40,40,0,0,1,40-40h19.14C191,163.5,163.5,191,144,203.14Z"></path></svg>
+			<svg class="chat-gif-mode-icon chat-gif-mode-icon-gif" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 28 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="1.5" y="3.5" width="25" height="17" rx="4.5"></rect><text x="14" y="15.6" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" font-weight="700" fill="currentColor" stroke="none">GIF</text></svg>
+		</button>
+	</div>
+
+	<div id="chat-gif-chips" class="chat-gif-chips" role="tablist" aria-label="GIF categories" data-sheet-no-drag></div>
+
+	<div id="chat-gif-scroll" class="chat-gif-scroll">
+		<div id="chat-gif-grid" class="chat-gif-grid"></div>
+		<p id="chat-gif-status" class="chat-gif-status" role="status" hidden></p>
+	</div>
+</section>
+<!-- END: Chat GIF Picker -->

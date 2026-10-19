@@ -34,7 +34,7 @@
 	<div id="chat-conv-scroll" class="flex-1 overflow-y-auto px-4 pt-5 pb-4">
 		<!-- Day of the first loaded message (set by renderChatConversation); hidden when empty. -->
 		<div id="chat-conv-day" class="flex justify-center mb-6">
-			<span id="chat-conv-day-label" class="px-4 py-1.5 rounded-full bg-gray-100 text-[14px] text-gray-500">Today</span>
+			<span id="chat-conv-day-label" class="px-4 py-1 rounded-full bg-gray-100 text-[14px] text-gray-500">Today</span>
 		</div>
 		<div id="chat-conv-thread" class="space-y-5"></div>
 	</div>
@@ -51,10 +51,10 @@
 	</div>
 
 	<!-- Composer -->
-	<div class="shrink-0 bg-white border-t border-gray-100 px-3 pt-3 flex items-center gap-3" style="padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));">
-		<div class="flex-1 min-w-0 h-12 rounded-full bg-gray-100 flex items-center pl-4 pr-4">
-			<button id="chat-conv-gif-btn" type="button" class="text-gray-500 shrink-0 mr-2 active:scale-95 transition-transform duration-100" onclick="showToast('Coming soon')" aria-label="GIF">
-				<svg class="w-7 h-6" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 28 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="1.5" y="3.5" width="25" height="17" rx="4.5"></rect><text x="14" y="15.6" text-anchor="middle" font-family="system-ui, sans-serif" font-size="9" font-weight="700" fill="currentColor" stroke="none">GIF</text></svg>
+	<div id="chat-conv-composer" class="shrink-0 bg-white border-t border-gray-100 px-3 pt-2.5 flex items-center gap-3" style="padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));">
+		<div class="flex-1 min-w-0 h-11 rounded-full bg-gray-100 flex items-center pl-4 pr-4">
+			<button id="chat-conv-gif-btn" type="button" class="text-gray-500 shrink-0 mr-2 active:scale-95 transition-transform duration-100" onclick="toggleChatGifPicker()" aria-label="GIF" aria-controls="chat-gif-picker" aria-expanded="false">
+				<svg class="w-6 h-6" fill="currentColor" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M174.92,156c-10.29,17.79-27.39,28-46.92,28s-36.63-10.2-46.93-28a8,8,0,1,1,13.86-8c7.46,12.91,19.2,20,33.07,20s25.61-7.1,33.08-20a8,8,0,1,1,13.84,8ZM232,128a104.35,104.35,0,0,1-4.56,30.56,8,8,0,0,1-2,3.31l-63.57,63.57a7.9,7.9,0,0,1-3.3,2A104,104,0,1,1,232,128Zm-16,0a87.89,87.89,0,1,0-64,84.69L212.69,152A88.05,88.05,0,0,0,216,128ZM92,120a12,12,0,1,0-12-12A12,12,0,0,0,92,120Zm72-24a12,12,0,1,0,12,12A12,12,0,0,0,164,96Z"></path></svg>
 			</button>
 			<input id="chat-conv-input" type="text" enterkeyhint="send" autocomplete="off" placeholder="Type a message..." class="flex-1 min-w-0 h-full bg-transparent border-0 p-0 shadow-none outline-none focus:outline-none focus:ring-0 focus:border-0 appearance-none text-[16px] text-gray-900 placeholder-gray-500" onkeydown="if (event.key === 'Enter') { event.preventDefault(); sendChatMessage(); }">
 			<!-- Trailing actions, in order: add file, camera (all "Coming soon") -->
@@ -68,8 +68,10 @@
 			</div>
 		</div>
 		<button id="chat-conv-send-btn" type="button" class="w-12 h-12 rounded-full bg-brand-red text-white flex items-center justify-center shrink-0 active:scale-95 transition-transform duration-100" onclick="sendChatMessage()" aria-label="Send message">
-			<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M21.7 2.3a1 1 0 0 0-1.03-.24L2.7 8.4a1 1 0 0 0-.08 1.87l7.1 2.97 2.97 7.1a1 1 0 0 0 1.87-.08l6.34-17.97a1 1 0 0 0-.2-1Zm-9.36 11.4-3.5-1.47 8.2-2.9-4.7 4.37Z"></path></svg>
+			<svg class="w-6 h-6" fill="currentColor" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M231.87,114l-168-95.89A16,16,0,0,0,40.92,37.34L71.55,128,40.92,218.67A16,16,0,0,0,56,240a16.15,16.15,0,0,0,7.93-2.1l167.92-96.05a16,16,0,0,0,.05-27.89ZM56,224a.56.56,0,0,0,0-.12L85.74,136H144a8,8,0,0,0,0-16H85.74L56.06,32.16A.46.46,0,0,0,56,32l168,95.83Z"></path></svg>
 		</button>
 	</div>
+
+	{% include "partials/chat_gif_picker.html" %}
 </div>
 <!-- END: Chat Conversation View -->
