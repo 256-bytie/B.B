@@ -89,130 +89,77 @@
 			<!-- END: Filter Bar -->
 
 			<!-- BEGIN: Business List -->
-			<main class="px-4 space-y-4 pb-24">
-				<!-- Card 1: Restaurant -->
+			<!-- Render target: clone #business-card-template once per business and append here. -->
+			<main id="business-list" class="px-4 space-y-4 pb-24"></main>
+
+			<!-- Business card template (inert; not rendered). Fill elements marked data-field.
+			     Stars: 5 icons; use "fas fa-star" (full), "fas fa-star-half-alt" (half), "far fa-star text-gray-200" (empty).
+			     Features row: hide when empty; clone #business-feature-available / #business-feature-unavailable per item. -->
+			<template id="business-card-template">
 				<article class="flex flex-row bg-white rounded-[16px] border border-gray-100 p-3 gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)]">
-					<img alt="Kang Il-Yong's Dad's Steak" class="w-[120px] h-[120px] rounded-[12px] object-cover bg-gray-100" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBc5pkSe3UU4mBwQyyZS-rbk9TqKE9qJJQZpox9udzwXvQpAuv19UuckL_2z-8zsiuG7SlRZpfwY2WRIl08c7oE0z3Q8gntpnba78ID4I86JDtxw5ImddIoNNM5R9OXjuw0j_QPChvWDMaO61GTiY0Tj6kHYZZdqhm9QhRgU9JWvc5axl6uBeOaXU9IpJQJRbG0sdnmojuNnH61cFMyOdVDGX1JPT07K-soUwdjXrBcsrUoXYm0u06N"/>
+					<img data-field="image" alt="" class="w-[120px] h-[120px] rounded-[12px] object-cover bg-gray-100"/>
 					<div class="flex flex-col justify-between py-1 w-full">
 						<div>
-							<h2 class="text-base font-bold text-gray-900 mb-0.5">Kang Il-Yong's Dad's Steak</h2>
-							<p class="text-sm text-gray-500 mb-1">Restaurant</p>
+							<h2 data-field="name" class="text-base font-bold text-gray-900 mb-0.5"></h2>
+							<p data-field="category" class="text-sm text-gray-500 mb-1"></p>
 							<div class="flex items-center text-sm mb-2">
-								<span class="font-bold mr-1">4.2</span>
-								<div class="flex text-[#FFB400] text-sm">
+								<span data-field="rating" class="font-bold mr-1"></span>
+								<div data-field="stars" class="flex text-[#FFB400] text-sm">
 									<i class="fas fa-star text-[16px]"></i>
 									<i class="fas fa-star text-[16px]"></i>
 									<i class="fas fa-star text-[16px]"></i>
 									<i class="fas fa-star text-[16px]"></i>
 									<i class="far fa-star text-[16px] text-gray-200"></i>
 								</div>
-								<span class="text-gray-500 ml-1 text-xs">(128)</span>
+								<span data-field="review-count" class="text-gray-500 ml-1 text-xs"></span>
 							</div>
 							<div class="flex items-center text-sm text-gray-500 mb-2">
 								<i class="fas fa-map-marker-alt text-[16px] mr-1"></i>
-								<span class="truncate text-xs">22 Korea Street, City 001</span>
+								<span data-field="address" class="truncate text-xs"></span>
 							</div>
 						</div>
-						<div class="flex flex-wrap gap-x-3 gap-y-1 text-xs">
-							<span class="flex items-center text-gray-500"><i class="fas fa-check text-[14px] text-green-500 mr-0.5"></i> Dine in</span>
-							<span class="flex items-center text-gray-500"><i class="fas fa-times text-[14px] text-red-500 mr-0.5"></i> Take away</span>
-							<span class="flex items-center text-gray-500"><i class="fas fa-times text-[14px] text-red-500 mr-0.5"></i> Delivery</span>
-						</div>
+						<div data-field="features" class="flex flex-wrap gap-x-3 gap-y-1 text-xs"></div>
 					</div>
 				</article>
+			</template>
 
-				<!-- Card 2: Shop -->
-				<article class="flex flex-row bg-white rounded-[16px] border border-gray-100 p-3 gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)]">
-					<img alt="Samgyupsal Mart" class="w-[120px] h-[120px] rounded-[12px] object-cover bg-gray-100" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBwWSGqc-irg5nfC2lPl4Umf0F6CevMIaiurTkLVrSTcu-AhFGgO3zcDaYxh5tI21zXsdhvNIDDPRRfnd1zKfN5oH_QHpfSGHuqPvpR_rnxPGtfLXpzwlO1VwrHARxmXGuV8hNXQLIikyk1hBvinxr3CSYKlLtJxdmUsrXQAPdZtwcuAan0fV7Zvss51BwBZYuN-LafDQUqkTVfPt_lYXkdITDFi-Vna09MdXBh-C_zkgiCSeYIdMx9"/>
-					<div class="flex flex-col justify-start py-1 w-full">
-						<h2 class="text-base font-bold text-gray-900 mb-0.5">Samgyupsal Mart</h2>
-						<p class="text-sm text-gray-500 mb-1">Shop</p>
-						<div class="flex items-center text-sm mb-2">
-							<span class="font-bold mr-1">4.1</span>
-							<div class="flex text-[#FFB400] text-sm">
-								<i class="fas fa-star text-[16px]"></i>
-								<i class="fas fa-star text-[16px]"></i>
-								<i class="fas fa-star text-[16px]"></i>
-								<i class="fas fa-star text-[16px]"></i>
-								<i class="far fa-star text-[16px] text-gray-200"></i>
-							</div>
-							<span class="text-gray-500 ml-1 text-xs">(86)</span>
-						</div>
-						<div class="flex items-center text-sm text-gray-500">
-							<i class="fas fa-map-marker-alt text-[16px] mr-1"></i>
-							<span class="truncate text-xs">12 Market Road, City 001</span>
-						</div>
-					</div>
-				</article>
-
-				<!-- Card 3: Charging -->
-				<article class="flex flex-row bg-white rounded-[16px] border border-gray-100 p-3 gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)]">
-					<img alt="ChargeUp Station" class="w-[120px] h-[120px] rounded-[12px] object-cover bg-gray-100" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAWiVcsa4SrzBi1vtGi0gfLubOuFb4heNKvD4_KirKWemiOB8fVEjxAAMU4MnXgOKe0XCS6aXO6h4j4tv9ojb_qgA7Ow5XTqFLzlerY4TkBIKm4eda7txiXQRJvLmP6Arpf-ea_iHznQuQyrbRr1SSb2mJzYwNxvEOom445aSyZsbevC5JJmRRKQTZFRmCGoN8b8vhaebAbN4EX5tv1p2q5X8yoDI3w4XRrfsVAYATQQnMow6U-FDUZ"/>
-					<div class="flex flex-col justify-between py-1 w-full">
-						<div>
-							<h2 class="text-base font-bold text-gray-900 mb-0.5">ChargeUp Station</h2>
-							<p class="text-sm text-gray-500 mb-1">Charging Station</p>
-							<div class="flex items-center text-sm mb-2">
-								<span class="font-bold mr-1">4.5</span>
-								<div class="flex text-[#FFB400] text-sm">
-									<i class="fas fa-star text-[16px]"></i>
-									<i class="fas fa-star text-[16px]"></i>
-									<i class="fas fa-star text-[16px]"></i>
-									<i class="fas fa-star text-[16px]"></i>
-									<i class="fas fa-star-half-alt text-[16px]"></i>
-								</div>
-								<span class="text-gray-500 ml-1 text-xs">(64)</span>
-							</div>
-							<div class="flex items-center text-sm text-gray-500 mb-2">
-								<i class="fas fa-map-marker-alt text-[16px] mr-1"></i>
-								<span class="truncate text-xs">88 Tech Avenue, City 001</span>
-							</div>
-						</div>
-						<div class="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-							<span class="flex items-center text-gray-500"><i class="fas fa-check text-[14px] text-green-500 mr-0.5"></i> Fast Charging</span>
-							<span class="flex items-center text-gray-500"><i class="fas fa-check text-[14px] text-green-500 mr-0.5"></i> 24/7 Service</span>
-						</div>
-					</div>
-				</article>
-
-				<!-- Card 4: Services -->
-				<article class="flex flex-row bg-white rounded-[16px] border border-gray-100 p-3 gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)]">
-					<img alt="FixIt Tech Services" class="w-[120px] h-[120px] rounded-[12px] object-cover bg-gray-100" src="https://lh3.googleusercontent.com/aida-public/AB6AXuChV6x5zl2s67MAKLDSnzbwsSVuhGyPHtRzahrQeiW7-02CTKbV-4XHStNLS-3saMB5udQcgIZ409pN4tr8aDl0_F9_jxR5lKNemo1ylnry5LfQbF-tn_1kycniWtoVFSyER3j7ueEwny0NiPqzqVhKWQMpiNu8SvWRN3VDGE5LRh6X3J8gcG0jlFaDlsoZsw2W_t8kNCckBbsHsf3s7mnfyXeFvXZGE6JbR62EDGAI1i60R49btB7d"/>
-					<div class="flex flex-col justify-between py-1 w-full">
-						<div>
-							<h2 class="text-base font-bold text-gray-900 mb-0.5">FixIt Tech Services</h2>
-							<p class="text-sm text-gray-500 mb-1">Electronics Service</p>
-							<div class="flex items-center text-sm mb-2">
-								<span class="font-bold mr-1">4.3</span>
-								<div class="flex text-[#FFB400] text-sm">
-									<i class="fas fa-star text-[16px]"></i>
-									<i class="fas fa-star text-[16px]"></i>
-									<i class="fas fa-star text-[16px]"></i>
-									<i class="fas fa-star text-[16px]"></i>
-									<i class="fas fa-star-half-alt text-[16px]"></i>
-								</div>
-								<span class="text-gray-500 ml-1 text-xs">(52)</span>
-							</div>
-							<div class="flex items-center text-sm text-gray-500 mb-2">
-								<i class="fas fa-map-marker-alt text-[16px] mr-1"></i>
-								<span class="truncate text-xs">7 Gadget Lane, City 001</span>
-							</div>
-						</div>
-						<div class="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-							<span class="flex items-center text-gray-500"><i class="fas fa-check text-[14px] text-green-500 mr-0.5"></i> Repairs</span>
-							<span class="flex items-center text-gray-500"><i class="fas fa-check text-[14px] text-green-500 mr-0.5"></i> Accessories</span>
-						</div>
-					</div>
-				</article>
-			</main>
+			<!-- Feature item templates (appended into [data-field="features"]) -->
+			<template id="business-feature-available">
+				<span class="flex items-center text-gray-500"><i class="fas fa-check text-[14px] text-green-500 mr-0.5"></i> <span data-field="label"></span></span>
+			</template>
+			<template id="business-feature-unavailable">
+				<span class="flex items-center text-gray-500"><i class="fas fa-times text-[14px] text-red-500 mr-0.5"></i> <span data-field="label"></span></span>
+			</template>
 			<!-- END: Business List -->
 
 			<!-- BEGIN: Footer Divider -->
-			<footer class="mt-8 flex items-center justify-center mb-4">
+			<footer id="business-list-footer" class="hidden mt-8 flex items-center justify-center mb-4">
 				<div class="h-px bg-gray-100 w-12"></div>
 				<span class="text-sm text-gray-400 px-4">No more businesses</span>
 				<div class="h-px bg-gray-100 w-12"></div>
 			</footer>
 			<!-- END: Footer Divider -->
+
+			<!-- BEGIN: Business FABs -->
+			<!-- Two edge-merged expandable pill FABs, stacked bottom-right: "Create" (red) and "My Stores" (blue) 12px above it. Same right inset as #compose-fab; bottom is 32px (not nav-offset) because the bottom nav is hidden on this view; 32px matches the gap #compose-fab and #chat-fab keep above the nav, so the pill sits clear of the screen edge and gesture bar. Both start retracted (only the icon peeks past the right edge); first tap expands, second tap on the icon/label runs the global function named in data-action, and the X on the right collapses the pill back to the edge (wire the flows by defining openBusinessCreate() / openMyStores()). State, locking and reset-on-open live in onBusinessFabClick()/onBusinessFabCollapse()/resetBusinessFabs() (core.js); the retracted offset is .business-fab.is-retracted in style.css. Visibility follows #businesses-view (.view-section is display:none unless active), so no core.js toggle is needed. -->
+			<div id="business-stores-fab" data-action="openMyStores" class="business-fab is-retracted fixed h-10 pr-1 bg-blue-600 text-white rounded-full card-shadow flex items-center hover:bg-blue-700 transition-colors z-9 font-semibold text-[15px]" style="bottom: calc(84px + env(safe-area-inset-bottom, 0px)); right: 20px;">
+				<button type="button" class="business-fab-main h-full pl-5 pr-2 gap-2 rounded-full flex items-center" onclick="onBusinessFabClick(this)" aria-expanded="false" aria-label="My Stores">
+					<svg class="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 256 256" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M232,96a7.89,7.89,0,0,0-.3-2.2L217.35,43.6A16.07,16.07,0,0,0,202,32H54A16.07,16.07,0,0,0,38.65,43.6L24.31,93.8A7.89,7.89,0,0,0,24,96h0v16a40,40,0,0,0,16,32v72a8,8,0,0,0,8,8H208a8,8,0,0,0,8-8V144a40,40,0,0,0,16-32V96ZM54,48H202l11.42,40H42.61Zm50,56h48v8a24,24,0,0,1-48,0Zm-16,0v8a24,24,0,0,1-35.12,21.26,7.88,7.88,0,0,0-1.82-1.06A24,24,0,0,1,40,112v-8ZM200,208H56V151.2a40.57,40.57,0,0,0,8,.8,40,40,0,0,0,32-16,40,40,0,0,0,64,0,40,40,0,0,0,32,16,40.57,40.57,0,0,0,8-.8Zm4.93-75.8a8.08,8.08,0,0,0-1.8,1.05A24,24,0,0,1,168,112v-8h48v8A24,24,0,0,1,204.93,132.2Z"></path></svg>
+					<span>My Stores</span>
+				</button>
+				<button type="button" class="business-fab-cancel w-8 h-8 shrink-0 rounded-full flex items-center justify-center" onclick="onBusinessFabCollapse(this)" aria-label="Collapse My Stores">
+					<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 256 256" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M165.66,101.66,139.31,128l26.35,26.34a8,8,0,0,1-11.32,11.32L128,139.31l-26.34,26.35a8,8,0,0,1-11.32-11.32L116.69,128,90.34,101.66a8,8,0,0,1,11.32-11.32L128,116.69l26.34-26.35a8,8,0,0,1,11.32,11.32ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"></path></svg>
+				</button>
+			</div>
+			<div id="business-create-fab" data-action="openBusinessCreate" class="business-fab is-retracted fixed h-10 pr-1 bg-brand-red text-white rounded-full card-shadow flex items-center hover:bg-red-700 transition-colors z-9 font-semibold text-[15px]" style="bottom: calc(32px + env(safe-area-inset-bottom, 0px)); right: 20px;">
+				<button type="button" class="business-fab-main h-full pl-5 pr-2 gap-2 rounded-full flex items-center" onclick="onBusinessFabClick(this)" aria-expanded="false" aria-label="Create business">
+					<i class="fa-solid fa-plus text-base"></i>
+					<span>Create</span>
+				</button>
+				<button type="button" class="business-fab-cancel w-8 h-8 shrink-0 rounded-full flex items-center justify-center" onclick="onBusinessFabCollapse(this)" aria-label="Collapse Create">
+					<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 256 256" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M165.66,101.66,139.31,128l26.35,26.34a8,8,0,0,1-11.32,11.32L128,139.31l-26.34,26.35a8,8,0,0,1-11.32-11.32L116.69,128,90.34,101.66a8,8,0,0,1,11.32-11.32L128,116.69l26.34-26.35a8,8,0,0,1,11.32,11.32ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"></path></svg>
+				</button>
+			</div>
+			<!-- END: Business FABs -->
 		</div>
 		<!-- END: Businesses View -->

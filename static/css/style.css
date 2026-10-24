@@ -402,6 +402,45 @@
                         opacity 280ms cubic-bezier(0.16, 1, 0.3, 1);
         }
 
+        /* Businesses edge-merged expandable pill FABs ("My Stores" and
+           "Create", both .business-fab). Retracted, a pill is shifted right by
+           its own width + the 20px right inset, minus a 38px peek, so only the
+           icon (and the pill's rounded left cap) stays on screen as the tap
+           target. Expanding clears the class, sliding it back to its normal
+           bottom-right spot. Same ease-out curve as #compose-fab;
+           background-color is kept in the transition so the hover colour (from
+           Tailwind's transition-colors, which this rule overrides) still
+           fades. The tap logic (first tap expands, second acts) is
+           onBusinessFabClick() / onBusinessFabCollapse() in core.js. */
+        .business-fab {
+            transition: transform 320ms cubic-bezier(0.16, 1, 0.3, 1),
+                        background-color 150ms ease;
+        }
+        .business-fab.is-retracted {
+            transform: translateX(calc(100% + 20px - 38px));
+        }
+        /* The collapse (X) button is hidden while retracted so it can't be
+           focused or read offscreen; the delay lets it stay visible until the
+           pill has finished sliding out. */
+        .business-fab-cancel {
+            visibility: visible;
+            background: transparent;
+            -webkit-tap-highlight-color: transparent;
+            transition: opacity 150ms ease;
+        }
+        .business-fab-cancel:active {
+            opacity: 0.6;
+        }
+        .business-fab.is-retracted .business-fab-cancel {
+            visibility: hidden;
+            transition: visibility 0s linear 320ms;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .business-fab {
+                transition: none !important;
+            }
+        }
+
         /* ---- Bottom navigation (Home / Search / Notifications / Chat) ----
            64px total: 1px top border + a 59px tap row + 4px bottom pad (sits the
            32px icons slightly above true center, as in the design), plus the device
@@ -1078,13 +1117,13 @@ html.dark {
        header, the full-height scroll container, and cards alike, with
        borders/dividers doing the separation instead of tone), so
        --bb-bg-surface (what .bg-white maps to below) needs to be the same
-       #000000 as --bb-bg-app: bg-white covers virtually the entire screen
-       in every view, so if it were any lighter than pure black, the true
-       black on <body> would never actually be visible behind it. The
+       #0B0C10 as --bb-bg-app: bg-white covers virtually the entire screen
+       in every view, so if it were any lighter than this, the colour on
+       <body> would never actually be visible behind it. The
        muted/subtle steps below stay lighter so inputs, hovers, and
-       dividers remain visible against that black. */
-    --bb-bg-app: #000000;
-    --bb-bg-surface: #000000;
+       dividers remain visible against that near-black. */
+    --bb-bg-app: #0B0C10;
+    --bb-bg-surface: #0B0C10;
     --bb-bg-subtle: #171E26;
     --bb-bg-muted: #1E2731;
     --bb-bg-muted-2: #2A3441;
@@ -1764,4 +1803,441 @@ html.dark .reply-image-thumb img { background: var(--bb-bg-muted); }
 html.dark .comment-image {
     border-color: var(--bb-border-default);
     background: var(--bb-bg-muted);
+}
+
+/* ---- Settings screen (templates/partials/settings.html, static/js/settings.js) ---- */
+.settings-banner {
+    position: relative;
+    height: 160px;
+    overflow: hidden;
+    border-radius: 0 0 28px 28px; /* curved bottom corners; overflow clips the gradient and arcs */
+    background: linear-gradient(160deg, #F6F6FA 0%, #E8E8F3 100%);
+}
+.settings-banner-arcs {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+.settings-banner-arcs circle { stroke: #FFFFFF; stroke-opacity: 0.9; stroke-width: 1; }
+.settings-back-btn {
+    position: absolute;
+    top: calc(env(safe-area-inset-top, 0px) + 24px);
+    left: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    background: transparent;
+    color: var(--bb-text-primary);
+    -webkit-tap-highlight-color: transparent;
+}
+.settings-back-btn:active { opacity: 0.6; }
+.settings-title {
+    position: absolute;
+    left: 28px;
+    bottom: 26px;
+    margin: 0;
+    font-size: 34px;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--bb-text-primary);
+}
+/* Compact banner (Settings only): smaller title sits on one line beside the back arrow. */
+.settings-banner--compact { height: calc(env(safe-area-inset-top, 0px) + 84px); }
+.settings-banner--compact .settings-title {
+    left: 62px;
+    bottom: auto;
+    top: calc(env(safe-area-inset-top, 0px) + 24px);
+    display: flex;
+    align-items: center;
+    height: 36px;
+    font-size: 20px;
+    line-height: 1;
+    letter-spacing: -0.01em;
+}
+.settings-main { display: flex; flex-direction: column; }
+.settings-section { flex: 1 1 auto; padding: 0 28px 24px; }
+.settings-version {
+    padding: 0 28px calc(env(safe-area-inset-bottom, 0px) + 28px);
+    text-align: center;
+    font-size: 13px;
+    line-height: 1.2;
+    color: var(--bb-text-quaternary);
+}
+.settings-search {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    height: 46px;
+    margin: 18px 0 8px; /* 18px gap below the banner; same side margins as the rows below */
+    padding: 0 16px;
+    border-radius: 9999px; /* fully rounded ends */
+    background: var(--bb-bg-muted);
+    color: var(--bb-text-quaternary);
+    width: 100%;
+    border: 0;
+    font: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+.settings-search-icon { width: 22px; height: 22px; flex: 0 0 auto; }
+.settings-search-placeholder { font-size: 16px; line-height: 1.25; color: var(--bb-text-quaternary); }
+.settings-row[hidden] { display: none; }
+.settings-row {
+    display: flex;
+    align-items: center;
+    gap: 17px;
+    width: 100%;
+    min-height: 71px;
+    padding: 12px 0;
+    border: 0;
+    border-bottom: 1px solid var(--bb-border-default);
+    background: transparent;
+    text-align: left;
+    color: var(--bb-text-primary);
+    -webkit-tap-highlight-color: transparent;
+}
+.settings-row:active { background: var(--bb-bg-subtle); }
+.settings-row-icon { width: 24px; height: 24px; flex: 0 0 auto; }
+.settings-row-label { flex: 1 1 auto; font-size: 17px; line-height: 1.2; }
+.settings-row-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.settings-row-text .settings-row-label { flex: 0 0 auto; }
+.settings-row-desc { font-size: 13px; line-height: 1.3; color: var(--bb-text-quaternary); }
+.settings-theme-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 16px 16px;
+    border: 0;
+    border-radius: 14px;
+    background: transparent;
+    font-size: 17px;
+    color: var(--bb-text-primary);
+    -webkit-tap-highlight-color: transparent;
+}
+.settings-theme-option:active { background: var(--bb-bg-subtle); }
+.settings-theme-check { width: 22px; height: 22px; opacity: 0; }
+.settings-theme-option[aria-checked="true"] .settings-theme-check { opacity: 1; }
+html.dark .settings-banner { background: linear-gradient(160deg, var(--bb-bg-subtle) 0%, var(--bb-bg-muted) 100%); }
+html.dark .settings-banner-arcs circle { stroke: rgba(255, 255, 255, 0.12); stroke-opacity: 1; }
+
+/* ---- Payment methods screen (templates/partials/payment_methods.html) ---- */
+.payment-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(100vh - 84px - env(safe-area-inset-top, 0px)); /* viewport minus the compact banner */
+    padding: 0 24px 80px;
+    text-align: center;
+}
+.payment-empty-icon { width: 28px; height: 28px; margin-bottom: 20px; color: var(--bb-text-primary); }
+.payment-empty-title { margin: 0 0 10px; font-size: 20px; font-weight: 600; line-height: 1.2; color: var(--bb-text-primary); }
+.payment-empty-text { margin: 0 0 28px; max-width: 300px; font-size: 16px; line-height: 1.5; color: var(--bb-text-quaternary); }
+.payment-add-btn {
+    width: 100%;
+    height: 52px;
+    border: 0;
+    border-radius: 9999px;
+    background: #000000;
+    color: #FFFFFF;
+    font-size: 16px;
+    font-weight: 500;
+    -webkit-tap-highlight-color: transparent;
+}
+.payment-add-btn:active { opacity: 0.8; }
+html.dark .payment-add-btn { background: #f9fafb; color: #111827; }
+
+/* ---- Add card screen (templates/partials/payment_card_add.html) ---- */
+.card-add-header {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: calc(env(safe-area-inset-top, 0px) + 64px);
+    padding-top: env(safe-area-inset-top, 0px);
+    border-bottom: 1px solid var(--bb-border-default);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+.card-add-back {
+    position: absolute;
+    left: 22px;
+    top: calc(env(safe-area-inset-top, 0px) + 14px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    background: transparent;
+    color: var(--bb-text-primary);
+    -webkit-tap-highlight-color: transparent;
+}
+.card-add-back:active { opacity: 0.6; }
+.card-add-title { margin: 0; font-size: 16px; font-weight: 600; color: var(--bb-text-primary); }
+.card-add-form { flex: 1 1 auto; padding: 22px 22px 0; }
+.card-field {
+    position: relative;
+    display: block;
+    height: 62px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--bb-border-default);
+}
+.card-field:focus-within { border-bottom-color: var(--bb-text-primary); }
+.card-field-row { display: flex; gap: 22px; }
+.card-field-row .card-field { flex: 1 1 0; min-width: 0; }
+.card-field input.card-input[type="text"],
+.card-field input.card-input[type="text"]:focus,
+.card-field input.card-input[type="text"]:focus-visible {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 8px;
+    width: 100%;
+    height: 28px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    outline: none;
+    box-shadow: none;
+    background: transparent;
+    appearance: none;
+    -webkit-appearance: none;
+    font: inherit;
+    font-size: 16px; /* 16px stops iOS zoom-on-focus */
+    font-weight: 600;
+    color: var(--bb-text-primary);
+}
+.card-field-label {
+    position: absolute;
+    left: 0;
+    bottom: 12px;
+    font-size: 16px;
+    line-height: 1.2;
+    color: var(--bb-text-quaternary);
+    pointer-events: none;
+    transition: transform 0.15s ease, font-size 0.15s ease;
+    transform-origin: left bottom;
+}
+.card-field input.card-input:focus + .card-field-label,
+.card-field input.card-input:not(:placeholder-shown) + .card-field-label {
+    bottom: 38px;
+    font-size: 11px;
+}
+.card-add-footer {
+    position: sticky;
+    bottom: 0;
+    padding: 16px 22px calc(env(safe-area-inset-bottom, 0px) + 20px);
+    border-top: 1px solid var(--bb-border-default);
+    background: var(--bb-bg-surface);
+}
+.card-add-submit {
+    width: 100%;
+    height: 52px;
+    border: 0;
+    border-radius: 9999px;
+    background: #000000;
+    color: #FFFFFF;
+    font-size: 16px;
+    font-weight: 500;
+    -webkit-tap-highlight-color: transparent;
+}
+.card-add-submit:active:not(:disabled) { opacity: 0.8; }
+.card-add-submit:disabled { background: #d9d9d9; color: #FFFFFF; }
+html.dark .card-add-submit { background: #f9fafb; color: #111827; }
+html.dark .card-add-submit:disabled { background: #27272a; color: #71717a; }
+
+/* ---- Settings search screen (templates/partials/settings_search.html) ---- */
+.ssearch-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    height: calc(env(safe-area-inset-top, 0px) + 64px);
+    padding: env(safe-area-inset-top, 0px) 16px 0 18px;
+    border-bottom: 1px solid var(--bb-border-default);
+}
+.ssearch-back, .ssearch-clear {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    background: transparent;
+    color: var(--bb-text-primary);
+    -webkit-tap-highlight-color: transparent;
+}
+.ssearch-clear { color: var(--bb-text-quaternary); }
+.ssearch-clear[hidden] { display: none; }
+.ssearch-back:active, .ssearch-clear:active { opacity: 0.6; }
+/* Tailwind's forms plugin gives text inputs a border/ring; these selectors are one step more specific. */
+.ssearch-header input.ssearch-input[type="text"],
+.ssearch-header input.ssearch-input[type="text"]:focus,
+.ssearch-header input.ssearch-input[type="text"]:focus-visible {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 44px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    outline: none;
+    box-shadow: none;
+    background: transparent;
+    appearance: none;
+    -webkit-appearance: none;
+    font: inherit;
+    font-size: 18px; /* >=16px stops iOS zoom-on-focus */
+    color: var(--bb-text-primary);
+}
+.ssearch-header input.ssearch-input::placeholder { color: var(--bb-text-quaternary); }
+.ssearch-hint { margin: 0; padding: 22px 22px; font-size: 16px; line-height: 1.4; color: var(--bb-text-quaternary); }
+.ssearch-hint[hidden] { display: none; }
+.ssearch-result {
+    display: block;
+    width: 100%;
+    padding: 16px 22px;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    font-size: 17px;
+    line-height: 1.3;
+    color: var(--bb-text-primary);
+    -webkit-tap-highlight-color: transparent;
+}
+.ssearch-result:active { background: var(--bb-bg-subtle); }
+
+/* ---- Appearance and display screen (templates/partials/appearance_display.html) ---- */
+.adisp-list { padding: 12px 22px 32px; }
+.adisp-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    width: 100%;
+    padding: 18px 0;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    -webkit-tap-highlight-color: transparent;
+}
+.adisp-row:active { opacity: 0.6; }
+.adisp-icon { flex: 0 0 auto; width: 26px; height: 26px; margin: 10px 0 0 3px; color: var(--bb-text-quaternary); }
+.adisp-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.adisp-title { font-size: 17px; font-weight: 500; line-height: 1.25; color: var(--bb-text-primary); }
+.adisp-desc { font-size: 15px; line-height: 1.35; color: var(--bb-text-quaternary); }
+
+/* ---- Create Business wizard (templates/partials/business_create.html, static/js/business-create.js) ----
+   .view-section.active forces display:block, so restore a bounded flex column
+   (same fix as #create-post-view): the header and Back/Next footer stay put and
+   #bc-scroll scrolls. dvh keeps the footer above the on-screen keyboard. */
+#business-create-view.active {
+    display: flex !important;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+}
+#bc-scroll {
+    min-height: 0;
+}
+/* Stepper: 32px circles joined by 2px lines. data-state is set by bcGoToStep(). */
+.bc-step-dot {
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+    background: var(--bb-bg-surface);
+    border: 1.5px solid var(--bb-border-strong);
+    color: #9ca3af;
+    transition: background-color 250ms ease, border-color 250ms ease, color 250ms ease;
+}
+.bc-step-dot[data-state="active"],
+.bc-step-dot[data-state="done"] {
+    background: #da292e;
+    border-color: #da292e;
+    color: #fff;
+}
+.bc-step-dot .bc-check { display: none; }
+.bc-step-dot[data-state="done"] .bc-num { display: none; }
+.bc-step-dot[data-state="done"] .bc-check { display: block; }
+.bc-step-line {
+    flex: 1 1 auto;
+    height: 2px;
+    background: var(--bb-border-default, #e5e7eb);
+    transition: background-color 250ms ease;
+}
+.bc-step-line.is-filled { background: #da292e; }
+/* Field cards: red ring while editing, solid red border when validation failed. */
+.bc-card {
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.bc-card:focus-within {
+    border-color: rgba(218, 41, 46, 0.5);
+    box-shadow: 0 0 0 3px rgba(218, 41, 46, 0.10);
+}
+.bc-card[data-invalid="true"] {
+    border-color: #da292e;
+}
+@keyframes bcStepIn {
+    from { opacity: 0; transform: translateX(12px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+.bc-step-section.bc-step-enter {
+    animation: bcStepIn 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+/* Field bottom sheet: same slide/fade mechanics as .share-sheet above, minus
+   touch-action:none (this sheet scrolls and holds inputs) and capped in
+   height so long forms (opening hours) scroll inside it. */
+.bc-sheet-backdrop {
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 260ms ease, visibility 0s linear 260ms;
+}
+.bc-sheet-backdrop.is-open {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 260ms ease, visibility 0s;
+}
+.bc-sheet {
+    display: flex;
+    flex-direction: column;
+    max-height: 85vh;
+    max-height: 85dvh;
+    transform: translateY(100%);
+    visibility: hidden;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    transition: transform 300ms cubic-bezier(0.32, 0.72, 0, 1), visibility 0s linear 300ms;
+}
+.bc-sheet.is-open {
+    transform: translateY(0);
+    visibility: visible;
+    transition: transform 300ms cubic-bezier(0.32, 0.72, 0, 1), visibility 0s;
+}
+@media (prefers-reduced-motion: reduce) {
+    .bc-step-dot,
+    .bc-step-line,
+    .bc-card,
+    .bc-sheet,
+    .bc-sheet.is-open,
+    .bc-sheet-backdrop,
+    .bc-sheet-backdrop.is-open {
+        transition-duration: 1ms;
+    }
+    .bc-step-section.bc-step-enter {
+        animation: none;
+    }
 }

@@ -1,0 +1,26 @@
+<!-- BEGIN: Settings Search View -->
+<!-- Opened by tapping the search bar on the Settings screen (openSettingsSearch in
+     static/js/settings.js). Empty query shows a hint; typing lists matching settings; tapping a
+     result opens that setting. The back arrow returns to Settings. -->
+<div id="settings-search-view" class="view-section bg-white min-h-screen flex justify-center">
+<main class="w-full max-w-[430px] bg-white min-h-screen relative">
+
+	<!-- BEGIN: Search header -->
+	<header class="ssearch-header">
+		<button type="button" id="settings-search-back-btn" class="ssearch-back" aria-label="Back" onclick="closeSettingsSearch()">
+			<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg>
+		</button>
+		<input id="settings-search-input" class="ssearch-input" type="text" placeholder="Search settings" aria-label="Search settings" enterkeyhint="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+		<button type="button" id="settings-search-clear-btn" class="ssearch-clear" aria-label="Clear search" hidden>
+			<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+		</button>
+	</header>
+	<!-- END: Search header -->
+
+	<p id="settings-search-hint" class="ssearch-hint">Try searching for password reset, notifications etc.</p>
+	<div id="settings-search-results" class="ssearch-results" role="listbox" aria-label="Matching settings"></div>
+	<p id="settings-search-empty" class="ssearch-hint" role="status" hidden>No settings found.</p>
+
+</main>
+</div>
+<!-- END: Settings Search View -->

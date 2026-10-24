@@ -33,9 +33,10 @@ const postCardContainerIds = ['feed-posts-container', 'profile-posts-container',
 // buildPostCardHtml in feed.js); expanding swaps in the full text from
 // the post card's data-post-content, and collapsing swaps back to the
 // preview stashed on the button's data-preview-text (so it doesn't need
-// to be recomputed client-side). Assigning to .textContent (not
-// .innerHTML) is what keeps this safe - the browser escapes it, so no
-// re-escaping of the already-unescaped dataset values is needed.
+// to be recomputed client-side). Both texts go through formatPostText()
+// (feed.js), which escapes before adding the *bold* / _italic_ tags, so
+// assigning its result to .innerHTML stays safe and expanding/collapsing
+// keeps the same formatting as the first render.
 postCardContainerIds.forEach(function(containerId) {
 	const container = document.getElementById(containerId);
 	if (!container) return;
@@ -48,11 +49,11 @@ postCardContainerIds.forEach(function(containerId) {
 
 		const isExpanded = readMoreBtn.dataset.expanded === 'true';
 		if (isExpanded) {
-			textEl.textContent = readMoreBtn.dataset.previewText;
+			textEl.innerHTML = formatPostText(readMoreBtn.dataset.previewText);
 			readMoreBtn.textContent = 'See more\u2026';
 			readMoreBtn.dataset.expanded = 'false';
 		} else {
-			textEl.textContent = postCard.dataset.postContent;
+			textEl.innerHTML = formatPostText(postCard.dataset.postContent);
 			// "See less" only labels the collapse for posts over 100
 			// words (see showSeeLess in buildPostCardHtml) - shorter
 			// long posts still collapse on tap, just via an unlabeled button.
@@ -419,7 +420,7 @@ function openCommentOverlay(postData) {
 		overlayImages.classList.add('hidden');
 	}
 
-	document.getElementById('overlay-post-content').textContent = postData.content;
+	document.getElementById('overlay-post-content').innerHTML = formatPostText(postData.content);
 
 	// Quoted post (if any) sits under the text, same card as the feed.
 	overlayQuotedPost = postData.quoted_post || null;

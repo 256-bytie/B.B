@@ -1,0 +1,2136 @@
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f8f9fa;
+            /* Defense-in-depth alongside the touchmove preventDefault() in
+               side-nav.js: stops Chrome/Edge's own overscroll-triggered
+               back/forward navigation from competing with the drawer's
+               left-edge swipe. Doesn't affect any in-page horizontal
+               scrolling (e.g. the category tabs, businesses list) - this
+               only governs the document's own scroll-boundary behavior. */
+            overscroll-behavior-x: none;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .post-content-clamped {
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .post-content-clamped.expanded {
+            display: block;
+            -webkit-line-clamp: unset;
+            overflow: visible;
+        }
+
+        /* ---- Threads-inspired feed/thread visual system ----
+           Adapted from adrianhajdin/threads' component-layer pattern
+           (semantic classes for card layout + a dedicated avatar-rail
+           "connector bar" for reply threads) to Beebo's existing
+           light/red palette - not a dark-mode reskin, just the same
+           structural discipline: a left avatar rail, a growing
+           connector line, and a named, reusable spacing/type scale
+           instead of ad hoc utility soup repeated in every template. */
+
+        /* Feed row: same visual result as before (flat, bordered,
+           no per-card shadow) but named so spacing changes happen in
+           one place instead of a JS template literal. */
+        .feed-card {
+            background-color: #fff;
+            padding: 14px 16px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .feed-card:last-child {
+            border-bottom: none;
+        }
+        /* Subtle press feedback on tap, same idea as Threads' card
+           hover/active state, toned down for a touch interface where
+           hover doesn't apply. */
+        .feed-card:active {
+            background-color: #fafafa;
+        }
+
+        /* Avatar rail: fixed-width left column so name/content/actions
+           align in a single right-hand column regardless of how many
+           lines the author name wraps to - this is the main structural
+           difference from the previous "avatar + stacked name/time"
+           header row. */
+        .feed-card-avatar-rail {
+            width: 44px;
+        }
+
+        /* ---- Nested comment tree: straight spine connectors ----
+           True depth-based nesting (each reply-to-a-reply indents further
+           right under its actual parent) instead of a flattened single
+           indent level. One straight vertical line per nesting level, no
+           curve/elbow - same model as the nested-comments-yt reference
+           (a border-left running the full height of each level's box). */
+
+        /* One top-level comment (with its full nested reply chain). Only
+           root threads (direct children of #overlay-comments-container)
+           get the divider below - nested replies are separated by
+           indentation/connector instead, not a divider line. */
+        .comment-thread {
+            position: relative;
+        }
+        #overlay-comments-container > .comment-thread {
+            padding-bottom: 18px;
+            margin-bottom: 18px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        #overlay-comments-container > .comment-thread:last-child {
+            padding-bottom: 0;
+            margin-bottom: 0;
+            border-bottom: none;
+        }
+        /* Spacing between sibling replies nested under the same parent. */
+        .comment-children > .comment-thread + .comment-thread {
+            margin-top: 16px;
+        }
+
+        .comment-row {
+            display: flex;
+            gap: 12px;
+        }
+        .thread-avatar-col {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 34px;
+            flex-shrink: 0;
+        }
+        .comment-avatar {
+            width: 34px;
+            height: 34px;
+        }
+        /* The spine: fills the rest of the avatar column's height (the
+           column is stretched to match the row's full height via flex
+           default align-items:stretch), so it always reaches exactly to
+           this row's bottom regardless of how tall the comment text runs -
+           picked up again by .comment-children's own border-left below. */
+        .thread-connector {
+            width: 2px;
+            border-radius: 9999px;
+            background-color: #e5e7eb;
+            flex: 1 1 auto;
+            min-height: 8px;
+            margin-top: 6px;
+        }
+
+        /* Nested replies, indented one level right of the parent avatar's
+           center. Straight border-left only - no elbow, no curve. Matches
+           the reference repo's model: one continuous vertical rule per
+           nesting level, running the full height of that level's box.
+           margin-left is set to 16px (not 20px) so the border lands at
+           x:16-18, the same band .thread-connector already occupies above
+           it (avatar column is 34px wide, so its centered 2px connector
+           sits at (34-2)/2 = 16-18) - the two pieces line up into one
+           unbroken straight line instead of two parallel rules a few
+           pixels apart. */
+        .comment-children {
+            position: relative;
+            margin-left: 16px;
+            padding-left: 24px;
+            /* padding-top, not margin-top: the border-left spine below
+               needs to run through this gap too, or the line would break
+               between the parent's .thread-connector (which only spans
+               the parent's own comment-row) and where this box's border
+               starts. Padding keeps the border continuous while still
+               pushing the first reply's content down for clearer
+               separation from its parent. */
+            padding-top: 14px;
+            border-left: 2px solid #e5e7eb;
+        }
+
+        /* Action row (like/reply) beneath a comment's text. Uses the same
+           justify-between distribution and icon/label gap (6px, matching
+           space-x-1.5) as the feed's post-actions-row so per-comment
+           actions read consistently with the post-level action bar. */
+        .comment-actions {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            color: #6b7280;
+        }
+        .comment-action-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        /* Groups the like/dislike buttons together on the right side of
+           .comment-actions, opposite the plain-text Reply button on the
+           left (see renderCommentNode in comments.js). */
+        .comment-actions-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        /* Reply-thread collapse/expand toggle. Only rendered on a comment
+           that has children (see buildRepliesToggleHtml in comments.js).
+           Sits below .comment-actions as its own row with a short leading
+           dash, matching the "— View N replies" reference layout, rather
+           than living inline with reply/like/dislike. Collapsing hides
+           that comment's entire .comment-children subtree in one step,
+           since nested replies live as real DOM descendants of it - no
+           need to separately toggle grandchildren. */
+        .comment-children.collapsed {
+            display: none;
+        }
+        .replies-toggle-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .replies-toggle-line {
+            width: 16px;
+            height: 0;
+            border-top: 1px solid #d1d5db;
+        }
+        .replies-toggle-chevron {
+            transition: transform 150ms ease;
+        }
+        .comment-replies-toggle.is-collapsed .replies-toggle-chevron {
+            transform: rotate(-90deg);
+        }
+
+        /* Comments section header: a plain sub-header row (count + sort
+           chevron) rather than a heavy filled pill, so it reads as a
+           section divider between the original post and the reply list -
+           closer to the reference's minimal "Comments ⌄" row. */
+        .comments-header-trigger {
+            background-color: transparent;
+            border-bottom: 1px solid #f3f4f6;
+            border-radius: 0;
+            padding-left: 0;
+            padding-right: 0;
+        }
+        .comments-header-trigger:active {
+            background-color: #fafafa;
+        }
+
+        /* Feed header (avatar/logo/notifications bar + category tabs).
+           Two different mechanisms apply to this element, both driven from
+           initFeedHeaderAutoHide in feed.js:
+
+           1) Normal scrolling: feed.js sets max-height/opacity as INLINE
+              styles every frame, in exact proportion to scroll distance,
+              with transition:none - so the header tracks the scroll 1:1
+              (a "push", not an eased animation) as the feed content
+              progressively covers it. Those inline styles win over the
+              rules below for the duration of that drag.
+           2) Landing back at the very top of the feed: feed.js clears the
+              inline overrides instead, and THIS class's transition is what
+              animates the reveal - the one place this still eases rather
+              than tracking the scroll directly (see FEED_HEADER_TOP_REVEAL_PX
+              in feed.js).
+
+           Avatar, logo, notifications icon and the tabs are all just child
+           content of this one element, so animating .feed-header-bar as a
+           unit is what keeps them moving together - no per-child
+           transitions needed. #feed-view is a flex column with
+           #feed-posts-container as its flex-1 scrolling child (see
+           #feed-view.active above), so it's max-height (not a transform)
+           that actually reflows the column and lets the posts container
+           grow to fill the space as the header is covered - a transform
+           on the header would just move its pixels without freeing that
+           space. --feed-header-full-height is set from feed.js (measured
+           off the real header, since its height depends on the
+           avatar/logo/icon sizing above and isn't a fixed constant).
+
+           max-height and opacity are kept on the SAME duration/curve here
+           (both were previously mismatched at 240ms/180ms) - opacity
+           finishing before max-height made the header visibly "pop" out
+           of existence mid-collapse instead of settling smoothly. The
+           easing is a gentle ease-out (quick start, long soft tail)
+           rather than the old standard Material curve, which reads as
+           slightly snappier/more mechanical at this duration. This
+           transition only ever plays for the top-of-feed reveal above -
+           during normal scrolling it's overridden by feed.js's inline
+           transition:none so the motion stays tied to the scroll itself. */
+        .feed-header-bar {
+            max-height: var(--feed-header-full-height, 220px);
+            overflow: hidden;
+            opacity: 1;
+            transition: max-height 600ms cubic-bezier(0.16, 1, 0.3, 1),
+                        opacity 600ms cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        /* Fully-covered resting state. feed.js also sets this via inline
+           styles during the drag itself; this class exists so pointer-
+           events:none reliably applies once fully covered (inline styles
+           above only ever set max-height/opacity/transition, not
+           pointer-events) and so the top-of-feed reveal above has a
+           well-defined "from" state to transition out of. */
+        .feed-header-bar.header-hidden {
+            max-height: 0;
+            opacity: 0;
+            pointer-events: none;
+            transition: max-height 600ms cubic-bezier(0.16, 1, 0.3, 1),
+                        opacity 600ms cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .feed-header-bar {
+                transition: none !important;
+            }
+        }
+
+        /* Feed skeleton loader (initial load only - pagination's
+           "Loading more..." row is unchanged). Shimmer instead of a
+           bare spinner so the feed's shape is visible immediately. */
+        .skeleton-shimmer {
+            background: linear-gradient(90deg, #f0f0f0 25%, #f7f7f7 37%, #f0f0f0 63%);
+            background-size: 400% 100%;
+            animation: skeletonShimmer 1.4s ease infinite;
+        }
+        @keyframes skeletonShimmer {
+            0% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        .card-shadow {
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.024);
+        }
+        /* Distinct from .card-shadow above (different blur/spread) - used by Courses view cards */
+        .course-card-shadow {
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+        }
+        .view-section {
+            display: none !important;
+        }
+        .view-section.active {
+            display: block !important;
+        }
+        /* feed-view is the one view whose <main> (#feed-posts-container) is
+           meant to be its own internal scroll container (flex-1
+           overflow-y-auto), with the header/tabs bar staying fixed above
+           it - unlike every other view here, which is min-h-screen and
+           relies on the document itself scrolling. That only works if
+           feed-view is an actual bounded-height flex column; as plain
+           `display:block` (from .view-section.active above) it has no
+           height constraint, so #feed-posts-container never overflows,
+           the document scrolls instead, and #feed-posts-container's
+           scroll listener (tab auto-hide, infinite scroll) never fires.
+           ID selector here outranks the class-only rule above so this
+           wins while active. */
+        #feed-view.active {
+            display: flex !important;
+            flex-direction: column;
+            height: 100%;
+        }
+        /* Flex items default to min-height:auto, which keeps them from
+           shrinking below their content's natural height - #feed-posts-
+           container would then just grow to fit every post instead of
+           respecting flex-1 and scrolling internally. min-height:0
+           overrides that so it actually clips to the space #feed-view
+           gives it above and overflow-y-auto takes over. */
+        #feed-posts-container {
+            min-height: 0;
+        }
+        /* Create-post view: same root cause as #feed-view above. The
+           .view-section.active rule forces display:block !important, which
+           silently disables the `flex flex-col` utility classes on
+           #create-post-view - so #compose-scroll-area's flex-1 never
+           stretched and #compose-footer sat directly under the textarea
+           instead of at the bottom of the screen. Restore a bounded flex
+           column. dvh (with vh fallback) so the bottom bar sits above the
+           browser's own bottom toolbar rather than behind it; min-height:0
+           overrides the min-h-screen utility so the height is actually
+           bounded and the scroll area, not the document, does the scrolling. */
+        #create-post-view.active {
+            display: flex !important;
+            flex-direction: column;
+            height: 100vh;
+            height: 100dvh;
+            min-height: 0;
+        }
+        /* Chat conversation: same root cause/fix as #create-post-view above
+           (.view-section.active forces display:block). Bounded flex column so
+           the header and composer stay put and #chat-conv-scroll scrolls; dvh
+           so the composer rides above the on-screen keyboard. */
+        #chat-conversation-view.active {
+            display: flex !important;
+            flex-direction: column;
+            height: 100vh;
+            height: 100dvh;
+            min-height: 0;
+        }
+        #chat-conv-scroll {
+            min-height: 0;
+        }
+        .input-icon-container {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #9CA3AF;
+        }
+        .auth-bg {
+            background: linear-gradient(180deg, #F9FAFB 0%, #FFFFFF 100%);
+        }
+        .eye-icon {
+            transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+        }
+        .eye-icon.hidden {
+            opacity: 0;
+            transform: scale(0.9);
+        }
+        /* Compose FAB styles.
+           Visibility is now driven directly by feed.js's header-hidden
+           logic (see initFeedHeaderAutoHide) rather than an independent
+           scroll listener, so it can never drift out of sync with the
+           header. The timing/curve below is intentionally identical to
+           .feed-header-bar's (220ms reveal / 280ms hide, same ease-out),
+           so the two read as one synchronized motion instead of two
+           separately-animated elements that happen to move at similar
+           times. */
+        .z-9 {
+            z-index: 9;
+        }
+        #compose-fab {
+            transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+                        opacity 220ms cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        #compose-fab.fab-hidden {
+            transform: translateY(100px);
+            opacity: 0;
+            pointer-events: none;
+            transition: transform 280ms cubic-bezier(0.16, 1, 0.3, 1),
+                        opacity 280ms cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* Businesses edge-merged expandable pill FABs ("My Stores" and
+           "Create", both .business-fab). Retracted, a pill is shifted right by
+           its own width + the 20px right inset, minus a 38px peek, so only the
+           icon (and the pill's rounded left cap) stays on screen as the tap
+           target. Expanding clears the class, sliding it back to its normal
+           bottom-right spot. Same ease-out curve as #compose-fab;
+           background-color is kept in the transition so the hover colour (from
+           Tailwind's transition-colors, which this rule overrides) still
+           fades. The tap logic (first tap expands, second acts) is
+           onBusinessFabClick() / onBusinessFabCollapse() in core.js. */
+        .business-fab {
+            transition: transform 320ms cubic-bezier(0.16, 1, 0.3, 1),
+                        background-color 150ms ease;
+        }
+        .business-fab.is-retracted {
+            transform: translateX(calc(100% + 20px - 38px));
+        }
+        /* The collapse (X) button is hidden while retracted so it can't be
+           focused or read offscreen; the delay lets it stay visible until the
+           pill has finished sliding out. */
+        .business-fab-cancel {
+            visibility: visible;
+            background: transparent;
+            -webkit-tap-highlight-color: transparent;
+            transition: opacity 150ms ease;
+        }
+        .business-fab-cancel:active {
+            opacity: 0.6;
+        }
+        .business-fab.is-retracted .business-fab-cancel {
+            visibility: hidden;
+            transition: visibility 0s linear 320ms;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .business-fab {
+                transition: none !important;
+            }
+        }
+
+        /* ---- Bottom navigation (Home / Search / Notifications / Chat) ----
+           64px total: 1px top border + a 59px tap row + 4px bottom pad (sits the
+           32px icons slightly above true center, as in the design), plus the device
+           safe-area inset. Shown/hidden and marked active by
+           updateBottomNav() in core.js. --bottom-nav-h is what the compose
+           FAB (feed.html) and chat padding key off, so change it here only. */
+        :root {
+            --bottom-nav-h: 64px;
+        }
+        .bottom-nav {
+            padding-bottom: calc(4px + env(safe-area-inset-bottom, 0px));
+            /* Retract/reveal timing mirrors #compose-fab (220ms reveal /
+               280ms hide, same ease-out) so the two move as one. */
+            transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        /* Toggled by feed.js alongside #compose-fab.fab-hidden: slides the
+           whole bar (incl. safe-area padding) fully off-screen. Cleared by
+           updateBottomNav() in core.js on every view switch. */
+        .bottom-nav.bottom-nav-retracted {
+            transform: translateY(100%);
+            pointer-events: none;
+            transition: transform 280ms cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .bottom-nav-item {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: calc(var(--bottom-nav-h) - 5px); /* minus 1px top border + 4px bottom pad */
+            -webkit-tap-highlight-color: transparent;
+        }
+        .bottom-nav-item:focus { outline: none; }
+        .bottom-nav-item:focus-visible {
+            outline: 2px solid #DA292E;
+            outline-offset: -6px;
+            border-radius: 16px;
+        }
+        .bottom-nav-icon {
+            width: 32px;
+            height: 32px;
+            transition: transform 100ms ease-out, color 160ms ease;
+        }
+        .bottom-nav-item:active .bottom-nav-icon {
+            transform: scale(0.92);
+        }
+        /* Active state: Home fills in behind its outline; Search/Chat get a
+           slightly heavier stroke (their glyphs have inner detail a fill
+           would swallow). Color itself is the text-gray-500 -> 900 swap. */
+        .bn-active-fill {
+            opacity: 0;
+            transition: opacity 160ms ease;
+        }
+        .bottom-nav-item.is-active .bn-active-fill { opacity: 1; }
+        .bottom-nav-item.is-active .bn-active-stroke {
+            stroke: currentColor;
+            stroke-width: 8px;
+            stroke-linejoin: round;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .bottom-nav-icon, .bn-active-fill { transition: none; }
+            .bottom-nav-item:active .bottom-nav-icon { transform: none; }
+        }
+        /* Profile tab: user's own avatar photo instead of a currentColor
+           glyph. Ring proportions match the supplied reference asset - a
+           white gap between the photo and a dark outer ring, at the same
+           32px footprint as the other bottom-nav icons. Inactive ring is
+           lighter (mirrors the glyphs' gray-500 -> gray-900 active swap);
+           .is-active thickens and darkens it rather than recoloring a
+           fill, since the ring, not the photo, carries the state. */
+        .bottom-nav-avatar-ring {
+            width: 30px;
+            height: 30px;
+            border-radius: 9999px;
+            box-sizing: border-box;
+            background: #fff;
+            border: 1.5px solid #9CA3AF;
+            padding: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: border-color 160ms ease, border-width 160ms ease, transform 100ms ease-out;
+        }
+        .bottom-nav-avatar-img {
+            width: 100%;
+            height: 100%;
+            border-radius: 9999px;
+            object-fit: cover;
+            display: block;
+            background: #E5E7EB;
+        }
+        .bottom-nav-item:active .bottom-nav-avatar-ring {
+            transform: scale(0.92);
+        }
+        .bottom-nav-item.is-active .bottom-nav-avatar-ring {
+            border-color: #111827;
+            border-width: 2px;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .bottom-nav-avatar-ring { transition: none; }
+            .bottom-nav-item:active .bottom-nav-avatar-ring { transform: none; }
+        }
+        /* Chat scrolls the document (not an inner container), so reserve
+           room for the fixed nav below its last row. */
+        /* Plus the Chats FAB (#chat-fab: 56px tall, 32px above the nav) and 16px of
+           air, so the last row can always scroll clear of it. */
+        #chat-view.active {
+            padding-bottom: calc(var(--bottom-nav-h) + 104px + env(safe-area-inset-bottom, 0px));
+        }
+        /* Search scrolls its own inner container (#search-body), not the
+           document, so - now that the bottom nav stays visible on Search
+           too - that inner container needs the clearance instead of the
+           view element. ID selector so it wins over the pb-10 utility
+           already on the element in search.html. */
+        #search-body {
+            padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px));
+        }
+        /* Comment overlay styles */
+        #comment-overlay {
+            transition: opacity 250ms ease-in-out, visibility 250ms ease-in-out;
+        }
+        #comment-overlay.hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+        #comment-overlay .overlay-content {
+            transition: transform 250ms ease-in-out;
+            /* Explicit dynamic-viewport-height sizing instead of relying on
+               h-full (100% of #comment-overlay, itself `fixed inset-0`).
+               Paired with interactive-widget=resizes-content in the meta
+               tag (see <head>): that meta hint makes Chromium-based mobile
+               browsers actually resize the layout viewport around the
+               on-screen keyboard, so 100dvh below shrinks correctly and the
+               shrink-0 reply bar at the bottom of this flex column stays
+               above the keyboard instead of underneath it. The plain vh
+               fallback keeps behavior unchanged in browsers without dvh
+               support. */
+            height: 100vh;
+            height: 100dvh;
+        }
+        #comment-overlay.hidden .overlay-content {
+            transform: translateY(100%);
+        }
+        body.overlay-open {
+            overflow: hidden;
+        }
+        /* Single scroll region for the comment overlay: post + comments
+           header + reply list all live inside this one element now, so the
+           whole view scrolls together (post included) instead of the post
+           being pinned outside a separately-scrolling replies box. */
+        .overlay-replies-section {
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            /* The reply bar floats over the bottom of this region (see .reply-composer-bar);
+               --reply-bar-h is kept equal to its height by comments.js so the last comment
+               can still scroll clear of it. */
+            padding-bottom: var(--reply-bar-h, 76px);
+        }
+        #comment-overlay .overlay-content { position: relative; }
+
+        /* ---- Reply composer (comment overlay) ----
+           Compact rounded pill. Idle = one row (avatar / input / media
+           icons). Active (focus or draft) = tools wrap onto a second row
+           with counter / expand / send on the right. Beebo tokens only:
+           brand red for focus + send, neutral grays elsewhere. */
+        /* Floating bar: no background, border or blur of its own, so the thread shows
+           behind the pill's rounded edges. Taps pass through everything except the
+           pill (and the reply chip / error above it). */
+        .reply-composer-bar {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 5;
+            padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+            pointer-events: none;
+        }
+        .reply-composer-bar > * { pointer-events: auto; }
+        /* Chip and error sit over scrolling content now, so they need their own surface. */
+        .reply-composer-bar #overlay-reply-context {
+            padding-top: 6px;
+            padding-bottom: 6px;
+            border: 1px solid var(--bb-border-default);
+            border-radius: 14px;
+            background: var(--bb-bg-subtle);
+        }
+        .reply-composer-bar #overlay-reply-error {
+            padding-top: 4px;
+            padding-bottom: 4px;
+            border-radius: 10px;
+            background: var(--bb-bg-surface);
+        }
+        .reply-composer {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            column-gap: 8px;
+            padding: 5px 6px 5px 6px;
+            background: #F9FAFB;
+            border: 1px solid #E5E7EB;
+            border-radius: 24px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+            transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease, border-radius 160ms ease;
+        }
+        .reply-composer[data-active="true"] {
+            background: #FFFFFF;
+            border-color: rgba(218, 41, 46, 0.55);
+            box-shadow: 0 0 0 3px rgba(218, 41, 46, 0.09);
+            border-radius: 22px;
+        }
+        .reply-composer-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 9999px;
+            object-fit: cover;
+            background: #E5E7EB;
+            flex-shrink: 0;
+            align-self: center;
+        }
+        .reply-composer-input {
+            flex: 1 1 0;
+            min-width: 0;
+            display: block;
+            resize: none;
+            border: 0;
+            outline: none;
+            background: transparent;
+            font: inherit;
+            font-size: 16px; /* 16px stops iOS zoom-on-focus */
+            line-height: 22px;
+            height: 34px;
+            max-height: 132px; /* ~6 lines, then scrolls */
+            padding: 6px 0;
+            color: #111827;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+        }
+        .reply-composer-input:focus,
+        .reply-composer-input:focus-visible {
+            outline: none;
+            box-shadow: none;
+            border-color: transparent;
+        }
+        .reply-composer-input::placeholder { color: #9CA3AF; }
+        /* Attached-image preview: its own full-width first row inside the
+           pill (order:-1 lifts it above the avatar/input row). */
+        .reply-image-preview {
+            flex: 1 0 100%;
+            order: -1;
+            padding: 4px 4px 6px;
+        }
+        .reply-image-preview.hidden { display: none; }
+        .reply-image-thumb {
+            position: relative;
+            display: inline-block;
+        }
+        .reply-image-thumb img {
+            display: block;
+            width: 72px;
+            height: 72px;
+            object-fit: cover;
+            border-radius: 12px;
+            background: #F3F4F6;
+        }
+        .reply-image-remove {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 22px;
+            height: 22px;
+            border-radius: 9999px;
+            border: 0;
+            color: #FFFFFF;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+        }
+        .reply-image-remove:hover { background: rgba(0, 0, 0, 0.8); }
+        /* Image inside a rendered comment. */
+        .comment-image {
+            display: block;
+            max-width: 100%;
+            max-height: 280px;
+            margin-bottom: 10px;
+            border-radius: 12px;
+            border: 1px solid #E5E7EB;
+            background: #F3F4F6;
+            object-fit: cover;
+            cursor: pointer;
+        }
+        .reply-composer[data-expanded="true"] .reply-composer-input {
+            height: 40vh;
+            height: 40dvh;
+            max-height: 40dvh;
+        }
+
+        .reply-composer-tools {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex: 0 0 auto;
+        }
+        .reply-composer-group {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+        }
+        /* Idle: only the media icons show, inline with the input. */
+        .reply-composer[data-active="false"] .reply-composer-group-end { display: none; }
+        /* Active: tools drop to their own full-width row under the input. */
+        .reply-composer[data-active="true"] .reply-composer-tools {
+            flex: 1 0 100%;
+            padding-top: 2px;
+            animation: reply-tools-in 160ms ease-out;
+        }
+        .reply-composer[data-active="true"] .reply-composer-avatar { align-self: flex-start; margin-top: 1px; }
+        @keyframes reply-tools-in {
+            from { opacity: 0; transform: translateY(-3px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .reply-tool-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 9999px;
+            color: #6B7280;
+            background: transparent;
+            border: 0;
+            outline: none;
+            -webkit-tap-highlight-color: transparent;
+            transition: background-color 120ms ease, color 120ms ease, transform 100ms ease;
+        }
+        .reply-tool-btn:hover { color: #DA292E; }
+        .reply-tool-btn:active { background: #F3F4F6; transform: scale(0.92); }
+        .reply-tool-btn:focus-visible { box-shadow: 0 0 0 2px rgba(218, 41, 46, 0.35); }
+        .reply-tool-btn.hidden { display: none; }
+        .reply-gif-badge {
+            font-size: 9.5px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            line-height: 1;
+            padding: 3px 4px;
+            border: 1.5px solid currentColor;
+            border-radius: 5px;
+        }
+
+        .reply-send-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            margin-left: 2px;
+            border-radius: 9999px;
+            border: 0;
+            outline: none;
+            color: #FFFFFF;
+            background: #DA292E;
+            -webkit-tap-highlight-color: transparent;
+            transition: background-color 140ms ease, opacity 140ms ease, transform 120ms ease;
+        }
+        .reply-send-btn svg { margin-left: 2px; }
+        .reply-send-btn:hover:not(:disabled) { background: #B91C1C; }
+        .reply-send-btn:active:not(:disabled) { transform: scale(0.92); }
+        .reply-send-btn:focus-visible { box-shadow: 0 0 0 2px rgba(218, 41, 46, 0.35); }
+        .reply-send-btn:disabled { opacity: 0.35; pointer-events: none; }
+
+        @media (prefers-reduced-motion: reduce) {
+            .reply-composer, .reply-tool-btn, .reply-send-btn { transition: none; }
+            .reply-composer[data-active="true"] .reply-composer-tools { animation: none; }
+        }
+
+        /* Like button animation styles */
+        .like-btn, .like-btn-comment, #overlay-post-like-btn {
+            position: relative;
+        }
+
+        /* Heart icon wrapper needs overflow visible for burst */
+        .like-icon-wrapper {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            overflow: visible;
+            width: 1.25rem;
+            height: 1.25rem;
+        }
+
+        /* Outline heart (default/unliked state) */
+        .heart-outline {
+            display: block;
+        }
+
+        .heart-filled {
+            display: none;
+        }
+
+        /* When liked, show filled heart */
+        .like-btn[data-liked="true"] .heart-outline,
+        .like-btn-comment[data-liked="true"] .heart-outline,
+        #overlay-post-like-btn[data-liked="true"] .heart-outline {
+            display: none;
+        }
+
+        .like-btn[data-liked="true"] .heart-filled,
+        .like-btn-comment[data-liked="true"] .heart-filled,
+        #overlay-post-like-btn[data-liked="true"] .heart-filled {
+            display: block;
+        }
+
+        /* Particle burst via ::after pseudo-element */
+        .like-icon-wrapper::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 1px;
+            height: 1px;
+            border-radius: 50%;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Animation state when liking (not on page load) */
+        .is-liking .like-icon-wrapper {
+            animation: heartPop 400ms cubic-bezier(.17,.89,.32,1.49) forwards;
+        }
+
+        .is-liking .like-icon-wrapper::after {
+            animation: particleBurst 550ms cubic-bezier(.17,.89,.32,1.49) forwards;
+        }
+
+        /* Unliking animation (simple fade/scale down) */
+        .is-unliking .like-icon-wrapper {
+            animation: heartShrink 180ms cubic-bezier(.4,0,.2,1) forwards;
+        }
+
+        /* Dislike (thumb-down) icon wrapper - mirrors .like-icon-wrapper */
+        .dislike-icon-wrapper {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            overflow: visible;
+            width: 1.25rem;
+            height: 1.25rem;
+        }
+
+        .thumb-down-outline {
+            display: block;
+        }
+
+        .thumb-down-filled {
+            display: none;
+        }
+
+        .dislike-btn-comment[data-disliked="true"] .thumb-down-outline {
+            display: none;
+        }
+
+        .dislike-btn-comment[data-disliked="true"] .thumb-down-filled {
+            display: block;
+        }
+
+        .is-disliking .dislike-icon-wrapper {
+            animation: heartPop 400ms cubic-bezier(.17,.89,.32,1.49) forwards;
+        }
+
+        .is-undisliking .dislike-icon-wrapper {
+            animation: heartShrink 180ms cubic-bezier(.4,0,.2,1) forwards;
+        }
+
+        /* Count number transition */
+        .like-count {
+            display: inline-block;
+            transition: opacity 140ms ease, transform 140ms ease;
+        }
+
+        /* Post/comment count badges (post-actions-row, comment overlay
+           header) are hidden via visibility, not display, when the count
+           is 0. visibility:hidden keeps the element's box in the layout,
+           so the number's width stays reserved whether it's shown or
+           not - the share/comment/like buttons around it stay pinned in
+           place instead of sliding sideways when a count appears or
+           disappears (e.g. a post's first like taking it from 0 to 1). */
+        .post-count-empty {
+            visibility: hidden;
+        }
+
+        .like-count.count-changing {
+            animation: countChange 140ms ease forwards;
+        }
+
+        /* Keyframes */
+        @keyframes heartPop {
+            0% {
+                transform: scale(0.8);
+            }
+            50% {
+                transform: scale(1.15);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        @keyframes heartShrink {
+            0% {
+                transform: scale(1);
+            }
+            100% {
+                transform: scale(0.9);
+                opacity: 0.8;
+            }
+        }
+
+        @keyframes particleBurst {
+            0% {
+                box-shadow:
+                    0 0 0 0 #DA292E,
+                    0 0 0 0 #DA292E,
+                    0 0 0 0 #DA292E,
+                    0 0 0 0 #DA292E,
+                    0 0 0 0 #DA292E,
+                    0 0 0 0 #DA292E,
+                    0 0 0 0 #DA292E,
+                    0 0 0 0 #DA292E;
+                opacity: 1;
+            }
+            100% {
+                box-shadow:
+                    0 -30px 0 1px #DA292E,
+                    21px -21px 0 1px #DA292E,
+                    30px 0 0 1px #DA292E,
+                    21px 21px 0 1px #DA292E,
+                    0 30px 0 1px #DA292E,
+                    -21px 21px 0 1px #DA292E,
+                    -30px 0 0 1px #DA292E,
+                    -21px -21px 0 1px #DA292E;
+                opacity: 0;
+            }
+        }
+
+        @keyframes countChange {
+            0% {
+                opacity: 0.5;
+                transform: translateY(-2px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Reduced motion: disable animations */
+        @media (prefers-reduced-motion: reduce) {
+            .is-liking .like-icon-wrapper,
+            .is-unliking .like-icon-wrapper {
+                animation: none !important;
+            }
+
+            .is-liking .like-icon-wrapper::after {
+                animation: none !important;
+                display: none !important;
+            }
+
+            .like-count.count-changing {
+                animation: none !important;
+            }
+        }
+
+        /* Star colors for business ratings */
+        .star-filled { color: #FFB400; }
+        .star-empty { color: #E5E7EB; }
+
+        /* Post action menu (three-dot) bottom sheet */
+        .post-menu-icon {
+            will-change: transform;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .post-menu-action,
+            .post-menu-icon {
+                transition: none !important;
+            }
+        }
+
+        /* Side navigation drawer: width/opacity are driven directly by
+           side-nav.js during a drag (real-time finger tracking), and
+           these transitions only take effect for the settle animation
+           after touchend, when JS re-enables them. Animating the shell's
+           WIDTH (rather than a transform) is what makes the mini rail
+           and full drawer read as one panel progressively expanding
+           through its two stops, instead of two layouts swapping. */
+        #side-nav {
+            transition: width 320ms cubic-bezier(0.32, 0.72, 0, 1);
+        }
+        #side-nav-mini,
+        #side-nav-full {
+            transition: opacity 220ms ease;
+        }
+        #side-nav-backdrop {
+            transition: opacity 320ms cubic-bezier(0.32, 0.72, 0, 1);
+        }
+        #side-nav.side-nav-dragging,
+        #side-nav-backdrop.side-nav-dragging {
+            transition: none;
+        }
+        #side-nav.side-nav-dragging #side-nav-mini,
+        #side-nav.side-nav-dragging #side-nav-full {
+            transition: none;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #side-nav,
+            #side-nav-mini,
+            #side-nav-full,
+            #side-nav-backdrop {
+                transition: none !important;
+            }
+        }
+
+/* ==========================================================================
+   Light / Dark theme system
+   ==========================================================================
+   Beebo's Tailwind is loaded from the CDN (no build step to extend/purge),
+   so rather than retrofitting every template with `dark:` variants, theme
+   colors are defined once as CSS variables and the utility classes already
+   used throughout the app (bg-white, text-gray-500, border-gray-200, etc.)
+   are remapped to those variables whenever `<html>` has the `dark` class.
+   This covers the whole app from one file and keeps every template's
+   markup, layout, and component structure untouched.
+
+   The variables intentionally distinguish "app background" from "surface"
+   (cards/sheets/menus) and give text three weights (primary/secondary/
+   tertiary) so dark mode reads as a proper dark theme rather than a naive
+   color inversion - see the class-mapping table below for how each
+   existing Tailwind color maps onto them.
+   ========================================================================== */
+
+:root {
+    --bb-bg-app: #f8f9fa;
+    --bb-bg-surface: #ffffff;
+    --bb-bg-subtle: #f9fafb;   /* gray-50 role: page sections, hover/active fills */
+    --bb-bg-muted: #f3f4f6;    /* gray-100 role: avatar placeholders, chips */
+    --bb-bg-muted-2: #e5e7eb;  /* gray-200 role: stronger fills, dividers-as-bg */
+    --bb-text-primary: #111827;   /* gray-900 */
+    --bb-text-secondary: #1f2937; /* gray-800 */
+    --bb-text-tertiary: #4b5563;  /* gray-700/600 */
+    --bb-text-quaternary: #6b7280;/* gray-500 */
+    --bb-text-muted: #9ca3af;     /* gray-400 */
+    --bb-text-faint: #d1d5db;     /* gray-300 */
+    --bb-border-subtle: #f3f4f6;  /* gray-100 */
+    --bb-border-default: #e5e7eb; /* gray-200 / brand-border */
+    --bb-border-strong: #d1d5db;  /* gray-300 */
+    --bb-red-tint: #fef2f2;   /* red-50 */
+    --bb-red-tint-2: #fee2e2; /* red-100 */
+    --bb-cover-gradient-from: #7dd3fc; /* sky-300 */
+    --bb-cover-gradient-via: #e0f2fe;  /* sky-100 */
+}
+
+/* Logo theme swap: pair a .logo-light/.logo-dark <img> in markup;
+   CSS picks the right one off the same html.dark class the rest of the
+   theme system uses, no JS involved. */
+.logo-dark { display: none; }
+html.dark .logo-light { display: none; }
+html.dark .logo-dark { display: inline-block; }
+
+html.dark {
+    /* Primary dark-mode background, as specified. This design is flat (no
+       elevation system - the light theme uses the same bg-white for the
+       header, the full-height scroll container, and cards alike, with
+       borders/dividers doing the separation instead of tone), so
+       --bb-bg-surface (what .bg-white maps to below) needs to be the same
+       #0B0C10 as --bb-bg-app: bg-white covers virtually the entire screen
+       in every view, so if it were any lighter than this, the colour on
+       <body> would never actually be visible behind it. The
+       muted/subtle steps below stay lighter so inputs, hovers, and
+       dividers remain visible against that near-black. */
+    --bb-bg-app: #0B0C10;
+    --bb-bg-surface: #0B0C10;
+    --bb-bg-subtle: #171E26;
+    --bb-bg-muted: #1E2731;
+    --bb-bg-muted-2: #2A3441;
+    --bb-text-primary: #f9fafb;
+    --bb-text-secondary: #e5e7eb;
+    --bb-text-tertiary: #d1d5db;
+    --bb-text-quaternary: #9ca3af;
+    --bb-text-muted: #71717a;
+    --bb-text-faint: #52525b;
+    --bb-border-subtle: #202932;
+    --bb-border-default: #333f4c;
+    --bb-border-strong: #48576a;
+    --bb-red-tint: rgba(218, 41, 46, 0.16);
+    --bb-red-tint-2: rgba(218, 41, 46, 0.24);
+    --bb-cover-gradient-from: #123049;
+    --bb-cover-gradient-via: #131A21;
+}
+
+html.dark body {
+    background-color: var(--bb-bg-app);
+    color-scheme: dark;
+}
+
+/* Backgrounds */
+html.dark .bg-white,
+html.dark .bg-\[\#fafafa\],
+html.dark .bg-\[\#F9F9FB\] { background-color: var(--bb-bg-surface) !important; }
+html.dark .bg-gray-50 { background-color: var(--bb-bg-subtle) !important; }
+html.dark .bg-gray-100 { background-color: var(--bb-bg-muted) !important; }
+html.dark .bg-gray-200 { background-color: var(--bb-bg-muted-2) !important; }
+html.dark .bg-red-50 { background-color: var(--bb-red-tint) !important; }
+html.dark .bg-red-100,
+html.dark .bg-red-200 { background-color: var(--bb-red-tint-2) !important; }
+html.dark .border-red-200 { border-color: rgba(218, 41, 46, 0.35) !important; }
+html.dark .text-red-700 { color: #f87171 !important; }
+html.dark .bg-teal-50 { background-color: rgba(20, 184, 166, 0.16) !important; }
+html.dark .bg-orange-50 { background-color: rgba(249, 115, 22, 0.16) !important; }
+html.dark .bg-blue-50 { background-color: rgba(59, 130, 246, 0.16) !important; }
+
+/* Text */
+html.dark .text-gray-900 { color: var(--bb-text-primary) !important; }
+html.dark .text-gray-800 { color: var(--bb-text-secondary) !important; }
+html.dark .text-gray-700,
+html.dark .text-gray-600 { color: var(--bb-text-tertiary) !important; }
+html.dark .text-gray-500 { color: var(--bb-text-quaternary) !important; }
+html.dark .text-gray-400 { color: var(--bb-text-muted) !important; }
+html.dark .text-gray-300,
+html.dark .text-gray-200 { color: var(--bb-text-faint) !important; }
+html.dark .placeholder-gray-400::placeholder { color: var(--bb-text-muted) !important; }
+html.dark body.text-gray-800 { color: var(--bb-text-secondary); }
+
+/* Borders */
+html.dark .border-gray-100 { border-color: var(--bb-border-subtle) !important; }
+html.dark .border-gray-200,
+html.dark .border-brand-border { border-color: var(--bb-border-default) !important; }
+html.dark .border-gray-300 { border-color: var(--bb-border-strong) !important; }
+html.dark .border-black-200 { border-color: var(--bb-border-default) !important; }
+html.dark .ring-gray-200 { --tw-ring-color: var(--bb-border-default) !important; }
+
+/* Cover-photo placeholder gradient (profile header): a bright sky-blue
+   banner reads wrong on a dark page, so it's swapped for a muted
+   dark-to-surface gradient instead of literally inverting the hue. */
+html.dark .from-sky-300 { --tw-gradient-from: var(--bb-cover-gradient-from) var(--tw-gradient-from-position) !important; }
+html.dark .via-sky-100 { --tw-gradient-via: var(--bb-cover-gradient-via) var(--tw-gradient-via-position) !important; }
+html.dark .to-white { --tw-gradient-to: var(--bb-bg-surface) var(--tw-gradient-to-position) !important; }
+
+/* Shadows read as pure black-on-black in dark mode and disappear -
+   swap for a subtle light-edge highlight instead so cards/sheets still
+   separate from the page. */
+html.dark .card-shadow,
+html.dark [class*="shadow-"] {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+/* Scoped, short-lived transition for the moment of switching themes only -
+   see theme.js. Not a permanent global rule, so it never interferes with
+   unrelated hover/press transitions elsewhere in the app. */
+html.theme-transitioning,
+html.theme-transitioning body,
+html.theme-transitioning * {
+    transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease, box-shadow 200ms ease !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html.theme-transitioning,
+    html.theme-transitioning body,
+    html.theme-transitioning * {
+        transition: none !important;
+    }
+}
+
+/* Custom classes below set their own literal hex colors instead of a
+   Tailwind utility, so none of the `html.dark .bg-*` / `.text-*` overrides
+   above ever reach them - each needs its own override here, mapped to the
+   same --bb- tokens everything else already uses, or it stays stuck in its
+   light-mode color while its surrounding text/borders flip around it. */
+html.dark .feed-card {
+    background-color: var(--bb-bg-surface);
+    border-bottom-color: var(--bb-border-subtle);
+}
+html.dark .feed-card:active {
+    background-color: var(--bb-bg-subtle);
+}
+html.dark .thread-connector {
+    background-color: var(--bb-border-default);
+}
+html.dark .comment-children {
+    border-left-color: var(--bb-border-default);
+}
+html.dark .comment-image {
+    border-color: var(--bb-border-default);
+    background-color: var(--bb-bg-muted);
+}
+html.dark .comment-actions {
+    color: var(--bb-text-quaternary);
+}
+html.dark .comment-replies-toggle:hover {
+    color: var(--bb-text-secondary);
+}
+html.dark .comments-header-trigger {
+    border-bottom-color: var(--bb-border-subtle);
+}
+html.dark .comments-header-trigger:active {
+    background-color: var(--bb-bg-subtle);
+}
+html.dark .skeleton-shimmer {
+    background: linear-gradient(90deg, var(--bb-bg-muted) 25%, var(--bb-bg-muted-2) 37%, var(--bb-bg-muted) 63%);
+    background-size: 400% 100%;
+}
+html.dark .star-empty {
+    color: var(--bb-border-strong);
+}
+html.dark .auth-bg {
+    background: linear-gradient(180deg, var(--bb-bg-app) 0%, var(--bb-bg-surface) 100%);
+}
+
+/* ---- Wallet screen (see templates/partials/wallet.html, static/js/wallet.js) ----
+   Primary action buttons there are near-black in light mode, per the design.
+   In dark mode a near-black button would vanish into the dark surface, so
+   it flips to a light button with dark text. */
+.wallet-primary-btn {
+    background-color: #111827;
+    color: #ffffff;
+}
+.wallet-primary-btn:disabled {
+    cursor: not-allowed;
+}
+html.dark .wallet-primary-btn {
+    background-color: var(--bb-text-primary);
+    color: var(--bb-bg-app);
+}
+
+/* ---- Share bottom sheet (templates/partials/share_sheet.html, static/js/share-sheet.js) ----
+   Kept in the DOM and toggled with .is-open (not the `hidden` class the older
+   sheets use) so it can animate. Closed: off-screen and visibility:hidden -
+   the visibility change is delayed until the slide-out finishes, so the
+   closing animation stays visible, and it's removed from tab order/hit-testing
+   afterwards. touch-action:none lets JS own the swipe-down gesture. */
+.share-sheet-backdrop,
+.chat-sheet-backdrop {
+    opacity: 0;
+    visibility: hidden;
+    touch-action: none;
+    transition: opacity 260ms ease, visibility 0s linear 260ms;
+}
+.share-sheet-backdrop.is-open,
+.chat-sheet-backdrop.is-open {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 260ms ease, visibility 0s;
+}
+.share-sheet,
+.chat-sheet {
+    transform: translateY(100%);
+    visibility: hidden;
+    touch-action: none;
+    will-change: transform;
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    transition: transform 300ms cubic-bezier(0.32, 0.72, 0, 1), visibility 0s linear 300ms;
+}
+.share-sheet.is-open,
+.chat-sheet.is-open {
+    transform: translateY(0);
+    visibility: visible;
+    transition: transform 300ms cubic-bezier(0.32, 0.72, 0, 1), visibility 0s;
+}
+@media (prefers-reduced-motion: reduce) {
+    .share-sheet,
+    .share-sheet.is-open,
+    .share-sheet-backdrop,
+    .share-sheet-backdrop.is-open,
+    .chat-sheet,
+    .chat-sheet.is-open,
+    .chat-sheet-backdrop,
+    .chat-sheet-backdrop.is-open {
+        transition-duration: 1ms;
+    }
+}
+
+/* ---- Chat message action sheet (templates/partials/chat_message_sheet.html) ----
+   `.chat-sheet*` reuse the share-sheet animation rules above (grouped selectors).
+   Bubbles must not select text / show the iOS callout on long-press. */
+.chat-msg-bubble {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    cursor: pointer;
+}
+.chat-msg-bubble:focus-visible {
+    outline: 2px solid #9ca3af;
+    outline-offset: 2px;
+}
+.chat-sheet-reactions {
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+.chat-sheet-reactions::-webkit-scrollbar { display: none; }
+.chat-sheet-react {
+    flex: 0 0 auto;
+    width: 48px;
+    height: 48px;
+    border-radius: 9999px;
+    font-size: 30px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 120ms ease, background-color 120ms ease;
+}
+.chat-sheet-react:active { transform: scale(0.88); }
+.chat-sheet-react.is-selected { background-color: #f3f4f6; box-shadow: inset 0 0 0 2px #e5e7eb; }
+html.dark .chat-sheet-react.is-selected { background-color: var(--bb-bg-muted); box-shadow: inset 0 0 0 2px var(--bb-border-default); }
+.chat-sheet-scroll {
+    max-height: 50vh;
+    overflow-y: auto;
+    touch-action: pan-y;
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* ---- Quote posts (static/js/feed.js buildQuoteCardHtml, compose.js quote mode) ----
+   Bordered, rounded card embedded under a quoting post's text (feed, profile,
+   search, community, overlay) and, with the X button, under the composer's
+   text box. Custom hex colors, so dark mode needs its own overrides below. */
+.quote-card {
+    border: 1px solid #e5e7eb;
+    background-color: transparent;
+    overflow: hidden;
+}
+.quote-card[data-quote-post-id] {
+    cursor: pointer;
+    transition: background-color 100ms ease;
+    -webkit-tap-highlight-color: transparent;
+}
+.quote-card[data-quote-post-id]:active {
+    background-color: #f3f4f6;
+}
+.quote-card[data-quote-post-id]:focus-visible {
+    outline: 2px solid #9ca3af;
+    outline-offset: 2px;
+}
+.quote-card-unavailable {
+    background-color: #f9fafb;
+}
+.quote-card-text {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 6;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+}
+.quote-card-text-composer {
+    -webkit-line-clamp: 10;
+}
+/* Remove (X) button in the composer's preview card. */
+.quote-card-remove {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background-color: rgba(15, 20, 25, 0.75);
+    transition: transform 100ms ease, background-color 100ms ease;
+}
+.quote-card-remove:active {
+    transform: scale(0.92);
+    background-color: rgba(15, 20, 25, 0.9);
+}
+/* "+N" badge on the last visible image of a multi-image quote. */
+.quote-card-more {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    padding: 1px 7px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+    background-color: rgba(15, 20, 25, 0.7);
+}
+/* Quote mode: the text box stops stretching (flex-1) so the quoted card sits
+   directly beneath it; JS (autosizeComposeTextarea) grows it with the text. */
+#create-post-view.compose-quote-mode #create-post-textarea {
+    flex: none;
+    min-height: 96px;
+}
+
+html.dark .quote-card {
+    border-color: var(--bb-border-default);
+}
+html.dark .quote-card[data-quote-post-id]:active {
+    background-color: var(--bb-bg-subtle);
+}
+html.dark .quote-card-unavailable {
+    background-color: var(--bb-bg-subtle);
+}
+
+/* ---- Chats list row menu (templates/partials/chat_row_menu.html) ----
+   Long-press a conversation row -> floating popup. Rows must not select text /
+   show the iOS callout on long-press. `.is-menu-target` marks the pressed row
+   while the popup is open. The popup scales in from the corner nearest the row
+   (transform-origin is set by chat-row-menu.js). */
+.chat-row {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+.chat-row.is-menu-target {
+    background-color: var(--bb-bg-subtle);
+}
+#chat-row-menu-backdrop {
+    touch-action: none;
+}
+.chat-row-menu:not(.hidden) {
+    animation: chat-row-menu-in 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes chat-row-menu-in {
+    from { opacity: 0; transform: scale(0.94); }
+    to   { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .chat-row-menu:not(.hidden) { animation: none; }
+}
+
+/* ---- Chat GIF picker (templates/partials/chat_gif_picker.html, static/js/chat-gif.js) ----
+   Docked under the composer; the thread above shrinks to make room. Colors use
+   the --bb-* theme variables so dark mode follows automatically. */
+.chat-gif-picker {
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 auto;
+    height: min(46dvh, 400px);
+    min-height: 0;
+    background: var(--bb-bg-subtle);
+    border-top: 1px solid var(--bb-border-default);
+    border-radius: 24px 24px 0 0;
+    box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.06);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    animation: chatGifRise 180ms ease-out;
+}
+.chat-gif-picker[hidden] { display: none; }
+@keyframes chatGifRise {
+    from { transform: translateY(16px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+/* The picker supplies the bottom safe-area itself while open. */
+#chat-conversation-view[data-gif-open="true"] #chat-conv-composer {
+    padding-bottom: 10px !important;
+}
+.chat-gif-handle-zone {
+    flex: 0 0 auto;
+    padding: 10px 0 12px;
+    touch-action: none;
+}
+.chat-gif-handle {
+    width: 44px;
+    height: 5px;
+    margin: 0 auto;
+    border-radius: 9999px;
+    background: var(--bb-bg-muted-2);
+}
+.chat-gif-search {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 46px;
+    margin: 0 14px;
+    padding: 0 7px 0 16px; /* the sticker button sits 7px from the right end */
+    border-radius: 9999px;
+    background: var(--bb-bg-muted);
+    color: var(--bb-text-quaternary);
+}
+.chat-gif-search-icon { display: block; width: 22px; height: 22px; flex: 0 0 auto; }
+/* Tailwind's forms plugin (injected after this sheet) styles every text input with a white
+   background, border, padding and a blue focus ring. Selectors here are one step more
+   specific than its [type='text'] rules, so the input stays transparent and the pill reads
+   as one uniform surface. */
+.chat-gif-search input.chat-gif-search-input[type="text"],
+.chat-gif-search input.chat-gif-search-input[type="text"]:focus,
+.chat-gif-search input.chat-gif-search-input[type="text"]:focus-visible {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    outline: none;
+    box-shadow: none;
+    background: transparent;
+    appearance: none;
+    -webkit-appearance: none;
+    font: inherit;
+    font-size: 16px; /* 16px stops iOS zoom-on-focus */
+    line-height: 1.25;
+    color: var(--bb-text-primary);
+}
+.chat-gif-search-input::placeholder { color: var(--bb-text-quaternary); }
+/* GIF <-> sticker switch at the far end of the search pill. It shows the icon of the
+   mode you would switch TO: sticker icon in GIF mode, GIF icon in sticker mode. */
+.chat-gif-mode-btn {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 9999px;
+    background: transparent;
+    color: var(--bb-text-quaternary);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 100ms ease;
+}
+.chat-gif-mode-icon { display: block; width: 22px; height: 22px; }
+.chat-gif-picker[data-mode="gif"] .chat-gif-mode-icon-gif,
+.chat-gif-picker[data-mode="sticker"] .chat-gif-mode-icon-sticker { display: none; }
+.chat-gif-mode-btn:active { transform: scale(0.92); }
+.chat-gif-mode-btn:focus-visible { outline: 2px solid #9ca3af; outline-offset: 1px; }
+.chat-gif-chips[hidden] { display: none; }
+.chat-gif-chips {
+    flex: 0 0 auto;
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 0 14px;
+    overflow-x: auto;
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+.chat-gif-chips::-webkit-scrollbar { display: none; }
+.chat-gif-chip {
+    flex: 0 0 auto;
+    height: 36px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 9999px;
+    background: var(--bb-bg-muted);
+    color: var(--bb-text-quaternary);
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 36px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: transform 100ms ease;
+}
+.chat-gif-chip:active { transform: scale(0.96); }
+.chat-gif-chip.is-active {
+    background: #2b2a28;
+    color: #e8c77b;
+}
+html.dark .chat-gif-chip.is-active { box-shadow: inset 0 0 0 1px rgba(232, 199, 123, 0.35); }
+.chat-gif-scroll {
+    flex: 1 1 0;
+    min-height: 0;
+    margin-top: 12px;
+    padding: 0 14px 14px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+.chat-gif-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+}
+.chat-gif-tile {
+    position: relative;
+    display: block;
+    aspect-ratio: 3 / 2;
+    padding: 0;
+    border: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--bb-bg-muted-2);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 100ms ease;
+}
+.chat-gif-tile:active { transform: scale(0.97); }
+.chat-gif-tile:focus-visible { outline: 2px solid #9ca3af; outline-offset: 2px; }
+.chat-gif-tile img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    -webkit-user-drag: none;
+}
+/* Sticker mode: square, background-less tiles in a 4-column tray (no chips, no GIF badge). */
+.chat-gif-picker[data-mode="sticker"] .chat-gif-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px 6px;
+}
+.chat-gif-tile.chat-sticker-tile {
+    aspect-ratio: 1 / 1;
+    padding: 4px;
+    background: transparent;
+}
+.chat-gif-tile.chat-sticker-tile img { object-fit: contain; }
+.chat-gif-badge {
+    position: absolute;
+    left: 6px;
+    bottom: 6px;
+    padding: 3px 8px;
+    border-radius: 9999px;
+    background: rgba(30, 30, 32, 0.62);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 0.02em;
+    pointer-events: none;
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+}
+.chat-gif-status {
+    padding: 28px 12px;
+    text-align: center;
+    font-size: 15px;
+    color: var(--bb-text-quaternary);
+}
+.chat-gif-status[hidden] { display: none; }
+.chat-gif-status button {
+    margin-top: 10px;
+    padding: 8px 16px;
+    border: 0;
+    border-radius: 9999px;
+    background: var(--bb-bg-muted);
+    color: var(--bb-text-primary);
+    font-size: 14px;
+    font-weight: 600;
+}
+/* GIF inside a chat bubble. A bare GIF (no reply/forward header) has no bubble
+   chrome; the image keeps the bubble's rounded shape. */
+.chat-msg-gif { background: transparent; }
+.chat-gif-msg-img {
+    display: block;
+    width: 220px;
+    max-width: 100%;
+    aspect-ratio: 4 / 3; /* placeholder until the file loads; see chatGifImgLoaded */
+    border-radius: 18px;
+    object-fit: cover;
+    background: var(--bb-bg-muted);
+    -webkit-user-drag: none;
+}
+.chat-gif-msg-img.is-loaded { aspect-ratio: auto; height: auto; background: transparent; }
+.chat-gif-msg-missing { display: block; padding: 8px 6px; font-size: 14px; font-style: italic; opacity: 0.8; }
+/* Sticker inside a chat bubble: transparent, natural proportions, no bubble when bare. */
+.chat-sticker-msg-img {
+    display: block;
+    width: 150px;
+    max-width: 100%;
+    aspect-ratio: 1 / 1; /* reserves the slot until the file loads; see chatGifImgLoaded */
+    object-fit: contain;
+    background: transparent;
+    -webkit-user-drag: none;
+}
+.chat-sticker-msg-img.is-loaded { aspect-ratio: auto; height: auto; }
+@media (prefers-reduced-motion: reduce) {
+    .chat-gif-picker { animation: none; }
+    .chat-gif-chip, .chat-gif-tile, .chat-gif-mode-btn { transition: none; }
+}
+
+/* ---- Highlight viewer (templates/partials/highlight_viewer.html, static/js/highlight-viewer.js) ---- */
+#highlight-viewer-overlay {
+    touch-action: none; /* pointer events drive tap / hold / swipe; the browser must not scroll */
+    overscroll-behavior: contain;
+}
+#highlight-viewer-overlay.hv-snap-back { transition: transform 180ms ease, opacity 180ms ease; }
+.hv-media {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain; /* default for photos far from the screen's shape */
+    background: #000;
+    -webkit-user-drag: none;
+}
+.hv-media.is-cover { object-fit: cover; } /* set by JS when the media is close to portrait screen shape: edge-to-edge */
+.hv-chrome { transition: opacity 150ms ease; }
+#highlight-viewer-overlay[data-holding="true"] .hv-chrome { opacity: 0; } /* hold to pause hides the chrome */
+.hv-scrim {
+    height: calc(env(safe-area-inset-top, 0px) + 130px);
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0));
+}
+.hv-progress {
+    top: calc(env(safe-area-inset-top, 0px) + 8px);
+    padding: 0 8px;
+}
+.hv-seg {
+    flex: 1 1 0;
+    height: 2px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.35);
+    overflow: hidden;
+}
+.hv-seg > i { display: block; width: 0; height: 100%; background: #ffffff; }
+.hv-header {
+    top: calc(env(safe-area-inset-top, 0px) + 22px);
+    padding: 0 8px 0 11px;
+}
+.hv-cover {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 9999px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 14px;
+}
+.hv-cover img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.hv-icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: 0;
+    background: transparent;
+    color: #ffffff;
+    -webkit-tap-highlight-color: transparent;
+}
+.hv-icon-btn:active { opacity: 0.6; }
+
+/* ---- Dark mode: reply composer (comment overlay) ----
+   The composer rules above hardcode light colors, so the pill and its parts stayed light in
+   dark mode. */
+html.dark .reply-composer {
+    background: var(--bb-bg-subtle);
+    border-color: var(--bb-border-default);
+}
+html.dark .reply-composer[data-active="true"] {
+    background: var(--bb-bg-surface);
+    border-color: rgba(218, 41, 46, 0.55);
+}
+html.dark .reply-composer-avatar { background: var(--bb-bg-muted-2); }
+html.dark .reply-composer-input { color: var(--bb-text-primary); }
+html.dark .reply-composer-input::placeholder { color: var(--bb-text-quaternary); }
+html.dark .reply-tool-btn { color: var(--bb-text-quaternary); }
+html.dark .reply-tool-btn:hover { color: #DA292E; }
+html.dark .reply-tool-btn:active { background: var(--bb-bg-muted); }
+html.dark .reply-image-thumb img { background: var(--bb-bg-muted); }
+html.dark .comment-image {
+    border-color: var(--bb-border-default);
+    background: var(--bb-bg-muted);
+}
+
+/* ---- Settings screen (templates/partials/settings.html, static/js/settings.js) ---- */
+.settings-banner {
+    position: relative;
+    height: 160px;
+    overflow: hidden;
+    border-radius: 0 0 28px 28px; /* curved bottom corners; overflow clips the gradient and arcs */
+    background: linear-gradient(160deg, #F6F6FA 0%, #E8E8F3 100%);
+}
+.settings-banner-arcs {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+.settings-banner-arcs circle { stroke: #FFFFFF; stroke-opacity: 0.9; stroke-width: 1; }
+.settings-back-btn {
+    position: absolute;
+    top: calc(env(safe-area-inset-top, 0px) + 24px);
+    left: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    background: transparent;
+    color: var(--bb-text-primary);
+    -webkit-tap-highlight-color: transparent;
+}
+.settings-back-btn:active { opacity: 0.6; }
+.settings-title {
+    position: absolute;
+    left: 28px;
+    bottom: 26px;
+    margin: 0;
+    font-size: 34px;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--bb-text-primary);
+}
+/* Compact banner (Settings only): smaller title sits on one line beside the back arrow. */
+.settings-banner--compact { height: calc(env(safe-area-inset-top, 0px) + 84px); }
+.settings-banner--compact .settings-title {
+    left: 62px;
+    bottom: auto;
+    top: calc(env(safe-area-inset-top, 0px) + 24px);
+    display: flex;
+    align-items: center;
+    height: 36px;
+    font-size: 20px;
+    line-height: 1;
+    letter-spacing: -0.01em;
+}
+.settings-main { display: flex; flex-direction: column; }
+.settings-section { flex: 1 1 auto; padding: 0 28px 24px; }
+.settings-version {
+    padding: 0 28px calc(env(safe-area-inset-bottom, 0px) + 28px);
+    text-align: center;
+    font-size: 13px;
+    line-height: 1.2;
+    color: var(--bb-text-quaternary);
+}
+.settings-search {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    height: 46px;
+    margin: 18px 0 8px; /* 18px gap below the banner; same side margins as the rows below */
+    padding: 0 16px;
+    border-radius: 9999px; /* fully rounded ends */
+    background: var(--bb-bg-muted);
+    color: var(--bb-text-quaternary);
+    width: 100%;
+    border: 0;
+    font: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+.settings-search-icon { width: 22px; height: 22px; flex: 0 0 auto; }
+.settings-search-placeholder { font-size: 16px; line-height: 1.25; color: var(--bb-text-quaternary); }
+.settings-row[hidden] { display: none; }
+.settings-row {
+    display: flex;
+    align-items: center;
+    gap: 17px;
+    width: 100%;
+    min-height: 71px;
+    padding: 12px 0;
+    border: 0;
+    border-bottom: 1px solid var(--bb-border-default);
+    background: transparent;
+    text-align: left;
+    color: var(--bb-text-primary);
+    -webkit-tap-highlight-color: transparent;
+}
+.settings-row:active { background: var(--bb-bg-subtle); }
+.settings-row-icon { width: 24px; height: 24px; flex: 0 0 auto; }
+.settings-row-label { flex: 1 1 auto; font-size: 17px; line-height: 1.2; }
+.settings-row-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.settings-row-text .settings-row-label { flex: 0 0 auto; }
+.settings-row-desc { font-size: 13px; line-height: 1.3; color: var(--bb-text-quaternary); }
+.settings-theme-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 16px 16px;
+    border: 0;
+    border-radius: 14px;
+    background: transparent;
+    font-size: 17px;
+    color: var(--bb-text-primary);
+    -webkit-tap-highlight-color: transparent;
+}
+.settings-theme-option:active { background: var(--bb-bg-subtle); }
+.settings-theme-check { width: 22px; height: 22px; opacity: 0; }
+.settings-theme-option[aria-checked="true"] .settings-theme-check { opacity: 1; }
+html.dark .settings-banner { background: linear-gradient(160deg, var(--bb-bg-subtle) 0%, var(--bb-bg-muted) 100%); }
+html.dark .settings-banner-arcs circle { stroke: rgba(255, 255, 255, 0.12); stroke-opacity: 1; }
+
+/* ---- Payment methods screen (templates/partials/payment_methods.html) ---- */
+.payment-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(100vh - 84px - env(safe-area-inset-top, 0px)); /* viewport minus the compact banner */
+    padding: 0 24px 80px;
+    text-align: center;
+}
+.payment-empty-icon { width: 28px; height: 28px; margin-bottom: 20px; color: var(--bb-text-primary); }
+.payment-empty-title { margin: 0 0 10px; font-size: 20px; font-weight: 600; line-height: 1.2; color: var(--bb-text-primary); }
+.payment-empty-text { margin: 0 0 28px; max-width: 300px; font-size: 16px; line-height: 1.5; color: var(--bb-text-quaternary); }
+.payment-add-btn {
+    width: 100%;
+    height: 52px;
+    border: 0;
+    border-radius: 9999px;
+    background: #000000;
+    color: #FFFFFF;
+    font-size: 16px;
+    font-weight: 500;
+    -webkit-tap-highlight-color: transparent;
+}
+.payment-add-btn:active { opacity: 0.8; }
+html.dark .payment-add-btn { background: #f9fafb; color: #111827; }
+
+/* ---- Add card screen (templates/partials/payment_card_add.html) ---- */
+.card-add-header {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: calc(env(safe-area-inset-top, 0px) + 64px);
+    padding-top: env(safe-area-inset-top, 0px);
+    border-bottom: 1px solid var(--bb-border-default);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+.card-add-back {
+    position: absolute;
+    left: 22px;
+    top: calc(env(safe-area-inset-top, 0px) + 14px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    background: transparent;
+    color: var(--bb-text-primary);
+    -webkit-tap-highlight-color: transparent;
+}
+.card-add-back:active { opacity: 0.6; }
+.card-add-title { margin: 0; font-size: 16px; font-weight: 600; color: var(--bb-text-primary); }
+.card-add-form { flex: 1 1 auto; padding: 22px 22px 0; }
+.card-field {
+    position: relative;
+    display: block;
+    height: 62px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--bb-border-default);
+}
+.card-field:focus-within { border-bottom-color: var(--bb-text-primary); }
+.card-field-row { display: flex; gap: 22px; }
+.card-field-row .card-field { flex: 1 1 0; min-width: 0; }
+.card-field input.card-input[type="text"],
+.card-field input.card-input[type="text"]:focus,
+.card-field input.card-input[type="text"]:focus-visible {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 8px;
+    width: 100%;
+    height: 28px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    outline: none;
+    box-shadow: none;
+    background: transparent;
+    appearance: none;
+    -webkit-appearance: none;
+    font: inherit;
+    font-size: 16px; /* 16px stops iOS zoom-on-focus */
+    font-weight: 600;
+    color: var(--bb-text-primary);
+}
+.card-field-label {
+    position: absolute;
+    left: 0;
+    bottom: 12px;
+    font-size: 16px;
+    line-height: 1.2;
+    color: var(--bb-text-quaternary);
+    pointer-events: none;
+    transition: transform 0.15s ease, font-size 0.15s ease;
+    transform-origin: left bottom;
+}
+.card-field input.card-input:focus + .card-field-label,
+.card-field input.card-input:not(:placeholder-shown) + .card-field-label {
+    bottom: 38px;
+    font-size: 11px;
+}
+.card-add-footer {
+    position: sticky;
+    bottom: 0;
+    padding: 16px 22px calc(env(safe-area-inset-bottom, 0px) + 20px);
+    border-top: 1px solid var(--bb-border-default);
+    background: var(--bb-bg-surface);
+}
+.card-add-submit {
+    width: 100%;
+    height: 52px;
+    border: 0;
+    border-radius: 9999px;
+    background: #000000;
+    color: #FFFFFF;
+    font-size: 16px;
+    font-weight: 500;
+    -webkit-tap-highlight-color: transparent;
+}
+.card-add-submit:active:not(:disabled) { opacity: 0.8; }
+.card-add-submit:disabled { background: #d9d9d9; color: #FFFFFF; }
+html.dark .card-add-submit { background: #f9fafb; color: #111827; }
+html.dark .card-add-submit:disabled { background: #27272a; color: #71717a; }
+
+/* ---- Settings search screen (templates/partials/settings_search.html) ---- */
+.ssearch-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    height: calc(env(safe-area-inset-top, 0px) + 64px);
+    padding: env(safe-area-inset-top, 0px) 16px 0 18px;
+    border-bottom: 1px solid var(--bb-border-default);
+}
+.ssearch-back, .ssearch-clear {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    background: transparent;
+    color: var(--bb-text-primary);
+    -webkit-tap-highlight-color: transparent;
+}
+.ssearch-clear { color: var(--bb-text-quaternary); }
+.ssearch-clear[hidden] { display: none; }
+.ssearch-back:active, .ssearch-clear:active { opacity: 0.6; }
+/* Tailwind's forms plugin gives text inputs a border/ring; these selectors are one step more specific. */
+.ssearch-header input.ssearch-input[type="text"],
+.ssearch-header input.ssearch-input[type="text"]:focus,
+.ssearch-header input.ssearch-input[type="text"]:focus-visible {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 44px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    outline: none;
+    box-shadow: none;
+    background: transparent;
+    appearance: none;
+    -webkit-appearance: none;
+    font: inherit;
+    font-size: 18px; /* >=16px stops iOS zoom-on-focus */
+    color: var(--bb-text-primary);
+}
+.ssearch-header input.ssearch-input::placeholder { color: var(--bb-text-quaternary); }
+.ssearch-hint { margin: 0; padding: 22px 22px; font-size: 16px; line-height: 1.4; color: var(--bb-text-quaternary); }
+.ssearch-hint[hidden] { display: none; }
+.ssearch-result {
+    display: block;
+    width: 100%;
+    padding: 16px 22px;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    font-size: 17px;
+    line-height: 1.3;
+    color: var(--bb-text-primary);
+    -webkit-tap-highlight-color: transparent;
+}
+.ssearch-result:active { background: var(--bb-bg-subtle); }
+
+/* ---- Appearance and display screen (templates/partials/appearance_display.html) ---- */
+.adisp-list { padding: 12px 22px 32px; }
+.adisp-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    width: 100%;
+    padding: 18px 0;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    -webkit-tap-highlight-color: transparent;
+}
+.adisp-row:active { opacity: 0.6; }
+.adisp-icon { flex: 0 0 auto; width: 26px; height: 26px; margin: 10px 0 0 3px; color: var(--bb-text-quaternary); }
+.adisp-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.adisp-title { font-size: 17px; font-weight: 500; line-height: 1.25; color: var(--bb-text-primary); }
+.adisp-desc { font-size: 15px; line-height: 1.35; color: var(--bb-text-quaternary); }

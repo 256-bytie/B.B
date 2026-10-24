@@ -1,0 +1,63 @@
+<!-- BEGIN: Appearance and Display View -->
+<!-- Opened from the "Appearance and display preferences" row in Settings
+     (openAppearanceView in static/js/settings.js); the back arrow returns to Settings.
+     Options are wired in settings.js by data-appearance-option. -->
+<div id="appearance-display-view" class="view-section bg-white min-h-screen flex justify-center">
+<main class="w-full max-w-[430px] bg-white min-h-screen relative">
+
+	<!-- BEGIN: Banner -->
+	<header class="settings-banner settings-banner--compact">
+		<svg class="settings-banner-arcs" viewBox="0 0 430 160" preserveAspectRatio="xMaxYMid slice" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+			<circle cx="478" cy="-20" r="300"></circle>
+			<circle cx="518" cy="-80" r="272"></circle>
+		</svg>
+		<button type="button" id="appearance-back-btn" class="settings-back-btn" aria-label="Back" onclick="closeAppearanceView()">
+			<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg>
+		</button>
+		<h1 class="settings-title">Appearance and display</h1>
+	</header>
+	<!-- END: Banner -->
+
+	<!-- BEGIN: Options -->
+	<section class="adisp-list" aria-label="Appearance and display options">
+		<button type="button" class="adisp-row" data-appearance-option="accessibility">
+			<svg class="adisp-icon" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M9.88 9.88a3 3 0 104.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0112 5c7 0 10 7 10 7a13.16 13.16 0 01-1.67 2.68"/><path d="M6.61 6.61A13.53 13.53 0 002 12s3 7 10 7a9.74 9.74 0 005.39-1.61"/><path d="M2 2l20 20"/></svg>
+			<span class="adisp-text">
+				<span class="adisp-title">Accessibility</span>
+				<span class="adisp-desc">Manage aspects of your Beebo experience such as limiting colour contrast and motion. These settings affect all the Beebo accounts on this device.</span>
+			</span>
+		</button>
+		<button type="button" class="adisp-row" data-appearance-option="display">
+			<svg class="adisp-icon" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M18.37 2.63L14 7l-1.59-1.59a2 2 0 00-2.82 0L8 7l9 9 1.59-1.59a2 2 0 000-2.82L17 10l4.37-4.37a2.12 2.12 0 10-3-3z"/><path d="M9 8c-2 3-4 3.5-7 4l8 10c2-1 6-5 6-7"/><path d="M14.5 17.5L4.5 15"/></svg>
+			<span class="adisp-text">
+				<span class="adisp-title">Display</span>
+				<span class="adisp-desc">Manage media, display and sound.</span>
+			</span>
+		</button>
+		<button type="button" class="adisp-row" data-appearance-option="languages">
+			<svg class="adisp-icon" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+			<span class="adisp-text">
+				<span class="adisp-title">Languages</span>
+				<span class="adisp-desc">Manage which languages are used to personalise your Beebo experience.</span>
+			</span>
+		</button>
+		<button type="button" class="adisp-row" data-appearance-option="preferred-language">
+			<svg class="adisp-icon" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.28z" stroke-linecap="round" stroke-linejoin="round"></path><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+			<span class="adisp-text">
+				<span class="adisp-title">Preferred language</span>
+				<span class="adisp-desc">This will be your default language in the app</span>
+			</span>
+		</button>
+		<button type="button" class="adisp-row" data-appearance-option="data-usage">
+			<svg class="adisp-icon" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 20v-8"/><path d="M9 20V6"/><path d="M14 20v-6"/><path d="M19 20V10"/></svg>
+			<span class="adisp-text">
+				<span class="adisp-title">Data usage</span>
+				<span class="adisp-desc">Limit how Beebo uses some of your network data. These settings affect all the Beebo accounts on this device.</span>
+			</span>
+		</button>
+	</section>
+	<!-- END: Options -->
+
+</main>
+</div>
+<!-- END: Appearance and Display View -->

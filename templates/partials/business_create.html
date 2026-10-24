@@ -1,0 +1,179 @@
+<!-- BEGIN: Create Business View -->
+<!-- 3-step setup wizard opened by the "Create" FAB on the Businesses screen
+     (openBusinessCreate(), static/js/business-create.js). Frontend only: the
+     draft lives in memory and is reset every time the wizard opens; nothing is
+     sent anywhere yet. Rows with a chevron open the shared bottom sheet at the
+     end of this file. -->
+<div id="business-create-view" class="view-section bg-white min-h-screen flex flex-col relative">
+	<header class="flex items-center gap-4 px-4 h-14 bg-white border-b border-gray-100 shrink-0">
+		<button type="button" aria-label="Back" onclick="bcBack()" class="p-2 -ml-2 text-gray-800 hover:opacity-80 transition-opacity active:scale-95 duration-100">
+			<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+		</button>
+		<h1 class="text-[16px] font-semibold text-gray-900">Create Business</h1>
+	</header>
+
+	<div id="bc-scroll" class="flex-1 overflow-y-auto">
+		<div class="px-5 pt-5 pb-6">
+			<!-- Stepper: states/fill driven by bcGoToStep() via data-state / .is-filled -->
+			<ol class="flex items-center" aria-label="Progress">
+				<li class="bc-step-dot" data-step="1"><span class="bc-num">1</span><svg class="bc-check w-4 h-4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg></li>
+				<li class="bc-step-line" data-line="1" aria-hidden="true"></li>
+				<li class="bc-step-dot" data-step="2"><span class="bc-num">2</span><svg class="bc-check w-4 h-4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg></li>
+				<li class="bc-step-line" data-line="2" aria-hidden="true"></li>
+				<li class="bc-step-dot" data-step="3"><span class="bc-num">3</span><svg class="bc-check w-4 h-4" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg></li>
+			</ol>
+			<p id="bc-step-label" class="text-[14px] text-gray-500 mt-3" aria-live="polite">Step 1 of 3</p>
+
+			<!-- BEGIN: Step 1 - Business Information -->
+			<section class="bc-step-section mt-5 space-y-3.5" data-step="1">
+				<div>
+					<h2 class="text-[24px] font-bold text-gray-900 leading-tight">Business Information</h2>
+					<p class="text-[15px] text-gray-500 mt-1.5 leading-snug">Tell us about your business. This will be visible on your profile.</p>
+				</div>
+			<div data-bc-card="name" class="bc-card rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+				<label class="flex items-center gap-4 px-4 py-4 cursor-text">
+					<span class="text-gray-800"><svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 9l1.5-5h13L20 9"></path><path d="M4 9a2.5 2.5 0 0 0 5 0 2.5 2.5 0 0 0 6 0 2.5 2.5 0 0 0 5 0"></path><path d="M5 12v8h14v-8"></path><path d="M10 20v-4h4v4"></path></svg></span>
+					<span class="flex-1 min-w-0">
+						<span class="block text-[14px] font-semibold text-gray-900">Business Name *</span>
+						<input type="text" id="bc-name" maxlength="60" autocomplete="off" placeholder="Enter your business name" oninput="bcOnName(this.value)" class="block w-full mt-0.5 p-0 bg-transparent border-0 text-[14px] text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-0">
+					</span>
+				</label>
+			</div>
+			<p data-bc-error="name" class="hidden text-[12.5px] text-brand-red px-1 -mt-2" role="alert"></p>
+			<div data-bc-card="category" class="bc-card rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+				<button type="button" onclick="bcOpenSheet('category')" class="w-full flex items-center gap-4 px-4 py-4 text-left active:bg-gray-50 transition-colors">
+					<span class="text-gray-800"><svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="2"></rect><rect x="13.5" y="4" width="6.5" height="6.5" rx="2"></rect><rect x="4" y="13.5" width="6.5" height="6.5" rx="2"></rect><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="2"></rect></svg></span>
+					<span class="flex-1 min-w-0">
+						<span class="block text-[14px] font-semibold text-gray-900">Category *</span>
+						<span data-bc-summary="category" data-placeholder="Select a category" class="block text-[14px] text-gray-500 truncate mt-0.5">Select a category</span>
+					</span>
+					<svg class="w-[18px] h-[18px] shrink-0 text-gray-500" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+				</button>
+			</div>
+			<p data-bc-error="category" class="hidden text-[12.5px] text-brand-red px-1 -mt-2" role="alert"></p>
+			<div data-bc-card="location" class="bc-card rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+				<button type="button" onclick="bcOpenSheet('location')" class="w-full flex items-center gap-4 px-4 py-4 text-left active:bg-gray-50 transition-colors">
+					<span class="text-gray-800"><svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"></path><circle cx="12" cy="10" r="2.5"></circle></svg></span>
+					<span class="flex-1 min-w-0">
+						<span class="block text-[14px] font-semibold text-gray-900">Location *</span>
+						<span data-bc-summary="location" data-placeholder="Enter your location" class="block text-[14px] text-gray-500 truncate mt-0.5">Enter your location</span>
+					</span>
+					<svg class="w-[18px] h-[18px] shrink-0 text-gray-500" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+				</button>
+			</div>
+			<p data-bc-error="location" class="hidden text-[12.5px] text-brand-red px-1 -mt-2" role="alert"></p>
+			</section>
+			<!-- END: Step 1 -->
+
+			<!-- BEGIN: Step 2 - About & Hours -->
+			<section class="bc-step-section hidden mt-5 space-y-3.5" data-step="2">
+				<div>
+					<h2 class="text-[24px] font-bold text-gray-900 leading-tight">About &amp; Hours</h2>
+					<p class="text-[15px] text-gray-500 mt-1.5 leading-snug">Give people more details about your business, like what you do and when you're open.</p>
+				</div>
+			<div data-bc-card="description" class="bc-card rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+				<label class="flex items-start gap-4 px-4 pt-4 pb-3 cursor-text">
+					<span class="text-gray-800"><svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M14 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8z"></path><path d="M14 3v5h4"></path><path d="M9 13h6M9 17h6"></path></svg></span>
+					<span class="flex-1 min-w-0">
+						<span class="block text-[14px] font-semibold text-gray-900">Business Description *</span>
+						<textarea id="bc-description" rows="4" maxlength="500" placeholder="Tell people what your business does..." oninput="bcOnDescription(this)" class="block w-full mt-1 p-0 bg-transparent border-0 text-[14px] text-gray-900 placeholder:text-gray-500 resize-none focus:outline-none focus:ring-0"></textarea>
+						<span id="bc-description-count" class="block text-right text-[12px] text-gray-500">0/500</span>
+					</span>
+				</label>
+			</div>
+			<p data-bc-error="description" class="hidden text-[12.5px] text-brand-red px-1 -mt-2" role="alert"></p>
+			<div data-bc-card="hours" class="bc-card rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+				<button type="button" onclick="bcOpenSheet('hours')" class="w-full flex items-center gap-4 px-4 py-4 text-left active:bg-gray-50 transition-colors">
+					<span class="text-gray-800"><svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg></span>
+					<span class="flex-1 min-w-0">
+						<span class="block text-[14px] font-semibold text-gray-900">Opening Hours *</span>
+						<span data-bc-summary="hours" data-placeholder="Set your opening hours" class="block text-[14px] text-gray-500 truncate mt-0.5">Set your opening hours</span>
+					</span>
+					<svg class="w-[18px] h-[18px] shrink-0 text-gray-500" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+				</button>
+			</div>
+			<p data-bc-error="hours" class="hidden text-[12.5px] text-brand-red px-1 -mt-2" role="alert"></p>
+			<div data-bc-card="services" class="bc-card rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+				<button type="button" onclick="bcOpenSheet('services')" class="w-full flex items-center gap-4 px-4 py-4 text-left active:bg-gray-50 transition-colors">
+					<span class="text-gray-800"><svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="2"></rect><rect x="13.5" y="4" width="6.5" height="6.5" rx="2"></rect><rect x="4" y="13.5" width="6.5" height="6.5" rx="2"></rect><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="2"></rect></svg></span>
+					<span class="flex-1 min-w-0">
+						<span class="block text-[14px] font-semibold text-gray-900">Services <span class="font-normal text-gray-500">(Optional)</span></span>
+						<span data-bc-summary="services" data-placeholder="Add the services you offer" class="block text-[14px] text-gray-500 truncate mt-0.5">Add the services you offer</span>
+					</span>
+					<svg class="w-[18px] h-[18px] shrink-0 text-gray-500" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+				</button>
+			</div>
+			<p data-bc-error="services" class="hidden text-[12.5px] text-brand-red px-1 -mt-2" role="alert"></p>
+			</section>
+			<!-- END: Step 2 -->
+
+			<!-- BEGIN: Step 3 - Additional Information -->
+			<section class="bc-step-section hidden mt-5 space-y-3.5" data-step="3">
+				<div>
+					<h2 class="text-[24px] font-bold text-gray-900 leading-tight">Additional Information</h2>
+					<p class="text-[15px] text-gray-500 mt-1.5 leading-snug">Add extra details to make your business more trustworthy and easy to find.</p>
+				</div>
+			<div data-bc-card="contact" class="bc-card rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+				<button type="button" onclick="bcOpenSheet('contact')" class="w-full flex items-center gap-4 px-4 py-4 text-left active:bg-gray-50 transition-colors">
+					<span class="text-gray-800"><svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6.5 3.5h3l1.5 4-2 1.5a11 11 0 0 0 5 5l1.5-2 4 1.5v3a2 2 0 0 1-2 2A15 15 0 0 1 4.5 5.5a2 2 0 0 1 2-2z"></path></svg></span>
+					<span class="flex-1 min-w-0">
+						<span class="block text-[14px] font-semibold text-gray-900">Contact Information <span class="font-normal text-gray-500">(Optional)</span></span>
+						<span data-bc-summary="contact" data-placeholder="Phone number, email or website" class="block text-[14px] text-gray-500 truncate mt-0.5">Phone number, email or website</span>
+					</span>
+					<svg class="w-[18px] h-[18px] shrink-0 text-gray-500" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+				</button>
+			</div>
+			<p data-bc-error="contact" class="hidden text-[12.5px] text-brand-red px-1 -mt-2" role="alert"></p>
+			<div data-bc-card="social" class="bc-card rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+				<button type="button" onclick="bcOpenSheet('social')" class="w-full flex items-center gap-4 px-4 py-4 text-left active:bg-gray-50 transition-colors">
+					<span class="text-gray-800"><svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"></path><circle cx="8" cy="8" r="1.2"></circle></svg></span>
+					<span class="flex-1 min-w-0">
+						<span class="block text-[14px] font-semibold text-gray-900">Social Media <span class="font-normal text-gray-500">(Optional)</span></span>
+						<span data-bc-summary="social" data-placeholder="Link to your social media pages" class="block text-[14px] text-gray-500 truncate mt-0.5">Link to your social media pages</span>
+					</span>
+					<svg class="w-[18px] h-[18px] shrink-0 text-gray-500" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+				</button>
+			</div>
+			<p data-bc-error="social" class="hidden text-[12.5px] text-brand-red px-1 -mt-2" role="alert"></p>
+			<div data-bc-card="documents" class="bc-card rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+				<button type="button" onclick="bcOpenSheet('documents')" class="w-full flex items-center gap-4 px-4 py-4 text-left active:bg-gray-50 transition-colors">
+					<span class="text-gray-800"><svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M14 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8z"></path><path d="M14 3v5h4"></path><path d="M9 12h6M9 16h6"></path></svg></span>
+					<span class="flex-1 min-w-0">
+						<span class="block text-[14px] font-semibold text-gray-900">Verification <span class="font-normal text-gray-500">(Optional)</span></span>
+						<span data-bc-summary="documents" data-placeholder="Add documents or proof (e.g. business license)" class="block text-[14px] text-gray-500 truncate mt-0.5">Add documents or proof (e.g. business license)</span>
+					</span>
+					<svg class="w-[18px] h-[18px] shrink-0 text-gray-500" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+				</button>
+			</div>
+			<p data-bc-error="documents" class="hidden text-[12.5px] text-brand-red px-1 -mt-2" role="alert"></p>
+			</section>
+			<!-- END: Step 3 -->
+		</div>
+	</div>
+
+	<!-- BEGIN: Footer actions -->
+	<footer class="shrink-0 bg-white border-t border-gray-100 px-5 pt-3 flex gap-3" style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));">
+		<button type="button" id="bc-back-btn" onclick="bcBack()" class="hidden flex-1 h-12 rounded-xl border border-brand-red bg-white text-brand-red font-semibold text-[15px] active:opacity-80 transition-opacity">Back</button>
+		<button type="button" id="bc-next-btn" onclick="bcNext()" class="flex-1 h-12 rounded-xl bg-brand-red text-white font-semibold text-[15px] active:opacity-90 transition-opacity"><span id="bc-next-label">Next</span></button>
+	</footer>
+	<!-- END: Footer actions -->
+
+	<!-- BEGIN: Field bottom sheet (shared by every chevron row; content built in business-create.js) -->
+	<div id="bc-sheet-backdrop" class="bc-sheet-backdrop fixed inset-0 z-40 bg-black/30" aria-hidden="true" onclick="bcCloseSheet()"></div>
+	<div id="bc-sheet" class="bc-sheet fixed left-0 right-0 bottom-0 z-50 bg-white rounded-t-[24px] shadow-[0_-8px_24px_rgba(0,0,0,0.12)] max-w-[430px] mx-auto outline-none" role="dialog" aria-modal="true" aria-labelledby="bc-sheet-title" aria-hidden="true">
+		<div class="pt-2.5 pb-1 shrink-0"><div class="w-12 h-1 bg-gray-200 rounded-full mx-auto"></div></div>
+		<div class="flex items-center justify-between px-5 pb-2 shrink-0">
+			<h2 id="bc-sheet-title" class="text-[18px] font-bold text-gray-900"></h2>
+			<button type="button" aria-label="Close" onclick="bcCloseSheet()" class="p-2 -mr-2 text-gray-500 hover:opacity-80 active:scale-95 transition">
+				<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+			</button>
+		</div>
+		<div id="bc-sheet-body" class="px-5 pb-4 overflow-y-auto min-h-0 flex-1"></div>
+		<div id="bc-sheet-footer" class="px-5 pt-3 pb-2 border-t border-gray-100 shrink-0">
+			<p id="bc-sheet-error" class="hidden text-[13px] text-brand-red mb-2" role="alert"></p>
+			<button type="button" id="bc-sheet-save" onclick="bcSaveSheet()" class="w-full h-12 rounded-xl bg-brand-red text-white font-semibold text-[15px] active:opacity-90 transition-opacity">Save</button>
+		</div>
+	</div>
+	<!-- END: Field bottom sheet -->
+</div>
+<!-- END: Create Business View -->

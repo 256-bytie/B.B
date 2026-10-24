@@ -1,0 +1,48 @@
+<!-- BEGIN: Add Card View -->
+<!-- Opened from "Add new card" on the Payment methods screen (openAddCardView in
+     static/js/settings.js); the back arrow returns there. Validation only: there is no card
+     storage or payment processor yet, so nothing typed here is saved or sent anywhere. -->
+<div id="payment-card-add-view" class="view-section bg-white min-h-screen flex justify-center">
+<main class="w-full max-w-[430px] bg-white min-h-screen relative flex flex-col">
+
+	<!-- BEGIN: Header -->
+	<header class="card-add-header">
+		<button type="button" id="card-add-back-btn" class="card-add-back" aria-label="Back" onclick="closeAddCardView()">
+			<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg>
+		</button>
+		<h1 class="card-add-title">Add new card</h1>
+	</header>
+	<!-- END: Header -->
+
+	<!-- BEGIN: Fields -->
+	<form id="card-add-form" class="card-add-form" autocomplete="on" novalidate onsubmit="return false;">
+		<label class="card-field">
+			<input id="card-name-input" class="card-input" type="text" placeholder=" " autocomplete="cc-name" autocapitalize="words" spellcheck="false" enterkeyhint="next">
+			<span class="card-field-label">Name on card</span>
+		</label>
+		<label class="card-field">
+			<input id="card-number-input" class="card-input" type="text" inputmode="numeric" placeholder=" " autocomplete="cc-number" maxlength="23" spellcheck="false" enterkeyhint="next">
+			<span class="card-field-label">Card number</span>
+		</label>
+		<div class="card-field-row">
+			<label class="card-field">
+				<input id="card-expiry-input" class="card-input" type="text" inputmode="numeric" placeholder=" " autocomplete="cc-exp" maxlength="5" spellcheck="false" enterkeyhint="next">
+				<span class="card-field-label">MM/YY</span>
+			</label>
+			<label class="card-field">
+				<input id="card-cvc-input" class="card-input" type="text" inputmode="numeric" placeholder=" " autocomplete="cc-csc" maxlength="4" spellcheck="false" enterkeyhint="done">
+				<span class="card-field-label">CVC</span>
+			</label>
+		</div>
+	</form>
+	<!-- END: Fields -->
+
+	<!-- BEGIN: Footer -->
+	<footer class="card-add-footer">
+		<button type="button" id="card-add-submit-btn" class="card-add-submit" disabled onclick="submitAddCard()">Add new card</button>
+	</footer>
+	<!-- END: Footer -->
+
+</main>
+</div>
+<!-- END: Add Card View -->

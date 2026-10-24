@@ -42,8 +42,9 @@ function showView(viewName, { skipUrlSync = false } = {}) {
     if (typeof closeChatMenu === 'function') closeChatMenu(); // never leave the chat ⋮ menu open across screens
     if (typeof closeChatRowMenu === 'function') closeChatRowMenu(); // ...or the long-press row menu
     if (typeof closeChatGroupSheet === 'function') closeChatGroupSheet(); // ...or a Group info sheet
+    if (typeof closeSettingsSheet === 'function') closeSettingsSheet(); // ...or the Settings appearance sheet
     if (typeof chatOnViewChange === 'function') chatOnViewChange(viewName); // stop live chat polling outside chat screens
-    const views = ['login', 'signup', 'feed', 'profile', 'edit-profile', 'user-profile', 'create-post', 'businesses', 'courses', 'gpa-calculator', 'chat', 'chat-conversation', 'chat-requests', 'chat-new-message', 'chat-new-group', 'chat-group-info', 'chat-group-media', 'library', 'library-contribute', 'search', 'wallet', 'community', 'community-members', 'community-edit', 'community-create', 'community-browse'];
+    const views = ['login', 'signup', 'feed', 'profile', 'edit-profile', 'user-profile', 'create-post', 'businesses', 'courses', 'gpa-calculator', 'chat', 'chat-conversation', 'chat-requests', 'chat-new-message', 'chat-new-group', 'chat-group-info', 'chat-group-media', 'library', 'library-contribute', 'search', 'wallet', 'settings', 'settings-search', 'payment-methods', 'payment-card-add', 'appearance-display', 'community', 'community-members', 'community-edit', 'community-create', 'community-browse', 'business-create', 'business-profile', 'my-stores'];
     views.forEach(v => {
         const view = document.getElementById(v + '-view');
         if (view) {
@@ -141,6 +142,11 @@ function showView(viewName, { skipUrlSync = false } = {}) {
         initChatRequestsView();
     }
 
+    // Reload persisted businesses each time the Businesses list is shown
+    if (viewName === 'businesses') {
+        initBusinessesView();
+    }
+
     // Refresh the file list + department counts each time Library is shown
     if (viewName === 'library') {
         initLibraryView();
@@ -197,7 +203,79 @@ function openBusinessesView() {
     const activeEl = document.querySelector('.view-section.active');
     const name = activeEl ? activeEl.id.replace(/-view$/, '') : 'feed';
     if (BUSINESSES_RETURN_VIEWS.includes(name)) businessesReturnView = name;
+    resetBusinessFabs(); // always re-enter with the FABs tucked into the edge
     showView('businesses');
+}
+
+// ---- Businesses edge-merged expandable FABs ("My Stores", "Create") ----
+// Each FAB is a .business-fab wrapper holding a main button (icon + label)
+// and a collapse (X) button. Retracted: only the icon peeks past the right
+// edge (.is-retracted in style.css). First tap on the main button expands the
+// pill; a tap on the expanded main button runs the global function named in
+// the wrapper's data-action (openMyStores / openBusinessCreate, each a no-op
+// until defined); the X slides it back to the edge. Only one FAB is open at
+// a time: expanding one retracts the other. Taps inside the lock window are
+// ignored so the animation can't be tapped through to the action, and the
+// action can't fire twice from a double tap.
+// BUSINESS_FAB_EXPAND_LOCK_MS is just over the 320ms transform transition in
+// style.css. State is tracked per FAB id.
+const BUSINESS_FAB_EXPAND_LOCK_MS = 360;
+const BUSINESS_FAB_ACTION_LOCK_MS = 400;
+const businessFabState = {};
+
+function businessFabGetState(fab) {
+    return businessFabState[fab.id] || (businessFabState[fab.id] = { expanded: false, lockUntil: 0 });
+}
+
+function setBusinessFabExpanded(fab, expanded) {
+    fab.classList.toggle('is-retracted', !expanded);
+    const main = fab.querySelector('.business-fab-main');
+    if (main) main.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+}
+
+// Slide one FAB back to the edge. The lock keeps a tap landing mid-slide from
+// re-expanding it (or hitting its action) before it has settled.
+function retractBusinessFab(fab, now) {
+    const state = businessFabGetState(fab);
+    state.expanded = false;
+    state.lockUntil = now + BUSINESS_FAB_EXPAND_LOCK_MS;
+    setBusinessFabExpanded(fab, false);
+}
+
+function resetBusinessFabs() {
+    document.querySelectorAll('.business-fab').forEach(function(fab) {
+        businessFabState[fab.id] = { expanded: false, lockUntil: 0 };
+        setBusinessFabExpanded(fab, false);
+    });
+}
+
+function onBusinessFabClick(btn) {
+    const fab = btn.closest('.business-fab');
+    if (!fab) return;
+    const state = businessFabGetState(fab);
+    const now = Date.now();
+    if (now < state.lockUntil) return;
+    if (!state.expanded) {
+        document.querySelectorAll('.business-fab').forEach(function(other) {
+            if (other !== fab && businessFabGetState(other).expanded) retractBusinessFab(other, now);
+        });
+        state.expanded = true;
+        state.lockUntil = now + BUSINESS_FAB_EXPAND_LOCK_MS;
+        setBusinessFabExpanded(fab, true);
+        return;
+    }
+    state.lockUntil = now + BUSINESS_FAB_ACTION_LOCK_MS;
+    const action = window[fab.dataset.action];
+    if (typeof action === 'function') action();
+}
+
+function onBusinessFabCollapse(btn) {
+    const fab = btn.closest('.business-fab');
+    if (!fab) return;
+    const state = businessFabGetState(fab);
+    const now = Date.now();
+    if (!state.expanded || now < state.lockUntil) return;
+    retractBusinessFab(fab, now);
 }
 
 function closeBusinessesView() {

@@ -1,0 +1,115 @@
+<!-- BEGIN: Business Profile View -->
+<!-- Owner's management screen shown right after the Create Business wizard
+     finishes (openBusinessProfile(), static/js/business-profile.js). Frontend
+     only: a brand-new business has no banner, avatar, rating, reviews,
+     followers or posts yet, so those render their empty state. The menu rows
+     and the settings gear are placeholders until their screens exist. -->
+<div id="business-profile-view" class="view-section bg-white min-h-screen">
+	<header class="flex items-center justify-between px-5 h-14 bg-white">
+		<button type="button" aria-label="Back" onclick="bpBack()" class="p-2 -ml-2 text-gray-900 hover:opacity-80 transition-opacity active:scale-95 duration-100">
+			<svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+		</button>
+		<button type="button" aria-label="Business settings" onclick="bpComingSoon('Business settings')" class="p-2 -mr-2 text-gray-900 hover:opacity-80 transition-opacity active:scale-95 duration-100">
+			<svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path></svg>
+		</button>
+	</header>
+
+	<!-- Banner (empty state: soft placeholder, inset with rounded corners). 90px tall;
+	     the avatar below overlaps its bottom edge. Same camera-button pattern as the
+	     user profile cover (#profile-cover-camera-btn): the button opens the hidden
+	     file input and the chosen image replaces the placeholder (bpOnImagePicked()). -->
+	<div id="bp-banner" class="relative mx-3 h-[90px] rounded-xl overflow-hidden bg-gray-100">
+		<svg id="bp-banner-placeholder" class="absolute inset-0 w-full h-full" viewBox="0 0 360 90" preserveAspectRatio="none" aria-hidden="true">
+			<path d="M0 62C40 42 90 34 150 50S250 78 360 44V90H0Z" fill="#000" fill-opacity="0.035"></path>
+			<path d="M120 90C190 60 250 28 310 26S350 30 360 24V90Z" fill="#000" fill-opacity="0.045"></path>
+		</svg>
+		<img id="bp-banner-img" alt="Cover photo" class="hidden absolute inset-0 w-full h-full object-cover"/>
+		<button type="button" id="bp-banner-camera-btn" aria-label="Change cover photo" onclick="document.getElementById('bp-banner-input').click()" class="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-white/90 border border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.16)] flex items-center justify-center text-gray-700 hover:bg-white transition-colors active:scale-95 duration-100">
+			<i class="fa-solid fa-camera text-[13px]"></i>
+		</button>
+	</div>
+
+	<!-- Identity: the 64px avatar (white ring) is pulled 17px up over the banner;
+	     the name block sits beside it, below the banner. The wrapper is relative
+	     z-10 so it paints above the (relative) banner it overlaps, and anchors the
+	     camera badge (same pattern as #profile-avatar-camera-btn) outside the
+	     circle's overflow clip. -->
+	<div class="flex items-start gap-4 px-5">
+		<div class="relative z-10 -mt-[17px] shrink-0">
+			<div id="bp-avatar" class="relative w-16 h-16 rounded-full border-[3px] border-white overflow-hidden bg-[#B9BECD] flex items-center justify-center text-white/70">
+				<svg id="bp-avatar-placeholder" class="w-7 h-7 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 9l1.5-5h13L20 9"></path><path d="M4 9a2.5 2.5 0 0 0 5 0 2.5 2.5 0 0 0 6 0 2.5 2.5 0 0 0 5 0"></path><path d="M5 12v8h14v-8"></path><path d="M10 20v-4h4v4"></path></svg>
+				<img id="bp-avatar-img" alt="Business photo" class="hidden absolute inset-0 w-full h-full object-cover"/>
+			</div>
+			<button type="button" id="bp-avatar-camera-btn" aria-label="Change business photo" onclick="document.getElementById('bp-avatar-input').click()" class="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-white border border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.12)] flex items-center justify-center text-gray-600 hover:bg-gray-50 transition-colors active:scale-95 duration-100">
+				<i class="fa-solid fa-camera text-[10px]"></i>
+			</button>
+		</div>
+		<div class="min-w-0 mt-2.5">
+			<h1 id="bp-name" class="text-[20px] font-bold text-gray-900 leading-tight break-words"></h1>
+			<p id="bp-category" class="text-[15px] text-gray-500 mt-1"></p>
+			<span class="inline-block mt-2 px-3 py-1 rounded-lg bg-green-50 text-green-700 text-[13px] font-medium">Business Owner</span>
+		</div>
+	</div>
+
+	<input type="file" id="bp-avatar-input" accept="image/*" class="hidden" onchange="bpOnImagePicked(event, 'avatar')"/>
+	<input type="file" id="bp-banner-input" accept="image/*" class="hidden" onchange="bpOnImagePicked(event, 'banner')"/>
+
+	<!-- Stats (empty state: no rating yet, 0 reviews, 0 followers) -->
+	<div class="mx-4 mt-5 py-4 rounded-2xl border border-gray-200 bg-white shadow-sm grid grid-cols-3 divide-x divide-gray-100">
+				<div class="flex flex-col items-center gap-1 px-2">
+					<span class="flex items-center gap-1.5 text-gray-900"><svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.8-4.4 4.3 1.1 6.1L12 16.9 6.5 19.8l1.1-6.1-4.4-4.3 6.1-.8z"></path></svg><span id="bp-rating" class="text-[16px] font-semibold">&mdash;</span></span>
+					<span class="text-[13px] text-gray-500">Rating</span>
+				</div>
+				<div class="flex flex-col items-center gap-1 px-2">
+					<span class="flex items-center gap-1.5 text-gray-900"><svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.1A8 8 0 1 1 20 12z"></path></svg><span id="bp-reviews" class="text-[16px] font-semibold">0</span></span>
+					<span class="text-[13px] text-gray-500">Reviews</span>
+				</div>
+				<div class="flex flex-col items-center gap-1 px-2">
+					<span class="flex items-center gap-1.5 text-gray-900"><svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="9" cy="8" r="3.2"></circle><path d="M3 20a6 6 0 0 1 12 0"></path><path d="M16 5.2a3.2 3.2 0 0 1 0 5.6M18 14.3A6 6 0 0 1 21 20"></path></svg><span id="bp-followers" class="text-[16px] font-semibold">0</span></span>
+					<span class="text-[13px] text-gray-500">Followers</span>
+				</div>
+	</div>
+
+	<!-- Management menu -->
+	<div class="mx-4 mt-4 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden divide-y divide-gray-100">
+				<button type="button" onclick="bpComingSoon('Business Information')" class="w-full flex items-center gap-3.5 px-4 py-3.5 text-left active:bg-gray-50 transition-colors">
+					<span class="text-gray-800 self-start mt-0.5"><svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"></rect><path d="M9 8h.01M15 8h.01M9 12h.01M15 12h.01M10 21v-4h4v4"></path></svg></span>
+					<span class="flex-1 min-w-0"><span class="block text-[15px] font-semibold text-gray-900">Business Information</span><span class="block text-[13px] text-gray-500 mt-0.5">Edit name, category, location, contact</span></span>
+					<svg class="w-[18px] h-[18px] text-gray-500 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+				</button>
+				<button type="button" onclick="bpComingSoon('About / Description')" class="w-full flex items-center gap-3.5 px-4 py-3.5 text-left active:bg-gray-50 transition-colors">
+					<span class="text-gray-800 self-start mt-0.5"><svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 8h.01M12 12v4"></path></svg></span>
+					<span class="flex-1 min-w-0"><span class="block text-[15px] font-semibold text-gray-900">About / Description</span><span class="block text-[13px] text-gray-500 mt-0.5">Edit your business description</span></span>
+					<svg class="w-[18px] h-[18px] text-gray-500 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+				</button>
+				<button type="button" onclick="bpComingSoon('Hours')" class="w-full flex items-center gap-3.5 px-4 py-3.5 text-left active:bg-gray-50 transition-colors">
+					<span class="text-gray-800 self-start mt-0.5"><svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg></span>
+					<span class="flex-1 min-w-0"><span class="block text-[15px] font-semibold text-gray-900">Hours</span><span class="block text-[13px] text-gray-500 mt-0.5">Edit opening hours</span></span>
+					<svg class="w-[18px] h-[18px] text-gray-500 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+				</button>
+				<button type="button" onclick="bpComingSoon('Services')" class="w-full flex items-center gap-3.5 px-4 py-3.5 text-left active:bg-gray-50 transition-colors">
+					<span class="text-gray-800 self-start mt-0.5"><svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="2"></rect><rect x="13.5" y="4" width="6.5" height="6.5" rx="2"></rect><rect x="4" y="13.5" width="6.5" height="6.5" rx="2"></rect><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="2"></rect></svg></span>
+					<span class="flex-1 min-w-0"><span class="block text-[15px] font-semibold text-gray-900">Services</span><span class="block text-[13px] text-gray-500 mt-0.5">Edit dine in, take away, delivery etc.</span></span>
+					<svg class="w-[18px] h-[18px] text-gray-500 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+				</button>
+				<button type="button" onclick="bpComingSoon('Write a Notice')" class="w-full flex items-center gap-3.5 px-4 py-3.5 text-left active:bg-gray-50 transition-colors">
+					<span class="text-gray-800 self-start mt-0.5"><svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 3h12a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"></path><path d="M9 8h6M9 12h6M9 16h3"></path></svg></span>
+					<span class="flex-1 min-w-0"><span class="block text-[15px] font-semibold text-gray-900">Write a Notice</span><span class="block text-[13px] text-gray-500 mt-0.5">Post an announcement or update</span></span>
+					<svg class="w-[18px] h-[18px] text-gray-500 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+				</button>
+	</div>
+
+	<!-- Your Posts (empty state: nothing posted yet, so no "See all") -->
+	<section class="mt-6 pt-5 border-t border-gray-100 px-4 pb-10" aria-labelledby="bp-posts-title">
+		<div class="flex items-center justify-between px-1 mb-3">
+			<h2 id="bp-posts-title" class="text-[16px] font-semibold text-gray-900">Your Posts</h2>
+		</div>
+		<div id="bp-posts-empty" class="rounded-2xl border border-gray-200 bg-white shadow-sm px-6 py-8 text-center">
+			<span class="mx-auto w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-gray-400"><svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 3h12a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"></path><path d="M9 8h6M9 12h6M9 16h3"></path></svg></span>
+			<p class="text-[15px] font-semibold text-gray-900 mt-3">No posts yet</p>
+			<p class="text-[14px] text-gray-500 mt-1">Announcements and updates you share will show up here.</p>
+			<button type="button" onclick="bpComingSoon('Write a Notice')" class="mt-4 h-10 px-5 rounded-xl border border-brand-red text-brand-red font-semibold text-[14px] active:opacity-80 transition-opacity">Write a Notice</button>
+		</div>
+	</section>
+</div>
+<!-- END: Business Profile View -->

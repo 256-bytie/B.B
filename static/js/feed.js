@@ -13,6 +13,31 @@ function escapeHtml(str) {
         .replace(/'/g, '&#39;');
 }
 
+// Display markup for user-written post text (feed cards, the post overlay,
+// quote cards). Returns HTML that is safe to assign to innerHTML: the text
+// is whitespace-normalised and escaped FIRST, and only then are the
+// WhatsApp-style markers turned into tags, so user input can never inject
+// markup of its own.
+//   *bold*   ->  <strong>      _italic_  ->  <em>
+// A marker pair only formats when it hugs its content (no space just inside
+// either marker), opens at the start of the text or after a non-word
+// character, closes before a non-word character, and stays on one line.
+// So "2 * 3 * 4", "snake_case_name" and a stray "*" are left alone.
+// Spacing: line endings are normalised, each line is trimmed, runs of blank
+// lines collapse to a single blank line and the ends are trimmed. Line
+// breaks themselves are kept by `white-space: pre-wrap` on the element
+// that receives the result (.post-content-text, #overlay-post-content).
+function formatPostText(str) {
+    const text = (str == null ? '' : String(str))
+        .replace(/\r\n?/g, '\n')
+        .split('\n').map(function(line) { return line.trim(); }).join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    return escapeHtml(text)
+        .replace(/(^|[^\w*])\*([^\s*](?:[^*\n]*[^\s*])?)\*(?![\w*])/g, '$1<strong>$2</strong>')
+        .replace(/(^|[^\w_])_([^\s_](?:[^_\n]*[^\s_])?)_(?![\w_])/g, '$1<em>$2</em>');
+}
+
 // Post-level like/comment counters (feed card actions row + the comment
 // overlay's matching post header row) show only the icon when a post has
 // no interactions yet, and the icon+number once there's at least one -
@@ -179,7 +204,7 @@ function buildQuoteCardHtml(quoted, opts) {
     const name = escapeHtml(quoted.author_name);
     const handle = escapeHtml(handleRaw);
     const time = escapeHtml(formatPostTime(quoted.created_at));
-    const content = escapeHtml(quoted.content);
+    const content = formatPostText(quoted.content);
     const interactive = composer
         ? ''
         : ` role="link" tabindex="0" data-quote-post-id="${escapeHtml(String(quoted.id))}" aria-label="Quoted post by ${name}"`;
@@ -234,7 +259,8 @@ function buildPostCardHtml(post) {
     // two without recomputing the truncation client-side.
     const isLong = post.content.length > 220;
     const previewRaw = isLong ? truncatePostContent(post.content, 220) : post.content;
-    const previewText = isLong ? escapeHtml(previewRaw) : content;
+    // previewRaw is the full text when the post isn't long.
+    const previewText = formatPostText(previewRaw);
     // Collapsing back down is always possible for a truncated post, but
     // the "See less" label only shows for posts over 100 words - shorter
     // long posts still collapse on tap, just without the label.
@@ -263,7 +289,7 @@ function buildPostCardHtml(post) {
 </svg>
 </button>
 </div>
-<p class="text-gray-800 text-[15px] mb-3 leading-relaxed post-content"><span class="post-content-text">${previewText}</span>${isLong ? ` <button class="read-more-btn text-gray-400 font-medium" data-preview-text="${escapeHtml(previewRaw)}" data-expanded="false" data-show-see-less="${showSeeLess}">See more&hellip;</button>` : ''}</p>
+<p class="text-gray-800 text-[15px] mb-3 leading-relaxed post-content"><span class="post-content-text whitespace-pre-wrap break-words">${previewText}</span>${isLong ? ` <button class="read-more-btn text-gray-400 font-medium" data-preview-text="${escapeHtml(previewRaw)}" data-expanded="false" data-show-see-less="${showSeeLess}">See more&hellip;</button>` : ''}</p>
 ${imagesHtml}
 ${quoteHtml}
 <div class="flex items-center justify-between text-gray-500 post-actions-row px-5">

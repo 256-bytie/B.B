@@ -298,8 +298,23 @@ function updateEditProfileBioCounter() {
     counter.textContent = `${bioInput.value.length}/150`;
 }
 
+// Edit Profile can be opened from the profile (default) or from Settings > Account
+// information; Back and a successful save return to wherever it was opened from.
+let editProfileReturnView = 'profile';
+
+function openEditProfileView(returnView) {
+    editProfileReturnView = returnView || 'profile';
+    showView('edit-profile');
+}
+
+function leaveEditProfileView() {
+    const target = editProfileReturnView || 'profile';
+    editProfileReturnView = 'profile';
+    showView(target);
+}
+
 function closeEditProfileView() {
-    showView('profile');
+    leaveEditProfileView();
 }
 
 // Persists Display Name / Username / Bio. Avatar and cover are saved
@@ -379,7 +394,7 @@ async function handleSaveProfileChanges() {
         renderProfileBio(session.user.bio);
 
         showToast('Profile updated');
-        showView('profile');
+        leaveEditProfileView();
     } catch (error) {
         console.error('Error saving profile changes:', error);
         if (errorEl) {
@@ -541,16 +556,12 @@ document.querySelectorAll('.profile-tab').forEach(function(tabBtn) {
 });
 
 document.getElementById('profile-edit-btn').addEventListener('click', function() {
-    showView('edit-profile');
+    openEditProfileView();
 });
 
-// Cosmetic-only controls with no backing feature yet
-['profile-settings-btn'].forEach(function(id) {
-    const btn = document.getElementById(id);
-    if (btn) {
-        btn.addEventListener('click', function() {
-            showToast('Coming soon');
-        });
-    }
-});
+// Settings screen (static/js/settings.js)
+(function() {
+    const btn = document.getElementById('profile-settings-btn');
+    if (btn) btn.addEventListener('click', function() { openSettingsView(); });
+})();
 
