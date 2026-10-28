@@ -4,8 +4,7 @@
 // lives in the in-memory bcDraft, which is rebuilt each time the wizard
 // opens. bcBuildPayload() is the single place the request body is read from;
 // bcFinish() POSTs it to /api/businesses. Depends on escapeHtml (feed.js),
-// showView (core.js), apiFetch (core.js), showToast (compose.js), addMyStore
-// (business-stores.js) and openBusinessProfile (business-profile.js).
+// showView (core.js), apiFetch (core.js), showToast (compose.js) and openBusinessProfile (business-profile.js).
 
 const BC_TOTAL_STEPS = 3;
 const BC_CATEGORIES = [
@@ -135,8 +134,8 @@ function bcBuildPayload() {
 
 let bcSaving = false;
 
-// Persist the business (POST /api/businesses), then add it to My Stores and
-// open its profile. Verification documents are collected by the wizard but not
+// Persist the business (POST /api/businesses), then open its profile (My Stores
+// loads it from the server). Verification documents are collected by the wizard but not
 // uploaded yet, so they are left out of the request body.
 async function bcFinish() {
 	if (bcSaving) return;
@@ -161,7 +160,6 @@ async function bcFinish() {
 			showToast(data.error || 'Something went wrong. Please try again.');
 			return;
 		}
-		addMyStore(data.business);
 		openBusinessProfile(data.business);
 	} catch (err) {
 		showToast('Network error. Please try again.');

@@ -77,7 +77,7 @@ def create_app():
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
     # Register blueprints
-    from app.routes import auth, posts, users, library, search, wallet, communities, chat
+    from app.routes import auth, posts, users, library, search, wallet, communities, chat, businesses
     app.register_blueprint(auth.bp)
     app.register_blueprint(posts.bp)
     app.register_blueprint(users.bp)
@@ -86,6 +86,7 @@ def create_app():
     app.register_blueprint(wallet.bp)
     app.register_blueprint(communities.bp)
     app.register_blueprint(chat.bp)
+    app.register_blueprint(businesses.bp)
 
     # Fast-fail on pool exhaustion instead of hanging the request.
     @app.errorhandler(PoolTimeout)

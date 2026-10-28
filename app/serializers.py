@@ -303,3 +303,34 @@ def serialize_community(row, icon_bg, viewer_role, icon_image=None, cover_image=
             'notification_level': notification_level if viewer_role is not None else None,
         },
     }
+
+
+def serialize_business(row):
+    """Convert a businesses row into a JSON-serializable dict.
+
+    Row order: id, owner_id, name, category, location, description, hours,
+    services, contact, social, avatar_image, banner_image, created_at,
+    theme_color (optional, last). The
+    JSONB columns arrive from psycopg already decoded (dict / list).
+    """
+    (business_id, owner_id, name, category, location, description,
+     hours, services, contact, social, avatar_image, banner_image,
+     created_at) = row[:13]
+    theme_color = row[13] if len(row) > 13 else None
+
+    return {
+        'id': business_id,
+        'owner_id': owner_id,
+        'name': name,
+        'category': category,
+        'location': location,
+        'description': description,
+        'hours': hours,
+        'services': services or [],
+        'contact': contact or {},
+        'social': social or {},
+        'avatar_url': avatar_image,
+        'banner_url': banner_image,
+        'theme_color': theme_color,
+        'created_at': timestamp_text(created_at),
+    }

@@ -415,7 +415,7 @@ document.getElementById('edit-profile-bio-input').addEventListener('input', upda
 const PROFILE_IMAGE_MAX_SIZE = 5 * 1024 * 1024; // 5MB, matches backend limit
 
 async function handleProfileImageSelected(event, kind) {
-    const file = event.target.files && event.target.files[0];
+    let file = event.target.files && event.target.files[0];
     event.target.value = ''; // allow re-selecting the same file later
 
     if (!file) return;
@@ -424,6 +424,25 @@ async function handleProfileImageSelected(event, kind) {
         showToast('Please choose an image file.');
         return;
     }
+
+    // Profile photos are cropped (square, shown round) before upload; Cancel aborts.
+    // The 5MB check below then applies to the cropped file, so large phone photos work.
+    if (kind === 'avatar') {
+        try {
+            const cropped = await openImageCropper(file, {
+                aspect: 1,
+                circle: true,
+                maxOutput: 1024,
+                title: 'Crop profile photo'
+            });
+            if (!cropped) return;
+            file = cropped;
+        } catch (error) {
+            showToast("Couldn't open that image. Try a different one.");
+            return;
+        }
+    }
+
     if (file.size > PROFILE_IMAGE_MAX_SIZE) {
         showToast('Image must be under 5MB.');
         return;

@@ -2241,3 +2241,75 @@ html.dark .card-add-submit:disabled { background: #27272a; color: #71717a; }
         animation: none;
     }
 }
+
+
+/* ---- Theme screen (static/js/business-theme.js) ---- */
+.bt-accent-text { color: var(--bt-accent, #DA292E); }
+#business-theme-view #bt-hex:focus { border-color: var(--bt-accent, #DA292E); }
+
+.bt-swatch-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 48px; background: none; border: 0; padding: 0; }
+.bt-swatch { position: relative; width: 34px; height: 34px; border-radius: 9999px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 13px; transition: transform .12s; }
+.bt-swatch i { opacity: 0; }
+.bt-swatch-btn:active .bt-swatch { transform: scale(.92); }
+.bt-swatch-btn[aria-checked="true"] .bt-swatch { box-shadow: 0 0 0 2px var(--bb-bg-surface, #fff), 0 0 0 4px var(--bt-accent, #DA292E); }
+.bt-swatch-btn[aria-checked="true"] .bt-swatch i { opacity: 1; }
+.bt-swatch-label { font-size: 11px; color: #6b7280; }
+.bt-swatch-btn[aria-checked="true"] .bt-swatch-label { color: var(--bt-accent, #DA292E); font-weight: 600; }
+
+.bt-dot { width: 30px; height: 30px; border-radius: 9999px; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.14); }
+.bt-hue-slider { -webkit-appearance: none; appearance: none; height: 10px; border-radius: 9999px; outline: none; padding: 0; border: 0;
+	background: linear-gradient(90deg, #ef4444 0%, #eab308 17%, #84cc16 28%, #22d3ee 50%, #2563eb 67%, #c026d3 83%, #ef4444 100%); }
+.bt-hue-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 9999px; background: var(--bt-accent, #DA292E); border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+.bt-hue-slider::-moz-range-thumb { width: 18px; height: 18px; border-radius: 9999px; background: var(--bt-accent, #DA292E); border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+
+/* ---- Themed business card (Businesses + My Stores; applyBusinessCardTheme in businesses.js) ----
+   Selectors start with `html` so they beat the dark-mode utility remaps; colors are
+   fixed because the card sits on its own accent background in both light and dark. */
+html .bb-themed-card { position: relative; overflow: hidden; align-items: center; min-height: 100px; padding: 12px; gap: 12px;
+	background: var(--bb-card-dark) !important; border-color: transparent !important; box-shadow: 0 6px 18px rgba(0,0,0,.14); }
+html .bb-themed-card .bb-card-cover { position: absolute; top: 0; right: 0; bottom: 0; width: 66%; height: 100%; object-fit: cover; }
+html .bb-themed-card .bb-card-cover-empty { background: linear-gradient(135deg, var(--bb-card-accent), var(--bb-card-light)); }
+html .bb-themed-card .bb-card-fade { position: absolute; inset: 0; pointer-events: none;
+	background: linear-gradient(90deg, var(--bb-card-dark) 0%, var(--bb-card-dark) 38%, color-mix(in srgb, var(--bb-card-dark) 55%, transparent) 56%, transparent 84%); }
+html .bb-themed-card .bb-card-avatar { position: relative; z-index: 2; width: 68px; height: 68px; border-radius: 16px; background: #fff !important; object-fit: cover; flex-shrink: 0; }
+html .bb-themed-card .bb-card-avatar i { color: var(--bb-card-accent) !important; }
+html .bb-themed-card .bb-card-text { position: relative; z-index: 2; width: auto; max-width: 60%; }
+html .bb-themed-card .bb-card-text,
+html .bb-themed-card .bb-card-text * { color: #fff !important; }
+html .bb-themed-card [data-field="category"] { opacity: .85; }
+html .bb-themed-card [data-field="stars"] i { opacity: .9; }
+
+/* ---- Image cropper (templates/partials/image_cropper.html, static/js/image-cropper.js) ----
+   Always dark, in light and dark mode. Own class names (not Tailwind utilities) so the
+   dark-mode remaps never touch it. */
+.ic-overlay { position: fixed; inset: 0; z-index: 70; display: flex; flex-direction: column; background: #050709; color: #fff;
+	padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.ic-overlay[hidden] { display: none; }
+.ic-overlay:focus { outline: none; }
+.ic-title { margin: 0; padding: 14px 16px 4px; text-align: center; font-size: 16px; font-weight: 600; color: #fff; }
+.ic-stage { position: relative; flex: 1; min-height: 0; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+.ic-canvas { position: absolute; display: block; pointer-events: none; }
+.ic-box { box-sizing: border-box; position: absolute; border: 1px solid rgba(255,255,255,.7); box-shadow: 0 0 0 100vmax rgba(0,0,0,.62); cursor: move; touch-action: none; }
+.ic-grid { position: absolute; inset: 0; pointer-events: none;
+	background:
+		linear-gradient(to right, transparent calc(33.333% - .5px), rgba(255,255,255,.4) calc(33.333% - .5px), rgba(255,255,255,.4) calc(33.333% + .5px), transparent calc(33.333% + .5px)),
+		linear-gradient(to right, transparent calc(66.667% - .5px), rgba(255,255,255,.4) calc(66.667% - .5px), rgba(255,255,255,.4) calc(66.667% + .5px), transparent calc(66.667% + .5px)),
+		linear-gradient(to bottom, transparent calc(33.333% - .5px), rgba(255,255,255,.4) calc(33.333% - .5px), rgba(255,255,255,.4) calc(33.333% + .5px), transparent calc(33.333% + .5px)),
+		linear-gradient(to bottom, transparent calc(66.667% - .5px), rgba(255,255,255,.4) calc(66.667% - .5px), rgba(255,255,255,.4) calc(66.667% + .5px), transparent calc(66.667% + .5px)); }
+.ic-circle { position: absolute; inset: 0; border-radius: 50%; border: 1px dashed rgba(255,255,255,.55); pointer-events: none; }
+.ic-h { box-sizing: border-box; position: absolute; width: 44px; height: 44px; touch-action: none; cursor: pointer; }
+.ic-h::before { content: ""; position: absolute; }
+.ic-h-nw { left: -22px; top: -22px; }    .ic-h-nw::before { left: 20px; top: 20px; width: 24px; height: 24px; border-top: 3px solid #fff; border-left: 3px solid #fff; }
+.ic-h-ne { right: -22px; top: -22px; }   .ic-h-ne::before { right: 20px; top: 20px; width: 24px; height: 24px; border-top: 3px solid #fff; border-right: 3px solid #fff; }
+.ic-h-sw { left: -22px; bottom: -22px; } .ic-h-sw::before { left: 20px; bottom: 20px; width: 24px; height: 24px; border-bottom: 3px solid #fff; border-left: 3px solid #fff; }
+.ic-h-se { right: -22px; bottom: -22px; } .ic-h-se::before { right: 20px; bottom: 20px; width: 24px; height: 24px; border-bottom: 3px solid #fff; border-right: 3px solid #fff; }
+.ic-h-n { left: 50%; top: -22px; margin-left: -22px; }    .ic-h-n::before { left: 10px; top: 20px; width: 24px; height: 3px; background: #fff; }
+.ic-h-s { left: 50%; bottom: -22px; margin-left: -22px; } .ic-h-s::before { left: 10px; bottom: 20px; width: 24px; height: 3px; background: #fff; }
+.ic-h-w { left: -22px; top: 50%; margin-top: -22px; }     .ic-h-w::before { left: 20px; top: 10px; width: 3px; height: 24px; background: #fff; }
+.ic-h-e { right: -22px; top: 50%; margin-top: -22px; }    .ic-h-e::before { right: 20px; top: 10px; width: 3px; height: 24px; background: #fff; }
+.ic-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px 16px; }
+.ic-btn { min-height: 44px; border: 0; background: none; color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; }
+.ic-btn:active { opacity: .7; }
+.ic-btn-text { padding: 0 10px; min-width: 72px; text-align: left; color: rgba(255,255,255,.85); }
+.ic-btn-icon { width: 44px; display: flex; align-items: center; justify-content: center; }
+.ic-btn-done { padding: 0 22px; border-radius: 9999px; background: #DA292E; }

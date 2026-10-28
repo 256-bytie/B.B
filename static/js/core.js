@@ -44,7 +44,7 @@ function showView(viewName, { skipUrlSync = false } = {}) {
     if (typeof closeChatGroupSheet === 'function') closeChatGroupSheet(); // ...or a Group info sheet
     if (typeof closeSettingsSheet === 'function') closeSettingsSheet(); // ...or the Settings appearance sheet
     if (typeof chatOnViewChange === 'function') chatOnViewChange(viewName); // stop live chat polling outside chat screens
-    const views = ['login', 'signup', 'feed', 'profile', 'edit-profile', 'user-profile', 'create-post', 'businesses', 'courses', 'gpa-calculator', 'chat', 'chat-conversation', 'chat-requests', 'chat-new-message', 'chat-new-group', 'chat-group-info', 'chat-group-media', 'library', 'library-contribute', 'search', 'wallet', 'settings', 'settings-search', 'payment-methods', 'payment-card-add', 'appearance-display', 'community', 'community-members', 'community-edit', 'community-create', 'community-browse', 'business-create', 'business-profile', 'my-stores'];
+    const views = ['login', 'signup', 'feed', 'profile', 'edit-profile', 'user-profile', 'create-post', 'businesses', 'courses', 'gpa-calculator', 'chat', 'chat-conversation', 'chat-requests', 'chat-new-message', 'chat-new-group', 'chat-group-info', 'chat-group-media', 'library', 'library-contribute', 'search', 'wallet', 'settings', 'settings-search', 'payment-methods', 'payment-card-add', 'appearance-display', 'community', 'community-members', 'community-edit', 'community-create', 'community-browse', 'business-create', 'business-profile', 'business-theme', 'my-stores'];
     views.forEach(v => {
         const view = document.getElementById(v + '-view');
         if (view) {

@@ -1,0 +1,34 @@
+<!-- BEGIN: Image Cropper -->
+<!-- Full-screen crop step shown before a photo is uploaded (openImageCropper(),
+     static/js/image-cropper.js). Currently used for the profile picture
+     (handleProfileImageSelected in profile-own.js). The crop box is moved by
+     dragging inside it and resized by dragging its corner (and, for free-ratio
+     crops, edge) handles; the rotate button turns the photo 90 degrees. Cancel
+     closes without uploading, Done returns the cropped JPEG. Styled by the .ic-*
+     rules in style.css. -->
+<div id="image-cropper" class="ic-overlay" hidden tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="ic-title">
+	<h2 id="ic-title" class="ic-title">Crop photo</h2>
+	<div id="ic-stage" class="ic-stage">
+		<canvas id="ic-canvas" class="ic-canvas"></canvas>
+		<div id="ic-box" class="ic-box">
+			<div class="ic-grid"></div>
+			<div id="ic-circle" class="ic-circle"></div>
+			<div class="ic-h ic-h-nw" data-handle="nw"></div>
+			<div class="ic-h ic-h-ne" data-handle="ne"></div>
+			<div class="ic-h ic-h-sw" data-handle="sw"></div>
+			<div class="ic-h ic-h-se" data-handle="se"></div>
+			<div class="ic-h ic-h-n" data-handle="n"></div>
+			<div class="ic-h ic-h-s" data-handle="s"></div>
+			<div class="ic-h ic-h-w" data-handle="w"></div>
+			<div class="ic-h ic-h-e" data-handle="e"></div>
+		</div>
+	</div>
+	<div class="ic-bar">
+		<button type="button" id="ic-cancel" class="ic-btn ic-btn-text">Cancel</button>
+		<button type="button" id="ic-rotate" class="ic-btn ic-btn-icon" aria-label="Rotate 90 degrees">
+			<svg width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 9.5 8 5l4.5 4.5L8 14z"></path><path d="M10 19a7 7 0 0 0 0-14"></path><path d="M12.5 3.2 10 5l2 2.4"></path></svg>
+		</button>
+		<button type="button" id="ic-done" class="ic-btn ic-btn-done">Done</button>
+	</div>
+</div>
+<!-- END: Image Cropper -->

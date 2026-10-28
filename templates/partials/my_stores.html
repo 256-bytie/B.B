@@ -3,7 +3,7 @@
      static/js/business-stores.js). Lists the businesses the user created with
      the Create Business wizard, using the same header and the same card
      markup (#business-card-template in businesses.html) as the Businesses
-     list. Frontend only: the list lives in memory for the session. -->
+     list. Loaded from GET /api/businesses?mine=1 each time it opens. -->
 <div id="my-stores-view" class="view-section bg-white min-h-screen relative">
 	<header class="bg-white sticky top-0 z-10 w-full shadow-sm">
 		<div class="flex items-center gap-3 px-4 py-3.5">

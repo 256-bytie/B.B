@@ -2,13 +2,18 @@
 		<div id="businesses-view" class="view-section bg-white min-h-screen relative">
 			<!-- BEGIN: Main Header -->
 			<header class="bg-white sticky top-0 z-10 w-full shadow-sm">
-				<div class="flex items-center gap-3 px-4 py-3.5">
-					<button type="button" aria-label="Back" onclick="closeBusinessesView()" class="p-1 -ml-1 text-gray-900 hover:opacity-80 transition-opacity active:scale-95 duration-100">
+				<div class="relative flex items-center justify-center px-4 py-3.5">
+					<button type="button" aria-label="Open menu" onclick="openSideNav()" class="absolute left-4 top-1/2 -translate-y-1/2 p-1 -ml-1 text-gray-500 hover:text-gray-700 focus:outline-none active:scale-95 duration-100">
 						<svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-							<path d="m15 18-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"></path>
+							<path d="M5 8H13.75M5 12H19M10.25 16L19 16" stroke-linecap="round" stroke-linejoin="round"></path>
 						</svg>
 					</button>
-					<h1 class="text-lg font-bold text-gray-900">Businesses</h1>
+					<h1 class="text-lg font-bold text-gray-900 text-center">Businesses</h1>
+					<button type="button" aria-label="Search" onclick="toggleSearch()" class="absolute right-4 top-1/2 -translate-y-1/2 p-1 -mr-1 text-gray-500 hover:text-gray-700 focus:outline-none active:scale-95 duration-100">
+						<svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+							<path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-linecap="round" stroke-linejoin="round"></path>
+						</svg>
+					</button>
 				</div>
 			</header>
 			<!-- END: Main Header -->
@@ -64,81 +69,114 @@
 			</div>
 			<!-- END: Search Overlay -->
 
-			<!-- BEGIN: Filter Bar -->
-			<nav class="px-5 py-4 mb-2 flex items-center justify-between">
-				<div class="flex overflow-x-auto no-scrollbar space-x-2 pb-2 flex-1">
-					<button class="bg-red-50 text-brand-red px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap">All</button>
-					<button class="bg-gray-50 text-gray-600 px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap hover:bg-gray-100 transition-colors">Restaurants</button>
-					<button class="bg-gray-50 text-gray-600 px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap hover:bg-gray-100 transition-colors">Shops</button>
-					<button class="bg-gray-50 text-gray-600 px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap hover:bg-gray-100 transition-colors">Services</button>
-					<button class="bg-gray-50 text-gray-600 px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap hover:bg-gray-100 transition-colors">Charging</button>
+			<!-- BEGIN: Promo banner -->
+			<!-- Banner photo: free Unsplash image (strawberry milkshake, by Alina Parache), hot-linked;
+			     if it fails to load the banner falls back to its gradient. -->
+			<section id="business-promo" class="px-4 pt-4">
+				<div class="relative overflow-hidden rounded-[20px] h-[150px]" style="background:linear-gradient(115deg,#B25A30 0%,#CF7D47 55%,#E39B66 100%)">
+					<img src="https://images.unsplash.com/photo-1686638745403-d21193f16b2f?fm=jpg&q=70&w=700&auto=format&fit=crop" alt="" loading="lazy" class="absolute top-0 right-0 h-full w-[58%] object-cover" onerror="this.remove()"/>
+					<div class="absolute inset-0" style="background:linear-gradient(90deg,#B25A30 0%,#B25A30 30%,rgba(178,90,48,.62) 48%,rgba(178,90,48,0) 74%)"></div>
+					<div class="relative z-10 h-full flex flex-col justify-center pl-5 pr-[40%]">
+						<h2 class="text-[26px] leading-[1.08]" style="font-family:'Kaushan Script',cursive;color:#fff">Good Food<br/>Good Vibes</h2>
+						<p class="text-[12px] leading-snug mt-1.5" style="color:rgba(255,255,255,.92)">Local favourites, great experiences.</p>
+						<button type="button" onclick="scrollToBusinessSection('food')" class="mt-2.5 self-start flex items-center gap-1.5 h-8 px-3.5 rounded-full text-[12px] font-semibold active:scale-95 transition-transform" style="background:#fff;color:#8A3F1D">Explore Food &amp; Drinks <i class="fa-solid fa-arrow-right text-[10px]"></i></button>
+					</div>
 				</div>
-				<div class="flex items-center space-x-4 text-gray-800 ml-4 pb-2">
-					<button aria-label="Search" onclick="toggleSearch()">
-						<svg class="w-6 h-6" fill="none" stroke="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-							<path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
-						</svg>
-					</button>
-					<button aria-label="Filter">
-						<svg class="w-6 h-6" fill="none" stroke="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-							<path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
-						</svg>
-					</button>
+				<!-- Pagination dots: decorative for now (not wired to a carousel). -->
+				<div class="flex items-center justify-center gap-1.5 mt-2.5" aria-hidden="true">
+					<span class="w-4 h-1.5 rounded-full" style="background:#DA292E"></span>
+					<span class="w-1.5 h-1.5 rounded-full bg-gray-300"></span>
+					<span class="w-1.5 h-1.5 rounded-full bg-gray-300"></span>
 				</div>
-			</nav>
-			<!-- END: Filter Bar -->
+			</section>
+			<!-- END: Promo banner -->
 
-			<!-- BEGIN: Business List -->
-			<!-- Render target: clone #business-card-template once per business and append here. -->
-			<main id="business-list" class="px-4 space-y-4 pb-24"></main>
+			<!-- BEGIN: Category sections -->
+			<!-- Three carousels built by renderBusinesses() (businesses.js): "Featured" (businesses with a cover),
+			     "Food & drinks" (category Food & Drinks)
+			     and "Shops & gadgets" (every other category). Cards use the business cover image; a section
+			     with no businesses stays hidden. Nothing else sits below them. -->
+			<div id="business-sections" class="pt-5 pb-28 space-y-6">
+				<section id="business-section-featured" class="hidden scroll-mt-16" aria-label="Featured">
+					<div class="flex items-center justify-between px-4">
+						<h2 class="flex items-center gap-2 text-[17px] font-bold text-gray-900">
+							<span class="w-7 h-7 rounded-full bg-orange-50 flex items-center justify-center"><i class="fa-solid fa-fire text-orange-500 text-[14px]"></i></span>Featured
+						</h2>
+						<button type="button" onclick="showToast('See all is coming soon')" class="flex items-center gap-1 text-[13px] font-medium text-gray-500 active:opacity-70">See all <i class="fa-solid fa-chevron-right text-[10px]"></i></button>
+					</div>
+					<div class="relative mt-3">
+						<div data-role="scroll" class="flex gap-3 overflow-x-auto no-scrollbar px-4 snap-x snap-mandatory" onscroll="updateBusinessSection('featured')"></div>
+						<button data-role="next" type="button" aria-label="Next" onclick="scrollBusinessSection('featured')" class="hidden absolute right-5 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white shadow-[0_2px_10px_rgba(0,0,0,0.25)] items-center justify-center text-gray-900 active:scale-95 transition-transform"><i class="fa-solid fa-chevron-right text-[13px]"></i></button>
+					</div>
+				</section>
 
+				<section id="business-section-food" class="hidden scroll-mt-16" aria-label="Food &amp; drinks">
+					<div class="flex items-center justify-between px-4">
+						<h2 class="flex items-center gap-2.5 text-[18px] font-bold text-gray-900"><i class="fa-solid fa-utensils text-[17px]" style="color:#F97316"></i>Food &amp; drinks</h2>
+						<button type="button" onclick="showToast('See all is coming soon')" class="flex items-center gap-1.5 text-[13px] font-medium text-gray-900 active:opacity-70">See all <i class="fa-solid fa-chevron-right text-[10px] text-brand-red"></i></button>
+					</div>
+					<div class="relative mt-3">
+						<div data-role="scroll" class="flex gap-3 overflow-x-auto no-scrollbar px-4 snap-x snap-mandatory" onscroll="updateBusinessSection('food')"></div>
+						<button data-role="next" type="button" aria-label="Next" onclick="scrollBusinessSection('food')" class="hidden absolute right-5 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white shadow-[0_2px_10px_rgba(0,0,0,0.25)] items-center justify-center text-gray-900 active:scale-95 transition-transform"><i class="fa-solid fa-chevron-right text-[13px]"></i></button>
+					</div>
+					<div data-role="dots" class="hidden items-center justify-center gap-1.5 mt-3" aria-hidden="true"></div>
+				</section>
+
+				<section id="business-section-shops" class="hidden scroll-mt-16" aria-label="Shops &amp; gadgets">
+					<div class="flex items-center justify-between px-4">
+						<h2 class="flex items-center gap-2.5 text-[18px] font-bold text-gray-900"><i class="fa-solid fa-bag-shopping text-[17px]" style="color:#F97316"></i>Shops &amp; gadgets</h2>
+						<button type="button" onclick="showToast('See all is coming soon')" class="flex items-center gap-1.5 text-[13px] font-medium text-gray-900 active:opacity-70">See all <i class="fa-solid fa-chevron-right text-[10px] text-brand-red"></i></button>
+					</div>
+					<div class="relative mt-3">
+						<div data-role="scroll" class="flex gap-3 overflow-x-auto no-scrollbar px-4 snap-x snap-mandatory" onscroll="updateBusinessSection('shops')"></div>
+						<button data-role="next" type="button" aria-label="Next" onclick="scrollBusinessSection('shops')" class="hidden absolute right-5 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white shadow-[0_2px_10px_rgba(0,0,0,0.25)] items-center justify-center text-gray-900 active:scale-95 transition-transform"><i class="fa-solid fa-chevron-right text-[13px]"></i></button>
+					</div>
+				</section>
+
+				<div id="business-status" class="hidden px-4 text-center"></div>
+			</div>
+			<!-- END: Category sections -->
+
+			<!-- BEGIN: Card templates (used by buildBusinessCard, shared with My Stores and the Theme preview) -->
 			<!-- Business card template (inert; not rendered). Fill elements marked data-field.
 			     Stars: 5 icons; use "fas fa-star" (full), "fas fa-star-half-alt" (half), "far fa-star text-gray-200" (empty).
 			     Features row: hide when empty; clone #business-feature-available / #business-feature-unavailable per item. -->
 			<template id="business-card-template">
-				<article class="flex flex-row bg-white rounded-[16px] border border-gray-100 p-3 gap-4 shadow-[0_2px_12px_rgba(0,0,0,0.04)]">
-					<img data-field="image" alt="" class="w-[120px] h-[120px] rounded-[12px] object-cover bg-gray-100"/>
-					<div class="flex flex-col justify-between py-1 w-full">
-						<div>
-							<h2 data-field="name" class="text-base font-bold text-gray-900 mb-0.5"></h2>
-							<p data-field="category" class="text-sm text-gray-500 mb-1"></p>
-							<div class="flex items-center text-sm mb-2">
+				<article class="flex flex-row bg-white rounded-[14px] border border-gray-100 p-2 gap-3 shadow-[0_2px_12px_rgba(0,0,0,0.04)]">
+					<img data-field="image" alt="" class="w-[70px] h-[70px] rounded-[10px] object-cover bg-gray-100 shrink-0"/>
+					<div class="flex flex-col justify-between min-w-0 w-full">
+						<div class="min-w-0">
+							<h2 data-field="name" class="text-[15px] leading-[18px] font-bold text-gray-900 truncate"></h2>
+							<p data-field="category" class="text-xs text-gray-500 mb-0.5 truncate"></p>
+							<div class="flex items-center text-xs leading-[14px] mb-0.5">
 								<span data-field="rating" class="font-bold mr-1"></span>
-								<div data-field="stars" class="flex text-[#FFB400] text-sm">
-									<i class="fas fa-star text-[16px]"></i>
-									<i class="fas fa-star text-[16px]"></i>
-									<i class="fas fa-star text-[16px]"></i>
-									<i class="fas fa-star text-[16px]"></i>
-									<i class="far fa-star text-[16px] text-gray-200"></i>
+								<div data-field="stars" class="flex text-[#FFB400]">
+									<i class="fas fa-star text-[11px]"></i>
+									<i class="fas fa-star text-[11px]"></i>
+									<i class="fas fa-star text-[11px]"></i>
+									<i class="fas fa-star text-[11px]"></i>
+									<i class="far fa-star text-[11px] text-gray-200"></i>
 								</div>
-								<span data-field="review-count" class="text-gray-500 ml-1 text-xs"></span>
+								<span data-field="review-count" class="text-gray-500 ml-1 text-[11px]"></span>
 							</div>
-							<div class="flex items-center text-sm text-gray-500 mb-2">
-								<i class="fas fa-map-marker-alt text-[16px] mr-1"></i>
+							<div class="flex items-center text-gray-500 leading-[14px]">
+								<i class="fas fa-map-marker-alt text-[11px] mr-1"></i>
 								<span data-field="address" class="truncate text-xs"></span>
 							</div>
 						</div>
-						<div data-field="features" class="flex flex-wrap gap-x-3 gap-y-1 text-xs"></div>
+						<div data-field="features" class="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] leading-[14px] mt-0.5"></div>
 					</div>
 				</article>
 			</template>
 
 			<!-- Feature item templates (appended into [data-field="features"]) -->
 			<template id="business-feature-available">
-				<span class="flex items-center text-gray-500"><i class="fas fa-check text-[14px] text-green-500 mr-0.5"></i> <span data-field="label"></span></span>
+				<span class="flex items-center text-gray-500"><i class="fas fa-check text-[10px] text-green-500 mr-0.5"></i> <span data-field="label"></span></span>
 			</template>
 			<template id="business-feature-unavailable">
-				<span class="flex items-center text-gray-500"><i class="fas fa-times text-[14px] text-red-500 mr-0.5"></i> <span data-field="label"></span></span>
+				<span class="flex items-center text-gray-500"><i class="fas fa-times text-[10px] text-red-500 mr-0.5"></i> <span data-field="label"></span></span>
 			</template>
-			<!-- END: Business List -->
-
-			<!-- BEGIN: Footer Divider -->
-			<footer id="business-list-footer" class="hidden mt-8 flex items-center justify-center mb-4">
-				<div class="h-px bg-gray-100 w-12"></div>
-				<span class="text-sm text-gray-400 px-4">No more businesses</span>
-				<div class="h-px bg-gray-100 w-12"></div>
-			</footer>
-			<!-- END: Footer Divider -->
+			<!-- END: Card templates -->
 
 			<!-- BEGIN: Business FABs -->
 			<!-- Two edge-merged expandable pill FABs, stacked bottom-right: "Create" (red) and "My Stores" (blue) 12px above it. Same right inset as #compose-fab; bottom is 32px (not nav-offset) because the bottom nav is hidden on this view; 32px matches the gap #compose-fab and #chat-fab keep above the nav, so the pill sits clear of the screen edge and gesture bar. Both start retracted (only the icon peeks past the right edge); first tap expands, second tap on the icon/label runs the global function named in data-action, and the X on the right collapses the pill back to the edge (wire the flows by defining openBusinessCreate() / openMyStores()). State, locking and reset-on-open live in onBusinessFabClick()/onBusinessFabCollapse()/resetBusinessFabs() (core.js); the retracted offset is .business-fab.is-retracted in style.css. Visibility follows #businesses-view (.view-section is display:none unless active), so no core.js toggle is needed. -->
