@@ -1,6 +1,6 @@
 // ---- Create Business wizard (templates/partials/business_create.html) ----
 // Opened by the "Create" FAB on the Businesses screen (core.js calls the
-// global openBusinessCreate() named in the FAB's data-action). Everything
+// global openBusinessCreate() called by the Create button on the Businesses screen). Everything
 // lives in the in-memory bcDraft, which is rebuilt each time the wizard
 // opens. bcBuildPayload() is the single place the request body is read from;
 // bcFinish() POSTs it to /api/businesses. Depends on escapeHtml (feed.js),

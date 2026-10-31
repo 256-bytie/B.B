@@ -402,45 +402,6 @@
                         opacity 280ms cubic-bezier(0.16, 1, 0.3, 1);
         }
 
-        /* Businesses edge-merged expandable pill FABs ("My Stores" and
-           "Create", both .business-fab). Retracted, a pill is shifted right by
-           its own width + the 20px right inset, minus a 38px peek, so only the
-           icon (and the pill's rounded left cap) stays on screen as the tap
-           target. Expanding clears the class, sliding it back to its normal
-           bottom-right spot. Same ease-out curve as #compose-fab;
-           background-color is kept in the transition so the hover colour (from
-           Tailwind's transition-colors, which this rule overrides) still
-           fades. The tap logic (first tap expands, second acts) is
-           onBusinessFabClick() / onBusinessFabCollapse() in core.js. */
-        .business-fab {
-            transition: transform 320ms cubic-bezier(0.16, 1, 0.3, 1),
-                        background-color 150ms ease;
-        }
-        .business-fab.is-retracted {
-            transform: translateX(calc(100% + 20px - 38px));
-        }
-        /* The collapse (X) button is hidden while retracted so it can't be
-           focused or read offscreen; the delay lets it stay visible until the
-           pill has finished sliding out. */
-        .business-fab-cancel {
-            visibility: visible;
-            background: transparent;
-            -webkit-tap-highlight-color: transparent;
-            transition: opacity 150ms ease;
-        }
-        .business-fab-cancel:active {
-            opacity: 0.6;
-        }
-        .business-fab.is-retracted .business-fab-cancel {
-            visibility: hidden;
-            transition: visibility 0s linear 320ms;
-        }
-        @media (prefers-reduced-motion: reduce) {
-            .business-fab {
-                transition: none !important;
-            }
-        }
-
         /* ---- Bottom navigation (Home / Search / Notifications / Chat) ----
            64px total: 1px top border + a 59px tap row + 4px bottom pad (sits the
            32px icons slightly above true center, as in the design), plus the device
@@ -1034,16 +995,14 @@
         /* Side navigation drawer: width/opacity are driven directly by
            side-nav.js during a drag (real-time finger tracking), and
            these transitions only take effect for the settle animation
-           after touchend, when JS re-enables them. Animating the shell's
-           WIDTH (rather than a transform) is what makes the mini rail
-           and full drawer read as one panel progressively expanding
-           through its two stops, instead of two layouts swapping. */
+           after touchend, when JS re-enables them. The shell's WIDTH and
+           the drawer's translateX animate together so the drawer slides
+           in/out as one panel. */
         #side-nav {
             transition: width 320ms cubic-bezier(0.32, 0.72, 0, 1);
         }
-        #side-nav-mini,
         #side-nav-full {
-            transition: opacity 220ms ease;
+            transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1);
         }
         #side-nav-backdrop {
             transition: opacity 320ms cubic-bezier(0.32, 0.72, 0, 1);
@@ -1052,13 +1011,11 @@
         #side-nav-backdrop.side-nav-dragging {
             transition: none;
         }
-        #side-nav.side-nav-dragging #side-nav-mini,
         #side-nav.side-nav-dragging #side-nav-full {
             transition: none;
         }
         @media (prefers-reduced-motion: reduce) {
             #side-nav,
-            #side-nav-mini,
             #side-nav-full,
             #side-nav-backdrop {
                 transition: none !important;
@@ -2313,3 +2270,57 @@ html .bb-themed-card [data-field="stars"] i { opacity: .9; }
 .ic-btn-text { padding: 0 10px; min-width: 72px; text-align: left; color: rgba(255,255,255,.85); }
 .ic-btn-icon { width: 44px; display: flex; align-items: center; justify-content: center; }
 .ic-btn-done { padding: 0 22px; border-radius: 9999px; background: #DA292E; }
+
+
+/* ---- Businesses action pills ("Create" / "Stores", templates/partials/businesses.html) ----
+   Centered, floating near the bottom, frosted glass: the translucent white fill plus
+   backdrop-filter blurs whatever scrolls underneath. The bar ignores touches so the list
+   scrolls through the gap between the pills. Own class names so the dark-mode remaps
+   don't recolor them; dark mode gets a smoked-glass variant below. */
+.bb-action-bar { position: fixed; left: 0; right: 0; z-index: 30; display: flex; justify-content: center; gap: 12px;
+	bottom: calc(36px + env(safe-area-inset-bottom, 0px)); pointer-events: none; }
+.bb-glass-pill { pointer-events: auto; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+	height: 46px; padding: 0 24px; border-radius: 9999px; font-size: 15px; font-weight: 600; color: #111827;
+	background: linear-gradient(180deg, rgba(255,255,255,.72) 0%, rgba(255,255,255,.42) 100%);
+	-webkit-backdrop-filter: blur(16px) saturate(1.6); backdrop-filter: blur(16px) saturate(1.6);
+	border: 1px solid rgba(255,255,255,.75);
+	box-shadow: 0 8px 24px rgba(0,0,0,.14), inset 0 1px 0 rgba(255,255,255,.9), inset 0 -1px 0 rgba(255,255,255,.3);
+	-webkit-tap-highlight-color: transparent; transition: transform 120ms ease; }
+.bb-glass-pill:active { transform: scale(.96); }
+.bb-glass-pill i { font-size: 15px; }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+	.bb-glass-pill { background: rgba(255,255,255,.92); }
+}
+html.dark .bb-glass-pill { color: #f9fafb; border-color: rgba(255,255,255,.22);
+	background: linear-gradient(180deg, rgba(60,70,84,.62) 0%, rgba(30,39,49,.42) 100%);
+	box-shadow: 0 8px 24px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.25), inset 0 -1px 0 rgba(255,255,255,.06); }
+@media (prefers-reduced-motion: reduce) { .bb-glass-pill { transition: none; } }
+
+/* ---- Composer bold toggle (compose.js toggleComposeBold) ----
+   Active state: filled pill so it reads as "on" while typing. */
+.compose-bold-btn.is-active {
+    background-color: #111827;
+    color: #ffffff;
+}
+.compose-bold-btn.is-active:hover { background-color: #111827; }
+html.dark .compose-bold-btn.is-active {
+    background-color: #f9fafb;
+    color: #111827;
+}
+
+/* ---- Bottom nav tap effect (core.js initBottomNavTaps) ----
+   Replayed on every tap, including taps on the already-active tab, which
+   no longer reloads its screen. */
+@keyframes bn-tap-pop {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(0.8); }
+    100% { transform: scale(1); }
+}
+.bottom-nav-item.bn-tap .bottom-nav-icon,
+.bottom-nav-item.bn-tap .bottom-nav-avatar-ring {
+    animation: bn-tap-pop 240ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+    .bottom-nav-item.bn-tap .bottom-nav-icon,
+    .bottom-nav-item.bn-tap .bottom-nav-avatar-ring { animation: none; }
+}

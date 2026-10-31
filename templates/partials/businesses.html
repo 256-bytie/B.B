@@ -178,26 +178,18 @@
 			</template>
 			<!-- END: Card templates -->
 
-			<!-- BEGIN: Business FABs -->
-			<!-- Two edge-merged expandable pill FABs, stacked bottom-right: "Create" (red) and "My Stores" (blue) 12px above it. Same right inset as #compose-fab; bottom is 32px (not nav-offset) because the bottom nav is hidden on this view; 32px matches the gap #compose-fab and #chat-fab keep above the nav, so the pill sits clear of the screen edge and gesture bar. Both start retracted (only the icon peeks past the right edge); first tap expands, second tap on the icon/label runs the global function named in data-action, and the X on the right collapses the pill back to the edge (wire the flows by defining openBusinessCreate() / openMyStores()). State, locking and reset-on-open live in onBusinessFabClick()/onBusinessFabCollapse()/resetBusinessFabs() (core.js); the retracted offset is .business-fab.is-retracted in style.css. Visibility follows #businesses-view (.view-section is display:none unless active), so no core.js toggle is needed. -->
-			<div id="business-stores-fab" data-action="openMyStores" class="business-fab is-retracted fixed h-10 pr-1 bg-blue-600 text-white rounded-full card-shadow flex items-center hover:bg-blue-700 transition-colors z-9 font-semibold text-[15px]" style="bottom: calc(84px + env(safe-area-inset-bottom, 0px)); right: 20px;">
-				<button type="button" class="business-fab-main h-full pl-5 pr-2 gap-2 rounded-full flex items-center" onclick="onBusinessFabClick(this)" aria-expanded="false" aria-label="My Stores">
-					<svg class="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 256 256" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M232,96a7.89,7.89,0,0,0-.3-2.2L217.35,43.6A16.07,16.07,0,0,0,202,32H54A16.07,16.07,0,0,0,38.65,43.6L24.31,93.8A7.89,7.89,0,0,0,24,96h0v16a40,40,0,0,0,16,32v72a8,8,0,0,0,8,8H208a8,8,0,0,0,8-8V144a40,40,0,0,0,16-32V96ZM54,48H202l11.42,40H42.61Zm50,56h48v8a24,24,0,0,1-48,0Zm-16,0v8a24,24,0,0,1-35.12,21.26,7.88,7.88,0,0,0-1.82-1.06A24,24,0,0,1,40,112v-8ZM200,208H56V151.2a40.57,40.57,0,0,0,8,.8,40,40,0,0,0,32-16,40,40,0,0,0,64,0,40,40,0,0,0,32,16,40.57,40.57,0,0,0,8-.8Zm4.93-75.8a8.08,8.08,0,0,0-1.8,1.05A24,24,0,0,1,168,112v-8h48v8A24,24,0,0,1,204.93,132.2Z"></path></svg>
-					<span>My Stores</span>
+			<!-- BEGIN: Business actions -->
+			<!-- Floating glass pills, centered near the bottom: "Create" opens the create wizard and "Stores"
+			     opens My Stores. The wrapper ignores touches so the list scrolls through the gap; each pill
+			     blurs whatever scrolls beneath it (.bb-glass-pill in style.css). -->
+			<div class="bb-action-bar">
+				<button type="button" class="bb-glass-pill" onclick="openBusinessCreate()">
+					<i class="fa-solid fa-plus" aria-hidden="true"></i><span>Create</span>
 				</button>
-				<button type="button" class="business-fab-cancel w-8 h-8 shrink-0 rounded-full flex items-center justify-center" onclick="onBusinessFabCollapse(this)" aria-label="Collapse My Stores">
-					<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 256 256" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M165.66,101.66,139.31,128l26.35,26.34a8,8,0,0,1-11.32,11.32L128,139.31l-26.34,26.35a8,8,0,0,1-11.32-11.32L116.69,128,90.34,101.66a8,8,0,0,1,11.32-11.32L128,116.69l26.34-26.35a8,8,0,0,1,11.32,11.32ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"></path></svg>
-				</button>
-			</div>
-			<div id="business-create-fab" data-action="openBusinessCreate" class="business-fab is-retracted fixed h-10 pr-1 bg-brand-red text-white rounded-full card-shadow flex items-center hover:bg-red-700 transition-colors z-9 font-semibold text-[15px]" style="bottom: calc(32px + env(safe-area-inset-bottom, 0px)); right: 20px;">
-				<button type="button" class="business-fab-main h-full pl-5 pr-2 gap-2 rounded-full flex items-center" onclick="onBusinessFabClick(this)" aria-expanded="false" aria-label="Create business">
-					<i class="fa-solid fa-plus text-base"></i>
-					<span>Create</span>
-				</button>
-				<button type="button" class="business-fab-cancel w-8 h-8 shrink-0 rounded-full flex items-center justify-center" onclick="onBusinessFabCollapse(this)" aria-label="Collapse Create">
-					<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 256 256" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M165.66,101.66,139.31,128l26.35,26.34a8,8,0,0,1-11.32,11.32L128,139.31l-26.34,26.35a8,8,0,0,1-11.32-11.32L116.69,128,90.34,101.66a8,8,0,0,1,11.32-11.32L128,116.69l26.34-26.35a8,8,0,0,1,11.32,11.32ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"></path></svg>
+				<button type="button" class="bb-glass-pill" onclick="openMyStores()">
+					<i class="fa-solid fa-store" aria-hidden="true"></i><span>Stores</span>
 				</button>
 			</div>
-			<!-- END: Business FABs -->
+			<!-- END: Business actions -->
 		</div>
 		<!-- END: Businesses View -->

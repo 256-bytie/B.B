@@ -411,6 +411,24 @@ function openCommentOverlay(postData) {
 	loadOverlayPostFollowState(postData.user_id);
 
 	const overlayImages = document.getElementById('overlay-post-images');
+
+	// Enforce feed-card order inside the post view: text, then images, then
+	// the quoted post. The template already declares this order, but
+	// templates are cached by the server until restart (debug=False) while
+	// this file is cache-busted by mtime, so the order is also guaranteed
+	// here and cannot be left stale by an old cached template.
+	const overlayText = document.getElementById('overlay-post-content');
+	const overlayQuoteSlot = document.getElementById('overlay-post-quote');
+	if (overlayText && overlayImages && overlayImages.parentNode) {
+		const host = overlayImages.parentNode;
+		if (overlayText.parentNode !== host || overlayText.nextElementSibling !== overlayImages) {
+			host.insertBefore(overlayText, overlayImages);
+		}
+		if (overlayQuoteSlot && overlayImages.nextElementSibling !== overlayQuoteSlot) {
+			host.insertBefore(overlayQuoteSlot, overlayImages.nextElementSibling);
+		}
+	}
+
 	const imagesHtml = buildPostImagesHtml(postData.images);
 	if (imagesHtml) {
 		overlayImages.innerHTML = imagesHtml;

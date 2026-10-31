@@ -1,6 +1,6 @@
 // ---- My Stores (templates/partials/my_stores.html) ----
 // Opened by the "My Stores" FAB on the Businesses screen (core.js calls the
-// global openMyStores() named in the FAB's data-action). Loads the current
+// global openMyStores() called by the Stores button on the Businesses screen). Loads the current
 // user's own businesses from GET /api/businesses?mine=1 each time it opens,
 // newest first, with loading / error / empty states like the Businesses list
 // (businesses.js). Cards come from buildBusinessCard(), so they look exactly

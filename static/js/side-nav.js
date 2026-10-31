@@ -1,10 +1,7 @@
-// ---- Side navigation drawer: gesture-driven, three-stop reveal ----
-// The drawer has three resting states - closed, mini (icon rail), and
-// full (labeled drawer) - driven by animating the WIDTH of the #side-nav
-// shell rather than a translateX transform. Growing the shell's width is
-// what makes a short edge-swipe progressively reveal the mini rail, and a
-// longer/continued swipe progressively expand that into the full drawer,
-// instead of the layouts abruptly swapping.
+// ---- Side navigation drawer: gesture-driven, two-state ----
+// The drawer has two resting states - closed and full (labeled drawer) -
+// driven by animating the WIDTH of the #side-nav shell while the drawer
+// inside slides with it, so its right edge tracks the finger.
 //
 // During a drag, width is set directly from touch position every
 // touchmove (real-time tracking). The CSS transition defined in
@@ -19,11 +16,10 @@
 // incident in comments.js/comment-actions.js for why that matters.
 
 const SIDE_NAV_EDGE_ZONE = 24; // px from the left screen edge that can start an open-drag
-const SIDE_NAV_MINI_WIDTH = 76; // px - matches #side-nav-mini's fixed width
 const SIDE_NAV_BACKDROP_MAX_OPACITY = 0.35;
-const SIDE_NAV_SNAP_BIAS = 28; // px of directional bias applied before nearest-snap picks a stop, so a decisive flick commits to the next stop instead of springing back
+const SIDE_NAV_SNAP_BIAS = 28; // px of directional bias applied before nearest-snap picks a stop, so a decisive flick commits instead of springing back
 
-// 'closed' | 'mini' | 'full'
+// 'closed' | 'full'
 let sideNavState = 'closed';
 let sideNavFullWidth = 0; // measured from #side-nav-full - varies with viewport (82vw, capped 300px)
 let sideNavDragging = false;
@@ -36,7 +32,6 @@ let sideNavDragBaseWidth = 0; // shell width when the current drag began
 function getSideNavEls() {
 	return {
 		panel: document.getElementById('side-nav'),
-		mini: document.getElementById('side-nav-mini'),
 		full: document.getElementById('side-nav-full'),
 		backdrop: document.getElementById('side-nav-backdrop')
 	};
@@ -62,7 +57,6 @@ function measureSideNavFullWidth() {
 
 function widthForState(state) {
 	if (state === 'full') return sideNavFullWidth;
-	if (state === 'mini') return SIDE_NAV_MINI_WIDTH;
 	return 0;
 }
 
@@ -71,18 +65,16 @@ function populateSideNav() {
 	const handle = session.user.username || session.user.email.split('@')[0];
 	const avatarSrc = session.user.profile_picture || `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(handle)}`;
 	const avatarEl = document.getElementById('side-nav-avatar');
-	const miniAvatarEl = document.getElementById('side-nav-mini-avatar');
 	const nameEl = document.getElementById('side-nav-name');
 	const handleEl = document.getElementById('side-nav-handle');
 	if (avatarEl) avatarEl.src = avatarSrc;
-	if (miniAvatarEl) miniAvatarEl.src = avatarSrc;
 	if (nameEl) nameEl.textContent = session.user.full_name || '';
 	if (handleEl) handleEl.textContent = `@${handle}`;
 }
 
-// Mirrors the active tab onto the matching side-nav rows (both the mini
-// rail and full drawer copies share data-nav-key) so it doesn't just
-// permanently show "Home" selected once you're actually on another view.
+// Mirrors the active tab onto the matching side-nav rows (data-nav-key) so
+// it doesn't just permanently show "Home" selected once you're actually on
+// another view.
 function applySideNavActiveState() {
 	const activeView = document.querySelector('.view-section.active');
 	const viewToKey = {
@@ -108,12 +100,11 @@ function applySideNavActiveState() {
 	});
 }
 
-// px is the shell's width in pixels (0 = closed, SIDE_NAV_MINI_WIDTH =
-// mini rail fully settled, sideNavFullWidth = full drawer fully settled).
-// withTransition controls whether the CSS settle animation applies
+// px is the shell's width in pixels (0 = closed, sideNavFullWidth = fully
+// open). withTransition controls whether the CSS settle animation applies
 // (false during an active drag, true for a snap-to-rest).
 function setSideNavWidth(px, withTransition) {
-	const { panel, mini, full, backdrop } = getSideNavEls();
+	const { panel, full, backdrop } = getSideNavEls();
 	if (!panel) return;
 
 	panel.classList.toggle('side-nav-dragging', !withTransition);
@@ -121,26 +112,11 @@ function setSideNavWidth(px, withTransition) {
 
 	panel.style.width = `${px}px`;
 
-	// Cross-fade: the mini rail owns the closed->mini segment, the full
-	// drawer owns the mini->full segment, so only one is ever animating
-	// opacity at a time and the handoff between them lines up exactly at
-	// the mini snap point.
-	const miniSpan = SIDE_NAV_MINI_WIDTH || 1;
-	const fullSpan = Math.max(sideNavFullWidth - SIDE_NAV_MINI_WIDTH, 1);
-	const q = Math.min(1, Math.max(0, px / miniSpan));
-	const p = Math.min(1, Math.max(0, (px - SIDE_NAV_MINI_WIDTH) / fullSpan));
-	const miniOpacity = q * (1 - p);
-	// Both layers occupy the same 0,0 box and the full drawer sits later
-	// in the DOM (so it paints - and hit-tests - on top whenever they
-	// overlap). Without this, an invisible (opacity 0) layer would still
-	// intercept taps meant for whichever layer is actually showing.
-	if (mini) {
-		mini.style.opacity = String(miniOpacity);
-		mini.style.pointerEvents = miniOpacity > 0.05 ? 'auto' : 'none';
-	}
+	// Slide the drawer with the shell: its right edge sits at the shell's
+	// right edge. While closed it is fully offscreen and inert.
 	if (full) {
-		full.style.opacity = String(p);
-		full.style.pointerEvents = p > 0.05 ? 'auto' : 'none';
+		full.style.transform = `translateX(${px - sideNavFullWidth}px)`;
+		full.style.pointerEvents = px > 0 ? 'auto' : 'none';
 	}
 
 	if (backdrop) {
@@ -179,8 +155,8 @@ document.addEventListener('touchstart', function(e) {
 	const touch = e.touches[0];
 
 	// A drag can start either from the screen's left edge (to open from
-	// closed) or anywhere on the panel itself once it's showing the mini
-	// rail or full drawer (to expand further or drag back closed).
+	// closed) or anywhere on the panel itself once it's open (to drag back
+	// closed).
 	const startingFromEdge = sideNavState === 'closed' && touch.clientX <= SIDE_NAV_EDGE_ZONE;
 	const startingFromPanel = sideNavState !== 'closed' && panel.contains(e.target);
 	if (!startingFromEdge && !startingFromPanel) return;
@@ -240,15 +216,13 @@ function endSideNavDrag() {
 	const delta = sideNavCurrentX - sideNavStartX;
 	const px = Math.min(sideNavFullWidth, Math.max(0, sideNavDragBaseWidth + delta));
 
-	// Snap to whichever of the three stops is nearest, after nudging the
-	// reading a little in the direction of travel - a decisive swipe past
-	// a stop commits to the next one instead of springing back to where
-	// it started.
+	// Snap to whichever stop (closed / full) is nearest, after nudging the
+	// reading a little in the direction of travel - a decisive swipe
+	// commits instead of springing back to where it started.
 	const direction = Math.sign(delta);
 	const biased = px + direction * SIDE_NAV_SNAP_BIAS;
 	const stops = [
 		{ state: 'closed', width: 0 },
-		{ state: 'mini', width: SIDE_NAV_MINI_WIDTH },
 		{ state: 'full', width: sideNavFullWidth }
 	];
 	let nearest = stops[0];

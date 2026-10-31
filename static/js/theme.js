@@ -26,8 +26,8 @@ function getCurrentTheme() {
 }
 
 function setThemeToggleIcons(theme) {
-	// Every theme-switcher button in the UI (currently: the full drawer
-	// footer and the mini rail) shares this class, so a single query
+	// Every theme-switcher button in the UI (currently: the side drawer
+	// footer) shares this class, so a single query
 	// keeps them all in sync regardless of how many exist.
 	document.querySelectorAll('.theme-toggle-icon').forEach(function(icon) {
 		icon.classList.toggle('fa-moon', theme === 'light');

@@ -138,6 +138,7 @@ function initComposeView() {
 
     updateComposeAvatar();
 
+    resetComposeBold();
     errorDiv.classList.add('hidden');
     closeAudiencePicker();
     closeDiscardDialog();
@@ -266,6 +267,218 @@ function startComposeViewportPoll() {
     }, COMPOSE_POLL_INTERVAL_MS);
 }
 
+// ---- Bold toggle ----
+// A <textarea> cannot render bold, so the toggle writes the WhatsApp-style
+// markers that formatPostText() (feed.js) already renders: *bold*.
+// Activating inserts an empty "**" pair at the caret and parks the caret
+// between the markers, so everything typed lands inside the pair.
+// Deactivating moves the caret past the closing marker. The run is tracked
+// by composeBold = { open, close, len } (indexes of the two markers + the
+// textarea length at last sync). Markers only render when they hug their
+// content, so finalizeBoldRun() moves edge whitespace outside the pair, and
+// a space is auto-inserted where a marker would otherwise touch a word
+// character (formatPostText requires a non-word char outside each marker).
+let composeBold = null;          // active run, or null
+let composeBoldBoundary = null;  // index right after a just-closed run
+
+function isComposeBoldActive() {
+    return composeBold !== null;
+}
+
+function renderComposeBoldBtn() {
+    const btn = document.getElementById('compose-bold-btn');
+    if (!btn) return;
+    const on = isComposeBoldActive();
+    btn.classList.toggle('is-active', on);
+    btn.setAttribute('aria-pressed', String(on));
+}
+
+function composeBoldRunValid(textarea) {
+    const b = composeBold;
+    if (!b) return false;
+    const v = textarea.value;
+    const caret = textarea.selectionStart;
+    return v[b.open] === '*' && v[b.close] === '*' &&
+        b.close > b.open && caret > b.open && caret <= b.close &&
+        textarea.selectionEnd === caret;
+}
+
+// Moves leading/trailing whitespace of the run outside its markers, drops an
+// empty pair, and returns the index just after the closing marker (or the
+// index where the pair was). Updates the textarea value; caller sets caret.
+function finalizeBoldRun(textarea) {
+    const b = composeBold;
+    const v = textarea.value;
+    const inner = v.slice(b.open + 1, b.close);
+    const lead = inner.match(/^\s*/)[0];
+    const trail = inner.slice(lead.length).match(/\s*$/)[0];
+    const core = inner.slice(lead.length, inner.length - trail.length);
+    let replacement;
+    let end;
+    if (!core) {
+        replacement = lead + trail;           // nothing bold was typed
+        end = b.open + replacement.length;
+    } else {
+        replacement = lead + '*' + core + '*' + trail;
+        end = b.open + lead.length + core.length + 2;
+    }
+    textarea.value = v.slice(0, b.open) + replacement + v.slice(b.close + 1);
+    return { end: end, hadCore: !!core };
+}
+
+function composeBoldPrefixFix(textarea, pos) {
+    // Opening marker must not touch a preceding word character.
+    const v = textarea.value;
+    if (pos > 0 && /\w/.test(v[pos - 1])) {
+        textarea.value = v.slice(0, pos) + ' ' + v.slice(pos);
+        return pos + 1;
+    }
+    return pos;
+}
+
+function activateComposeBold(textarea) {
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const v = textarea.value;
+    const selected = v.slice(start, end);
+    composeBoldBoundary = null;
+
+    if (selected.trim()) {
+        // Bold an existing selection: wrap it, keep the toggle off afterwards.
+        const m = selected.match(/^(\s*)([\s\S]*?)(\s*)$/);
+        textarea.value = v.slice(0, start) + m[1];
+        let open = composeBoldPrefixFix(textarea, textarea.value.length);
+        textarea.value = textarea.value.slice(0, open) + '*' + m[2] + '*' + m[3] + v.slice(end);
+        const after = open + m[2].length + 2;
+        textarea.setSelectionRange(after, after);
+        composeBoldBoundary = after;
+        return false;
+    }
+
+    // Insert an empty pair at the caret.
+    const open = (function () {
+        const before = v.slice(0, start);
+        textarea.value = before;
+        const o = composeBoldPrefixFix(textarea, before.length);
+        textarea.value = textarea.value.slice(0, o) + '**' + v.slice(start);
+        return o;
+    })();
+    const caret = open + 1;
+    textarea.setSelectionRange(caret, caret);
+    composeBold = { open: open, close: open + 1, len: textarea.value.length };
+    return true;
+}
+
+function deactivateComposeBold(textarea) {
+    if (!composeBold) return;
+    if (!composeBoldRunValid(textarea)) {
+        // Markers were edited away; just drop the state.
+        composeBold = null;
+        return;
+    }
+    const res = finalizeBoldRun(textarea);
+    composeBold = null;
+    textarea.setSelectionRange(res.end, res.end);
+    composeBoldBoundary = res.hadCore ? res.end : null;
+}
+
+function resetComposeBold() {
+    composeBold = null;
+    composeBoldBoundary = null;
+    renderComposeBoldBtn();
+}
+
+function toggleComposeBold() {
+    const textarea = document.getElementById('create-post-textarea');
+    if (!textarea) return;
+    textarea.focus();
+    if (isComposeBoldActive()) {
+        deactivateComposeBold(textarea);
+    } else {
+        activateComposeBold(textarea);
+    }
+    renderComposeBoldBtn();
+    updateCharCounter();
+    updatePostButtonState();
+    autosizeComposeTextarea();
+    scheduleAutosave();
+}
+
+// Runs on every textarea 'input' event, before the other input handlers.
+function handleComposeBoldInput(textarea) {
+    // 1. Text typed right after a closed run: keep a space between the
+    //    closing marker and a word character so the run still renders.
+    if (!composeBold && composeBoldBoundary !== null) {
+        const pos = composeBoldBoundary;
+        composeBoldBoundary = null;
+        const v = textarea.value;
+        if (textarea.selectionStart === pos + 1 && v[pos - 1] === '*' && /\w/.test(v[pos])) {
+            textarea.value = v.slice(0, pos) + ' ' + v.slice(pos);
+            textarea.setSelectionRange(pos + 2, pos + 2);
+        }
+        return;
+    }
+    if (!composeBold) return;
+
+    const b = composeBold;
+    const delta = textarea.value.length - b.len;
+    b.close += delta;
+    b.len = textarea.value.length;
+
+    if (!composeBoldRunValid(textarea)) {
+        // Backspaced into a marker or caret left the run: stop bolding.
+        composeBold = null;
+        renderComposeBoldBtn();
+        return;
+    }
+
+    // 2. A newline ends the bold run on that line; the next line opens a new
+    //    pair, because markers only render within a single line.
+    const v = textarea.value;
+    const nl = v.indexOf('\n', b.open);
+    if (nl !== -1 && nl < b.close) {
+        const caret = textarea.selectionStart;
+        const head = v.slice(0, nl);
+        const tail = v.slice(nl + 1, b.close);   // run text after the break
+        const rest = v.slice(b.close + 1);
+        const innerHead = head.slice(b.open + 1);
+        const core = innerHead.trim();
+        const lead = innerHead.match(/^\s*/)[0];
+        const trail = core ? innerHead.slice(lead.length + core.length) : '';
+        const closed = core
+            ? head.slice(0, b.open) + lead + '*' + core + '*' + trail
+            : head.slice(0, b.open) + innerHead;
+        const open = closed.length + 1;
+        textarea.value = closed + '\n*' + tail + '*' + rest;
+        composeBold = { open: open, close: open + 1 + tail.length, len: textarea.value.length };
+        const offset = Math.min(Math.max(0, caret - nl - 1), tail.length);
+        textarea.setSelectionRange(open + 1 + offset, open + 1 + offset);
+    }
+}
+
+// Text as it would be saved/sent right now: an active run that holds no
+// visible characters yet (just "**" or "* *") is not content.
+function composeEffectiveText(textarea) {
+    const v = textarea.value;
+    if (composeBold && composeBoldRunValid(textarea)) {
+        const inner = v.slice(composeBold.open + 1, composeBold.close);
+        if (!inner.trim()) {
+            return v.slice(0, composeBold.open) + inner + v.slice(composeBold.close + 1);
+        }
+    }
+    return v;
+}
+
+// Strip a dangling run before submit/draft so no empty "**" is ever sent.
+function settleComposeBold() {
+    if (!composeBold) return;
+    const textarea = document.getElementById('create-post-textarea');
+    if (composeBoldRunValid(textarea)) {
+        finalizeBoldRun(textarea);
+    }
+    resetComposeBold();
+}
+
 // ---- Character counter ----
 function updateCharCounter() {
     const textarea = document.getElementById('create-post-textarea');
@@ -287,7 +500,7 @@ function updateCharCounter() {
 function updatePostButtonState() {
     const textarea = document.getElementById('create-post-textarea');
     const submitBtn = document.getElementById('submit-post-btn');
-    const len = textarea.value.trim().length;
+    const len = composeEffectiveText(textarea).trim().length;
     const overLimit = textarea.value.length > COMPOSE_MAX_CHARS;
     submitBtn.disabled = len === 0 || overLimit;
     submitBtn.setAttribute('aria-disabled', String(submitBtn.disabled));
@@ -564,7 +777,7 @@ function saveDraft() {
     // Quote composition is never persisted (see "Quote mode" above).
     if (composeState.quote) return;
     const textarea = document.getElementById('create-post-textarea');
-    const content = textarea.value;
+    const content = composeEffectiveText(textarea);
 
     if (!content.trim() && composeState.images.length === 0) {
         localStorage.removeItem(COMPOSE_DRAFT_KEY);
@@ -602,7 +815,7 @@ function clearDraft() {
 
 function hasUnsavedComposeContent() {
     const textarea = document.getElementById('create-post-textarea');
-    return textarea.value.trim().length > 0 || composeState.images.length > 0;
+    return composeEffectiveText(textarea).trim().length > 0 || composeState.images.length > 0;
 }
 
 // ---- Close / discard flow ----
@@ -634,6 +847,7 @@ function closeDiscardDialog() {
 }
 
 function confirmDiscardPost() {
+    resetComposeBold();
     if (!composeState.quote) clearDraft();
     composeQuoteStash = null;
     composeState.images = [];
@@ -695,6 +909,7 @@ function dataUrlToBlob(dataUrl) {
 async function handlePostSubmit() {
     const textarea = document.getElementById('create-post-textarea');
     const errorDiv = document.getElementById('create-post-error');
+    settleComposeBold();
     const content = textarea.value.trim();
 
     errorDiv.classList.add('hidden');
@@ -755,6 +970,7 @@ async function handlePostSubmit() {
 
         if (response.ok) {
             const postedTo = composeState.community;
+            resetComposeBold();
             textarea.value = '';
             composeState.images = [];
             composeState.audience = 'Public';
@@ -792,6 +1008,7 @@ async function handlePostSubmit() {
     if (!textarea) return;
 
     textarea.addEventListener('input', () => {
+        handleComposeBoldInput(textarea);
         autosizeComposeTextarea();
         updateCharCounter();
         updatePostButtonState();
