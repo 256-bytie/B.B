@@ -29,7 +29,7 @@ re-verified against the current tree.
 - DB: PostgreSQL selected by required `DATABASE_URL`; `beebo.db` and `migrations/*.sql` are legacy source artifacts and **never** the
   target of a test run — see Testing). Tables: `users`, `posts`,
   `post_images`, `comments`, `likes`, `follows`, `highlights`,
-  `search_history`, `library_files`, `credit_transactions`, `businesses`. Schema created idempotently in
+  `search_history`, `library_files`, `course_folders`, `course_files`, `credit_transactions`, `businesses`. Schema created idempotently in
   `init_db()` (`app/db.py`); older columns/tables are migrated in place
   with `PRAGMA table_info` checks + `ALTER TABLE`, not a migration
   framework. New schema changes go in `migrations/*.sql` (see
@@ -80,6 +80,7 @@ re-verified against the current tree.
 | Post/comment like, comment delete | `app/routes/posts.py:391,466,541` |
 | User public profile, follow, highlights, profile picture/cover, post delete | `app/routes/users.py` |
 | Library file upload/list/download, departments | `app/routes/library.py` |
+| Private Courses folders/files/storage/download | `app/routes/courses.py`, `app/course_service.py` |
 | Search, trending, suggestions, search history | `app/routes/search.py` |
 | View-switching (`showView`) | `static/js/core.js:41` |
 | Chat conversation screen (tap a Messages row; real 1:1 DMs via `/api/chat/*` + `static/js/chat-sync.js`, groups client-side; full-screen, bottom nav hidden) | `templates/partials/chat_conversation.html`, "Conversation screen" section + `chatThreads` in `static/js/chat.js`, `#chat-conversation-view` in `static/css/style.css`. View id `chat-conversation` is in `showView`'s list (core.js). Real DM preview/time/unread come from the server; group preview/time derive from the thread's last message. Long-press a bubble → message action sheet (react/copy/reply/forward/delete in groups; Copy only on real DMs): `templates/partials/chat_message_sheet.html`, `static/js/chat-message-actions.js` (after `chat.js`), reply state in `chat.js`; details in `docs/CHATS_FLOW_DOCUMENTATION.md` §5.5. Long-press a Chats list row → UI-only row menu (mark unread/mute/pin/delete): `templates/partials/chat_row_menu.html`, `static/js/chat-row-menu.js` (after `chat-message-actions.js`; `closeChatRowMenu()` hooked in `showView`), §4.8. Chats list FAB (`#chat-fab`, one instance at the end of `#chat-view`, anchored like the feed FAB) opens the New message screen (`templates/partials/chat_new_message.html`, `static/js/chat-new-message.js`, views `chat-new-message` / `chat-new-group` in `showView`; user search via `/api/search?type=people`; DM + group creation client-side; Cancel restores list state via `chatListRestoreOnce`): §4.9–§4.11. Tapping a group's header avatar/name opens Group info (`templates/partials/chat_group_info.html`, `static/js/chat-group-info.js`, views `chat-group-info` / `chat-group-media`; per-group roles/settings live on the conversation object; Back via `closeChatGroupInfo()`): §5.6–§5.7. Real 1:1 DMs are wired end to end: backend `app/routes/chat.py` + `app/chat_service.py` (`docs/DIRECT_MESSAGING.md`), frontend `static/js/chat-sync.js` (list/history/send/retry/long-poll; chat flow doc §5.8). Groups, requests and the row-menu actions are still client-side only. **Message requests** are a separate screen (no tab bar on the Chats list): `templates/partials/chat_requests.html`, `openChatRequests`/`closeChatRequests`/`initChatRequestsView` in `chat.js`, view id `chat-requests` in `showView`'s list + init hook (core.js); entry point is the Chats list ⋮ → Requests; details §4.7 |
@@ -101,6 +102,23 @@ re-verified against the current tree.
 | Businesses: create (`POST`) / list (`GET`, newest first, cap 50, `?mine=1`) API | `app/routes/businesses.py` (HTTP) → `app/business_service.py` (validation + queries, Flask-free); schema `migrations/pg/002_businesses.sql`. Frontend: `static/js/businesses.js` (list loader + `buildBusinessCard`, shared with My Stores), `bcFinish` in `static/js/business-create.js`. Gaps: verification documents are collected but not stored (need access-controlled storage, not `static/uploads`); My Stores is still in-memory |
 | Direct messages (1:1 text) API — conversations, messages, read cursors, long-poll updates | `app/routes/chat.py` (HTTP) → `app/chat_service.py` (logic, Flask-free); schema in `migrations/008_direct_messages.sql`; design record in `docs/DIRECT_MESSAGING.md`. **Frontend not wired yet** — `static/js/chat.js` is still mock/client-side. All updates long-polls hold the request up to 25s on a condition variable (never a DB connection); rate limiter + realtime signalling are in-process (single-process only) |
 | Communities API (create/get/join/leave/mine/browse/members, per-community posts) | `app/routes/communities.py` (HTTP) → `app/community_service.py` (logic, Flask-free); schema in `migrations/003_communities.sql`; frontend `static/js/community.js` |
+
+### Personal Courses API
+
+- `GET /api/courses/items?folder_id=` lists up to 500 direct folders and 500
+  direct files, newest first, and returns the selected folder when present.
+- `POST /api/courses/folders`, `PATCH/DELETE /api/courses/folders/<id>` create,
+  rename, move, and recursively delete private folders.
+- `POST /api/courses/files`, `PATCH/DELETE /api/courses/files/<id>` upload,
+  rename, move, and delete private files.
+- `GET /api/courses/files/<id>/download?inline=1` serves private files;
+  inline is restricted to PDFs and supported images.
+- `GET /api/courses/storage` returns usage, the 500 MB quota, and the 50 MB
+  raw-file limit. Multipart overhead makes the effective upload maximum
+  slightly less than 50 MB.
+- Blobs live outside static routes at
+  `COURSE_FILES_ROOT/courses/<user_id>/` (default `./private_uploads`). See
+  `docs/COURSE_STORAGE.md` for validation, backup, and cleanup decisions.
 
 ## Key data flow — post images (still true, same shape, new file locations)
 

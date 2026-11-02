@@ -6,3 +6,4 @@ __pycache__/
 doodle.txt
 tools/
 server.log
+private_uploads/

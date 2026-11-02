@@ -6,6 +6,7 @@ from flask_cors import CORS
 from flask_session import Session
 
 from psycopg_pool import PoolTimeout
+from werkzeug.exceptions import RequestEntityTooLarge
 
 
 def create_app():
@@ -67,6 +68,7 @@ def create_app():
 
     # Set maximum upload size (50MB) - raised for library file uploads
     app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
+    app.config['COURSE_FILES_ROOT'] = os.environ.get('COURSE_FILES_ROOT', './private_uploads')
 
     # Print the target database (host/dbname only, never credentials).
     from app.db import get_db_host, get_db_name
@@ -77,7 +79,9 @@ def create_app():
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
     # Register blueprints
-    from app.routes import auth, posts, users, library, search, wallet, communities, chat, businesses
+    from app import course_service
+    from app.routes import auth, posts, users, library, search, wallet, communities, chat, businesses, courses
+    course_service.configure(app.config['COURSE_FILES_ROOT'])
     app.register_blueprint(auth.bp)
     app.register_blueprint(posts.bp)
     app.register_blueprint(users.bp)
@@ -87,11 +91,18 @@ def create_app():
     app.register_blueprint(communities.bp)
     app.register_blueprint(chat.bp)
     app.register_blueprint(businesses.bp)
+    app.register_blueprint(courses.bp)
 
     # Fast-fail on pool exhaustion instead of hanging the request.
     @app.errorhandler(PoolTimeout)
     def handle_pool_timeout(error):
         return jsonify({'error': 'Service temporarily unavailable'}), 503
+
+    @app.errorhandler(RequestEntityTooLarge)
+    def handle_request_too_large(error):
+        if request.path.startswith('/api/courses/'):
+            return jsonify({'error': 'File size exceeds the effective multipart request limit of 50MB.'}), 413
+        return error.get_response()
 
     # CSRF protection: validate token on mutating requests
     @app.before_request

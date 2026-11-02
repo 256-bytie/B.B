@@ -9,6 +9,19 @@ def timestamp_text(value):
     return value
 
 
+def serialize_course_folder(row, item_count):
+    folder_id, _user_id, parent_id, name, created_at = row
+    return {'id': folder_id, 'name': name, 'parent_id': parent_id,
+            'item_count': item_count, 'created_at': timestamp_text(created_at)}
+
+
+def serialize_course_file(row):
+    file_id, _user_id, folder_id, name, file_type, _mime_type, file_size, _storage_key, _original, created_at = row
+    return {'id': file_id, 'name': name, 'file_type': file_type,
+            'file_size': file_size, 'folder_id': folder_id,
+            'created_at': timestamp_text(created_at)}
+
+
 
 def serialize_post(
     row, image_rows=None, liked_by_user=None, quoted_post=None, share_count=0
