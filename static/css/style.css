@@ -2324,3 +2324,103 @@ html.dark .compose-bold-btn.is-active {
     .bottom-nav-item.bn-tap .bottom-nav-icon,
     .bottom-nav-item.bn-tap .bottom-nav-avatar-ring { animation: none; }
 }
+
+/* ---- DEUS intro modal (courses.js) ---- */
+.deus-intro-backdrop { opacity: 0; transition: opacity 220ms ease; }
+.deus-intro-card {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+    transition: opacity 220ms ease, transform 260ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+#deus-intro.deus-intro-open .deus-intro-backdrop { opacity: 1; }
+#deus-intro.deus-intro-open .deus-intro-card { opacity: 1; transform: none; }
+.deus-cta { background-color: #111827; color: #ffffff; }
+html.dark .deus-cta { background-color: #f9fafb; color: #111827; }
+@media (prefers-reduced-motion: reduce) {
+    .deus-intro-backdrop, .deus-intro-card { transition: none; }
+}
+
+/* ---- Courses category tabs (courses.js selectCourseCategory) ---- */
+.course-tab { background-color: #f3f4f6; color: #4b5563; transition: background-color 150ms ease, color 150ms ease, transform 100ms; }
+.course-tab.is-active { background-color: #111827; color: #ffffff; }
+html.dark .course-tab { background-color: #2A3441; color: #9ca3af; }
+html.dark .course-tab.is-active { background-color: #f9fafb; color: #111827; }
+
+/* ---- Course categories editor (courses.js) ---- */
+.course-fab { background-color: #111827; color: #ffffff; }
+html.dark .course-fab { background-color: #f9fafb; color: #111827; }
+.course-dialog-submit { color: #0284c7; }
+.course-dialog-submit:disabled { color: #9ca3af; }
+.course-dialog-submit:not(:disabled):active { background-color: #f3f4f6; }
+html.dark .course-dialog-submit:not(:disabled):active { background-color: #2A3441; }
+.course-category-handle { touch-action: none; }
+.course-category-row { will-change: auto; }
+/* While a drag is active, siblings slide one slot with an eased transform. */
+.course-category-row.is-dragging,
+#course-categories-list.is-sorting .course-category-row { will-change: transform; }
+#course-categories-list.is-sorting .course-category-row:not(.is-dragging) {
+    transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* The held row tracks the finger 1:1 (no transform transition); it lifts
+   with the individual `scale` property so it doesn't fight the translate. */
+.course-category-row.is-dragging {
+    position: relative;
+    z-index: 2;
+    scale: 1.03;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.20);
+    transition: scale 160ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 160ms ease;
+    user-select: none;
+    -webkit-user-select: none;
+}
+/* On release it glides into its slot. */
+.course-category-row.is-dragging.is-settling {
+    transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1), scale 200ms ease, box-shadow 200ms ease;
+    scale: 1;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+@media (prefers-reduced-motion: reduce) {
+    #course-categories-list.is-sorting .course-category-row:not(.is-dragging),
+    .course-category-row.is-dragging,
+    .course-category-row.is-dragging.is-settling { transition: none; }
+}
+
+/* ---- DEUS consent screen (courses.js) ---- */
+.deus-consent-check {
+    appearance: none; -webkit-appearance: none;
+    flex-shrink: 0; width: 24px; height: 24px; margin-top: 0;
+    border: 2px solid #9ca3af; border-radius: 7px; background: transparent;
+    display: grid; place-content: center; cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease;
+}
+.deus-consent-check::after {
+    content: ""; width: 12px; height: 7px; margin-top: -2px;
+    border-left: 2.5px solid #fff; border-bottom: 2.5px solid #fff;
+    transform: rotate(-45deg) scale(0); transition: transform 120ms ease;
+}
+.deus-consent-check:checked { background-color: #111827; border-color: #111827; }
+.deus-consent-check:checked::after { transform: rotate(-45deg) scale(1); }
+.deus-consent-check:focus-visible { outline: 2px solid #38bdf8; outline-offset: 2px; }
+html.dark .deus-consent-check { border-color: #6b7280; }
+html.dark .deus-consent-check:checked { background-color: #f9fafb; border-color: #f9fafb; }
+html.dark .deus-consent-check::after { border-color: #111827; }
+.deus-consent-num { background-color: #f3f4f6; color: #374151; }
+html.dark .deus-consent-num { background-color: #2A3441; color: #d1d5db; }
+/* Unfilled copy placeholder, highlighted so it can't ship unnoticed. */
+.deus-consent-todo { background-color: #fef08a; color: #713f12; border-radius: 4px; padding: 0 3px; }
+.deus-cta:disabled { opacity: 0.4; }
+
+/* ---- DEUS FAB (courses.html) ---- */
+.deus-fab { background-color: #e3ecff; transition: background-color 150ms ease, transform 100ms; }
+.deus-fab:hover { background-color: #d2e0ff; }
+html.dark .deus-fab { background-color: #2A3441; }
+html.dark .deus-fab:hover { background-color: #334155; }
+
+/* ---- Course folders (courses.js) ---- */
+.course-folder-tile { background-color: #e0f2fe; color: #0ea5e9; }
+html.dark .course-folder-tile { background-color: #1e3a5f; color: #7dd3fc; }
+@keyframes course-folder-pop {
+    0%   { opacity: 0; transform: translateY(-10px) scale(0.96); }
+    100% { opacity: 1; transform: none; }
+}
+.course-folder-new { animation: course-folder-pop 280ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+@media (prefers-reduced-motion: reduce) { .course-folder-new { animation: none; } }

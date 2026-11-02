@@ -1,0 +1,23 @@
+<!-- BEGIN: Courses Options Bottom Sheet (opened by the header 3-dot button) -->
+<div id="courses-menu-backdrop" class="hidden fixed inset-0 z-40 bg-black/20 transition-opacity" onclick="closeCoursesMenu()"></div>
+<div id="courses-menu-sheet" class="hidden fixed left-0 right-0 bottom-0 z-50 bg-white rounded-t-[24px] shadow-[0_-8px_24px_rgba(0,0,0,0.12)] pt-2 pb-6 max-w-[430px] mx-auto transition-transform origin-bottom" role="dialog" aria-modal="true" aria-label="Courses options">
+	<div class="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-2"></div>
+	<div class="py-2">
+		<button type="button" class="courses-menu-action group w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors duration-100 active:bg-gray-50" data-action="categories" onclick="coursesMenuAction('categories')">
+			<span class="w-6 flex items-center justify-center text-gray-700 transition-transform duration-150 group-active:scale-90">
+				<svg class="w-[22px] h-[22px]" fill="currentColor" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M246.66,123.56,201,55.13A15.94,15.94,0,0,0,187.72,48H40A16,16,0,0,0,24,64V192a16,16,0,0,0,16,16H187.72A16,16,0,0,0,201,200.88l45.63-68.44A8,8,0,0,0,246.66,123.56ZM187.72,192H40V64H187.72l42.66,64Z"></path></svg>
+			</span>
+			<span class="text-[15px] font-medium text-gray-900">Categories</span>
+		</button>
+		<button type="button" class="courses-menu-action group w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors duration-100 active:bg-gray-50" data-action="gpa" onclick="coursesMenuAction('gpa')">
+			<span class="w-6 flex items-center justify-center text-gray-700 transition-transform duration-150 group-active:scale-90">
+				<svg class="w-[22px] h-[22px]" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M15.75 15.75V18m-7.5-6.75h.008v.008H8.25v-.008zm0 2.25h.008v.008H8.25V13.5zm0 2.25h.008v.008H8.25v-.008zm0 2.25h.008v.008H8.25V18zm2.498-6.75h.007v.008h-.007v-.008zm0 2.25h.007v.008h-.007V13.5zm0 2.25h.007v.008h-.007v-.008zm0 2.25h.007v.008h-.007V18zm2.504-6.75h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008V13.5zm0 2.25h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008V18zm2.498-6.75h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008V13.5zM8.25 6h7.5v2.25h-7.5V6zM12 2.25c-1.892 0-3.758.11-5.593.322C5.307 2.7 4.5 3.65 4.5 4.757V19.5a2.25 2.25 0 002.25 2.25h10.5a2.25 2.25 0 002.25-2.25V4.757c0-1.108-.806-2.057-1.907-2.185A48.507 48.507 0 0012 2.25z"></path></svg>
+			</span>
+			<span class="text-[15px] font-medium text-gray-900">GPA Calculator</span>
+		</button>
+	</div>
+	<div class="border-t border-gray-100 pt-2 px-3">
+		<button type="button" onclick="closeCoursesMenu()" class="w-full py-3.5 text-center text-[15px] font-semibold text-gray-500 rounded-xl transition-colors duration-100 active:bg-gray-100">Cancel</button>
+	</div>
+</div>
+<!-- END: Courses Options Bottom Sheet -->

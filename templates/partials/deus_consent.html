@@ -1,0 +1,38 @@
+<!-- BEGIN: DEUS AI Study Buddy consent screen
+     Opened by "Get Started" in the DEUS intro modal until the user has
+     accepted the current DEUS_CONSENT_VERSION (see courses.js). The 12
+     sections are rendered by renderDeusConsentSections() from the copy in
+     courses.js so wording and placeholders live in one place. -->
+<div id="deus-consent-view" class="hidden fixed inset-y-0 left-0 right-0 z-[58] bg-[#fafafa] max-w-[430px] mx-auto flex flex-col" role="dialog" aria-modal="true" aria-labelledby="deus-consent-title">
+	<header class="flex items-center gap-3 px-4 h-16 shrink-0">
+		<button type="button" class="w-10 h-10 -ml-1 rounded-full flex items-center justify-center text-gray-900 active:bg-gray-100 transition-colors" aria-label="Back" onclick="closeDeusConsent()">
+			<i class="fa-solid fa-arrow-left text-xl"></i>
+		</button>
+		<h1 id="deus-consent-title" class="text-[20px] font-semibold text-gray-900">AI Study Buddy</h1>
+	</header>
+
+	<div id="deus-consent-scroll" class="flex-1 overflow-y-auto px-4 pt-1 pb-6">
+		<p class="text-[22px] leading-7 font-bold text-gray-900 px-1">Before you start with DEUS</p>
+		<p class="text-[14px] leading-5 text-gray-600 mt-2 px-1">DEUS uses AI to work with your course files. Please read how it handles your information and what we expect from you.</p>
+		<ol id="deus-consent-sections" class="mt-5 space-y-3"></ol>
+	</div>
+
+	<footer class="shrink-0 bg-white border-t border-gray-100 px-4 pt-4 pb-5 space-y-3">
+		<label class="deus-consent-row flex items-start gap-3 cursor-pointer">
+			<input id="deus-consent-terms" type="checkbox" class="deus-consent-check" onchange="onDeusConsentChange()">
+			<span class="text-[14px] leading-5 text-gray-900">I have read and agree to the AI Study Buddy Terms.</span>
+		</label>
+		<label class="deus-consent-row flex items-start gap-3 cursor-pointer">
+			<input id="deus-consent-notice" type="checkbox" class="deus-consent-check" onchange="onDeusConsentChange()">
+			<span class="text-[14px] leading-5 text-gray-900">I acknowledge the AI Data Processing Notice.</span>
+		</label>
+		<!-- Informational only: deliberately not a checkbox, so it is never
+		     mistaken for (or bundled into) the consent itself. -->
+		<p class="flex items-start gap-3 text-[13px] leading-5 text-gray-600 pl-0.5">
+			<i class="fa-solid fa-circle-info text-[16px] mt-0.5 text-gray-500"></i>
+			<span>Please note that your conversations may be processed by third-party AI providers.</span>
+		</p>
+		<button type="button" id="deus-consent-accept" class="deus-cta w-full h-14 rounded-full flex items-center justify-center text-[17px] font-semibold active:scale-[0.98] transition-transform duration-100" disabled onclick="acceptDeusConsent()">Accept &amp; Continue</button>
+	</footer>
+</div>
+<!-- END: DEUS AI Study Buddy consent screen -->

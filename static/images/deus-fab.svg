@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1402" height="1122" viewBox="0 0 1402 1122">
+<title>Robot mascot head and ears</title>
+<desc>Scalable vector illustration of a friendly robot head with blue triangular ears, a dark rounded display face, eyes, smile and cheek marks.</desc>
+<defs>
+ <linearGradient id="shell" x1="0" y1="0" x2="0.8" y2="1"><stop stop-color="#fff"/><stop offset=".48" stop-color="#f8faff"/><stop offset="1" stop-color="#dce2ef"/></linearGradient>
+ <linearGradient id="rim" x1="0" y1="0" x2=".15" y2="1"><stop stop-color="#aeb8cb"/><stop offset=".28" stop-color="#fff"/><stop offset=".72" stop-color="#e4e9f3"/><stop offset="1" stop-color="#7c879d"/></linearGradient>
+ <linearGradient id="visor" x1=".2" y1="0" x2=".8" y2="1"><stop stop-color="#20283f"/><stop offset="1" stop-color="#101729"/></linearGradient>
+ <linearGradient id="blue" x1="0" y1="0" x2=".8" y2="1"><stop stop-color="#65caff"/><stop offset="1" stop-color="#38a9ed"/></linearGradient>
+ <linearGradient id="earwhite" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#e3e8f2"/></linearGradient>
+</defs>
+<!-- left ear -->
+<path d="M139 478 Q121 469 120 443 L117 260 Q116 191 151 185 Q167 181 188 194 L352 286 Q384 304 371 327 L235 482 Q219 500 193 494 Z" fill="url(#earwhite)" stroke="#46516d" stroke-width="8" stroke-linejoin="round"/>
+<path d="M128 265 Q127 199 154 193 Q166 190 181 201 L306 289 Q317 297 305 309 L151 470 Q139 479 136 457 Z" fill="#fff" stroke="#9ba6bb" stroke-width="4"/>
+<path d="M128 269 L165 222 Q170 215 179 222 L279 292 Q288 299 280 307 L151 449 Q143 457 140 443 Z" fill="url(#blue)" stroke="#398fca" stroke-width="5" stroke-linejoin="round"/>
+<path d="M180 201 L306 289 Q318 298 306 310 L235 482" fill="none" stroke="#c5ccda" stroke-width="6"/>
+<!-- right ear -->
+<path d="M1003 247 L1181 119 Q1218 92 1239 128 Q1253 151 1253 184 L1254 389 Q1254 419 1228 430 L1188 435 Q1175 438 1163 426 L1001 286 Q980 267 1003 247Z" fill="url(#earwhite)" stroke="#46516d" stroke-width="8" stroke-linejoin="round"/>
+<path d="M1004 255 L1193 128 Q1217 112 1231 137 Q1241 153 1242 183 L1243 389 Q1243 405 1227 412 L1084 258Z" fill="#fff" stroke="#9ba6bb" stroke-width="4"/>
+<path d="M1096 255 L1197 151 Q1207 141 1217 154 L1239 181 L1240 386 Q1240 397 1228 401 L1096 267 Q1090 261 1096 255Z" fill="url(#blue)" stroke="#398fca" stroke-width="5" stroke-linejoin="round"/>
+<path d="M1003 255 L1067 256 L1188 435" fill="none" stroke="#c5ccda" stroke-width="6"/>
+<!-- outer helmet shell -->
+<path d="M205 629 C204 478 246 366 352 321 C447 279 555 269 698 268 C858 267 1001 298 1091 379 C1172 451 1205 557 1205 665 C1205 811 1125 906 1002 944 C887 980 733 972 595 969 C433 966 310 921 248 833 C218 790 204 712 205 629Z" fill="url(#shell)" stroke="#46516d" stroke-width="9" stroke-linejoin="round"/>
+<path d="M228 630 C228 485 273 390 365 348 C464 302 574 291 699 291 C849 291 989 321 1073 395 C1147 460 1180 558 1180 665 C1180 795 1109 881 991 919 C875 957 732 950 597 947 C447 944 330 906 273 824 C242 779 228 706 228 630Z" fill="none" stroke="#d5dceb" stroke-width="8"/>
+<!-- raised inner bezel -->
+<path d="M292 638 C292 507 321 417 397 374 C470 333 573 318 700 318 C835 318 948 343 1011 397 C1074 452 1099 550 1099 668 C1099 790 1040 860 941 894 C840 929 717 926 602 920 C478 914 389 883 342 820 C307 772 292 708 292 638Z" fill="url(#rim)" stroke="#8994aa" stroke-width="5"/>
+<!-- dark screen -->
+<path d="M326 637 C326 513 350 430 417 393 C485 356 581 341 700 341 C827 341 930 364 982 411 C1038 461 1064 551 1064 667 C1064 777 1014 839 925 872 C833 907 716 904 606 898 C494 892 412 865 371 812 C340 771 326 707 326 637Z" fill="url(#visor)"/>
+<!-- eyes, cheeks and smile -->
+<g fill="#fff"><ellipse cx="505" cy="655" rx="36" ry="36"/><ellipse cx="922" cy="626" rx="36" ry="36"/><ellipse cx="398" cy="753" rx="48" ry="24"/><ellipse cx="1028" cy="705" rx="46" ry="23"/></g>
+<path d="M615 709 Q666 758 722 755 Q775 753 814 697" fill="none" stroke="#fff" stroke-width="17" stroke-linecap="round"/>
+</svg>

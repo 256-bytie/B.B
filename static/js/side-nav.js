@@ -15,7 +15,7 @@
 // order dependency on core.js/comment-actions.js - see the ReferenceError
 // incident in comments.js/comment-actions.js for why that matters.
 
-const SIDE_NAV_EDGE_ZONE = 24; // px from the left screen edge that can start an open-drag
+const SIDE_NAV_EDGE_ZONE = 240; // px from the left screen edge that can start an open-drag
 const SIDE_NAV_BACKDROP_MAX_OPACITY = 0.35;
 const SIDE_NAV_SNAP_BIAS = 28; // px of directional bias applied before nearest-snap picks a stop, so a decisive flick commits instead of springing back
 
@@ -46,6 +46,10 @@ function getSideNavEls() {
 const SIDE_NAV_ELIGIBLE_VIEWS = ['feed-view', 'profile-view', 'courses-view', 'businesses-view', 'chat-view', 'library-view'];
 
 function sideNavAvailable() {
+	// The post & comments overlay sits on top of the feed/profile view
+	// (which stays .active underneath), so it has to be checked on its own.
+	const commentOverlay = document.getElementById('comment-overlay');
+	if (commentOverlay && !commentOverlay.classList.contains('hidden')) return false;
 	const activeView = document.querySelector('.view-section.active');
 	return !!activeView && SIDE_NAV_ELIGIBLE_VIEWS.includes(activeView.id);
 }

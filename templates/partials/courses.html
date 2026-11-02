@@ -1,133 +1,122 @@
 <!-- BEGIN: Courses View -->
+<!-- Empty state only for now. #courses-list is where course cards will be
+     rendered once the data layer exists; #courses-empty is visible by
+     default and is the element to hide when the list has items. -->
 <div id="courses-view" class="view-section bg-[#fafafa] min-h-screen p-4">
-<!-- BEGIN: HeaderSection -->
-<header class="flex justify-between items-center mb-6 px-1">
-<h1 class="text-2xl font-bold tracking-tight text-gray-900">My Courses</h1>
-<a class="text-[15px] font-medium text-red-600 hover:text-red-700 transition-colors" href="#">View All</a>
-</header>
-<!-- END: HeaderSection -->
-<!-- BEGIN: CourseList -->
-<main class="space-y-4 pb-24">
-<!-- Course Card: Introduction to Computer Science -->
-<article class="bg-white rounded-3xl p-5 course-card-shadow border border-gray-100 flex items-start gap-4">
-<!-- Icon Container -->
-<div class="flex-shrink-0 w-14 h-14 rounded-full bg-red-50 flex items-center justify-center text-red-500">
-<svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-<path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" stroke-linecap="round" stroke-linejoin="round"></path>
-</svg>
-</div>
-<!-- Content -->
-<div class="flex-grow min-w-0">
-<div class="flex justify-between items-start mb-1">
-<h2 class="text-[17px] font-semibold text-gray-900 truncate pr-2">Introduction to Computer Science</h2>
-<svg class="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-<path d="M8.25 4.5l7.5 7.5-7.5 7.5" stroke-linecap="round" stroke-linejoin="round"></path>
-</svg>
-</div>
-<p class="text-[14px] text-gray-500 mb-1">CSC 101</p>
-<div class="flex items-center text-gray-500 text-[13px] mb-4">
-<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-<path d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" stroke-linecap="round" stroke-linejoin="round"></path>
-</svg>
-          Dr. John Smith
-        </div>
-<!-- Progress Bar -->
-<div class="flex items-center gap-3">
-<div class="flex-grow h-1.5 bg-gray-200 rounded-full overflow-hidden">
-<div class="h-full bg-red-600 rounded-full" style="width: 60%"></div>
-</div>
-<span class="text-[15px] font-bold text-red-600">60%</span>
-</div>
-</div>
-</article>
-<!-- Course Card: General Chemistry -->
-<article class="bg-white rounded-3xl p-5 course-card-shadow border border-gray-100 flex items-start gap-4">
-<div class="flex-shrink-0 w-14 h-14 rounded-full bg-teal-50 flex items-center justify-center text-teal-500">
-<svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-<path d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" stroke-linecap="round" stroke-linejoin="round"></path>
-</svg>
-</div>
-<div class="flex-grow min-w-0">
-<div class="flex justify-between items-start mb-1">
-<h2 class="text-[17px] font-semibold text-gray-900 truncate pr-2">General Chemistry</h2>
-<svg class="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-<path d="M8.25 4.5l7.5 7.5-7.5 7.5" stroke-linecap="round" stroke-linejoin="round"></path>
-</svg>
-</div>
-<p class="text-[14px] text-gray-500 mb-1">CHM 102</p>
-<div class="flex items-center text-gray-500 text-[13px] mb-4">
-<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-<path d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" stroke-linecap="round" stroke-linejoin="round"></path>
-</svg>
-          Dr. Sarah Johnson
-        </div>
-<div class="flex items-center gap-3">
-<div class="flex-grow h-1.5 bg-gray-200 rounded-full overflow-hidden">
-<div class="h-full bg-red-600 rounded-full" style="width: 45%"></div>
-</div>
-<span class="text-[15px] font-bold text-red-600">45%</span>
-</div>
-</div>
-</article>
-<!-- Course Card: Calculus I -->
-<article class="bg-white rounded-3xl p-5 course-card-shadow border border-gray-100 flex items-start gap-4">
-<div class="flex-shrink-0 w-14 h-14 rounded-full bg-blue-50 flex items-center justify-center text-blue-500">
-<svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-<path d="M15.75 15.75V18m-7.5-6.75h.008v.008H8.25v-.008zm0 2.25h.008v.008H8.25V13.5zm0 2.25h.008v.008H8.25v-.008zm0 2.25h.008v.008H8.25V18zm2.498-6.75h.007v.008h-.007v-.008zm0 2.25h.007v.008h-.007V13.5zm0 2.25h.007v.008h-.007v-.008zm0 2.25h.007v.008h-.007V18zm2.504-6.75h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008V13.5zm0 2.25h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008V18zm2.498-6.75h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008V13.5zM8.25 6h7.5v2.25h-7.5V6zM12 2.25c-1.892 0-3.758.11-5.593.322C5.307 2.7 4.5 3.65 4.5 4.757V19.5a2.25 2.25 0 002.25 2.25h10.5a2.25 2.25 0 002.25-2.25V4.757c0-1.108-.806-2.057-1.907-2.185A48.507 48.507 0 0012 2.25z" stroke-linecap="round" stroke-linejoin="round"></path>
-</svg>
-</div>
-<div class="flex-grow min-w-0">
-<div class="flex justify-between items-start mb-1">
-<h2 class="text-[17px] font-semibold text-gray-900 truncate pr-2">Calculus I</h2>
-<svg class="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-<path d="M8.25 4.5l7.5 7.5-7.5 7.5" stroke-linecap="round" stroke-linejoin="round"></path>
-</svg>
-</div>
-<p class="text-[14px] text-gray-500 mb-1">MTH 101</p>
-<div class="flex items-center text-gray-500 text-[13px] mb-4">
-<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-<path d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" stroke-linecap="round" stroke-linejoin="round"></path>
-</svg>
-          Dr. Michael Brown
-        </div>
-<div class="flex items-center gap-3">
-<div class="flex-grow h-1.5 bg-gray-200 rounded-full overflow-hidden">
-<div class="h-full bg-red-600 rounded-full" style="width: 80%"></div>
-</div>
-<span class="text-[15px] font-bold text-red-600">80%</span>
-</div>
-</div>
-</article>
-<!-- Course Card: Use of English -->
-<article class="bg-white rounded-3xl p-5 course-card-shadow border border-gray-100 flex items-start gap-4">
-<div class="flex-shrink-0 w-14 h-14 rounded-full bg-orange-50 flex items-center justify-center text-orange-500">
-<svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-<path d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.315 48.315 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z" stroke-linecap="round" stroke-linejoin="round"></path>
-</svg>
-</div>
-<div class="flex-grow min-w-0">
-<div class="flex justify-between items-start mb-1">
-<h2 class="text-[17px] font-semibold text-gray-900 truncate pr-2">Use of English</h2>
-<svg class="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-<path d="M8.25 4.5l7.5 7.5-7.5 7.5" stroke-linecap="round" stroke-linejoin="round"></path>
-</svg>
-</div>
-<p class="text-[14px] text-gray-500 mb-1">ENG 105</p>
-<div class="flex items-center text-gray-500 text-[13px] mb-4">
-<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" stroke-width="1.5" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-<path d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" stroke-linecap="round" stroke-linejoin="round"></path>
-</svg>
-          Prof. Emily Davis
-        </div>
-<div class="flex items-center gap-3">
-<div class="flex-grow h-1.5 bg-gray-200 rounded-full overflow-hidden">
-<div class="h-full bg-red-600 rounded-full" style="width: 30%"></div>
-</div>
-<span class="text-[15px] font-bold text-red-600">30%</span>
-</div>
-</div>
-</article>
-</main>
-<!-- END: CourseList -->
+	<!-- BEGIN: HeaderSection -->
+	<header class="flex justify-between items-center mb-6 px-1">
+		<h1 class="text-2xl font-bold tracking-tight text-gray-900">My Courses</h1>
+		<div class="flex items-center gap-2">
+			<!-- Add folder: opens the Add folder dialog (nothing is saved yet). -->
+			<button type="button" id="courses-folder-btn" class="w-11 h-11 rounded-2xl bg-gray-100 flex items-center justify-center text-gray-700 active:scale-95 transition-transform duration-100" aria-label="Add folder" onclick="openCourseFolderDialog()">
+				<svg class="w-6 h-6" fill="currentColor" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M216,72H130.67L102.93,51.2a16.12,16.12,0,0,0-9.6-3.2H40A16,16,0,0,0,24,64V200a16,16,0,0,0,16,16H216.89A15.13,15.13,0,0,0,232,200.89V88A16,16,0,0,0,216,72Zm0,128H40V64H93.33L123.2,86.4A8,8,0,0,0,128,88h88Zm-56-56a8,8,0,0,1-8,8H136v16a8,8,0,0,1-16,0V152H104a8,8,0,0,1,0-16h16V120a8,8,0,0,1,16,0v16h16A8,8,0,0,1,160,144Z"></path></svg>
+			</button>
+			<!-- Upload a course. Intentionally not wired to anything yet. -->
+			<button type="button" id="courses-upload-btn" class="w-11 h-11 rounded-2xl bg-gray-100 flex items-center justify-center text-gray-700 active:scale-95 transition-transform duration-100" aria-label="Upload a course">
+				<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"></path></svg>
+			</button>
+			<!-- More options: opens the Courses options sheet (courses_menu_sheet.html) -->
+			<button type="button" id="courses-more-btn" class="w-11 h-11 rounded-2xl bg-gray-100 flex items-center justify-center text-gray-700 active:scale-95 transition-transform duration-100" aria-label="More options" aria-haspopup="dialog" onclick="openCoursesMenu()">
+				<i class="fa-solid fa-ellipsis-vertical text-xl"></i>
+			</button>
+		</div>
+	</header>
+	<!-- END: HeaderSection -->
+
+	<!-- BEGIN: CategoryTabs
+	     Horizontally scrollable pill tabs. "All" is always first and selected
+	     by default. Further categories get appended as .course-tab buttons
+	     (same markup, data-category set) and are picked up by
+	     selectCourseCategory() in courses.js. -->
+	<div id="courses-category-row" class="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-5 mb-5" role="tablist" aria-label="Course categories">
+		<button type="button" role="tab" aria-selected="true" data-category="all" class="course-tab is-active shrink-0 h-9 px-5 rounded-full text-[14px] font-semibold active:scale-95 transition-transform duration-100" onclick="selectCourseCategory('all')">All</button>
+	</div>
+	<!-- END: CategoryTabs -->
+
+	<!-- BEGIN: CourseList -->
+	<main id="courses-list" class="space-y-4 pb-24"></main>
+	<!-- END: CourseList -->
+
+	<!-- Empty state: shown while the user has no courses -->
+	<div id="courses-empty" class="px-8 pt-24 pb-24 text-center">
+		<div class="relative mx-auto w-20 h-20">
+			<span class="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center text-gray-400">
+				<svg class="w-9 h-9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"></path></svg>
+			</span>
+			<!-- Sparkle strokes beside the icon -->
+			<svg class="absolute -top-1 -right-5 w-7 h-7 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" viewBox="0 0 28 28" aria-hidden="true"><path d="M7 8l5-3"></path><path d="M13 14l6-1"></path><path d="M10 20l5 2"></path></svg>
+		</div>
+		<p class="text-[17px] font-semibold text-gray-900 mt-4">No courses yet</p>
+		<p class="text-[14px] text-gray-500 mt-1">Upload a course and let DEUS organize it for you.</p>
+	</div>
+
+	<!-- DEUS FAB: bottom-right corner (the GPA calculator now lives in the
+	     3-dot menu). Lives inside #courses-view so it shows and hides with
+	     the tab. Opens the DEUS intro. -->
+	<button type="button" id="deus-fab" class="deus-fab fixed w-14 h-14 rounded-full flex items-center justify-center active:scale-95 transition-transform duration-100" style="bottom: 20px; right: 20px; z-index: 9;" aria-label="Meet DEUS" onclick="openDeusIntro()">
+		<img src="/static/images/deus-fab.svg" alt="" class="w-10 h-auto pointer-events-none" draggable="false">
+	</button>
 </div>
 <!-- END: Courses View -->
+
+<!-- BEGIN: Add folder dialog (same look as the Add category dialog) -->
+<div id="course-folder-dialog" class="hidden fixed inset-0 z-[59] flex items-center justify-center px-6" role="dialog" aria-modal="true" aria-labelledby="course-folder-dialog-title">
+	<div class="absolute inset-0 bg-black/50" onclick="closeCourseFolderDialog()"></div>
+	<div class="relative w-full max-w-[380px] bg-white rounded-[28px] px-6 pt-7 pb-5 shadow-2xl">
+		<h2 id="course-folder-dialog-title" class="text-[24px] leading-8 text-gray-900">Add folder</h2>
+		<div class="relative mt-6">
+			<label for="course-folder-input" class="absolute -top-2.5 left-3 px-1 bg-white text-[13px] text-sky-600">Name</label>
+			<input id="course-folder-input" type="text" maxlength="30" autocomplete="off" autocapitalize="sentences" enterkeyhint="done" class="w-full h-14 px-4 rounded-xl border-2 border-sky-400 bg-transparent text-[16px] text-gray-900 outline-none focus:ring-0" oninput="onCourseFolderInput()" onkeydown="if(event.key==='Enter'){event.preventDefault();submitCourseFolder();}">
+		</div>
+		<p id="course-folder-helper" class="text-[13px] text-gray-500 mt-2 px-3">*required</p>
+		<div class="flex justify-end items-center gap-2 mt-8">
+			<button type="button" class="px-4 h-11 rounded-full text-[15px] font-semibold text-sky-600 active:bg-gray-100 transition-colors" onclick="closeCourseFolderDialog()">Cancel</button>
+			<button type="button" id="course-folder-submit" class="course-dialog-submit px-4 h-11 rounded-full text-[15px] font-semibold transition-colors" disabled onclick="submitCourseFolder()">Add</button>
+		</div>
+	</div>
+</div>
+<!-- END: Add folder dialog -->
+
+<!-- BEGIN: Folder screen (opened by tapping a folder card in the Courses list) -->
+<div id="course-folder-view" class="hidden fixed inset-y-0 left-0 right-0 z-[58] bg-[#fafafa] max-w-[430px] mx-auto flex flex-col" role="dialog" aria-modal="true" aria-labelledby="course-folder-title">
+	<header class="flex items-center gap-3 px-4 h-16 shrink-0">
+		<button type="button" class="w-10 h-10 -ml-1 rounded-full flex items-center justify-center text-gray-900 active:bg-gray-100 transition-colors" aria-label="Back" onclick="closeCourseFolder()">
+			<i class="fa-solid fa-arrow-left text-xl"></i>
+		</button>
+		<div class="min-w-0">
+			<h1 id="course-folder-title" class="text-[20px] leading-6 font-semibold text-gray-900 truncate"></h1>
+			<p id="course-folder-subtitle" class="text-[13px] leading-4 text-gray-500"></p>
+		</div>
+	</header>
+
+	<div class="flex-1 overflow-y-auto px-4 pt-2 pb-8">
+		<!-- Empty state. Course cards will render above/instead of this once folders can hold courses. -->
+		<div id="course-folder-empty" class="px-8 pt-24 text-center">
+			<span class="course-folder-tile mx-auto w-20 h-20 rounded-3xl flex items-center justify-center">
+				<i class="fa-solid fa-folder-open text-[34px]"></i>
+			</span>
+			<p class="text-[17px] font-semibold text-gray-900 mt-5">This folder is empty</p>
+			<p class="text-[14px] text-gray-500 mt-1">Courses you add to this folder will show up here.</p>
+		</div>
+	</div>
+</div>
+<!-- END: Folder screen -->
+
+<!-- BEGIN: DEUS intro modal. Shown once per account, the first time the
+     Courses tab is opened (see maybeShowDeusIntro in courses.js). -->
+<div id="deus-intro" class="hidden fixed inset-0 z-[70] flex items-center justify-center px-5" role="dialog" aria-modal="true" aria-labelledby="deus-intro-title">
+	<div id="deus-intro-backdrop" class="deus-intro-backdrop absolute inset-0 bg-black/40" onclick="closeDeusIntro()"></div>
+	<div class="deus-intro-card relative w-full max-w-[380px] bg-white rounded-[32px] px-6 pt-6 pb-6 shadow-2xl">
+		<button type="button" class="absolute top-4 right-4 w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 active:scale-95 transition-transform duration-100" aria-label="Close" onclick="closeDeusIntro()">
+			<i class="fa-solid fa-xmark text-lg"></i>
+		</button>
+		<img src="/static/images/deus-mascot.svg" alt="DEUS, your AI study buddy" class="mx-auto mt-6 h-52 w-auto object-contain" draggable="false">
+		<h2 id="deus-intro-title" class="text-[28px] leading-8 font-bold text-center text-gray-900 mt-2">Meet DEUS!</h2>
+		<p class="text-[16px] leading-6 text-center text-gray-600 mt-3 px-1">Your AI study buddy. I&rsquo;ll read your course files, create smart summaries, organize them into cards, and help you learn better.</p>
+		<button type="button" class="deus-cta w-full h-14 mt-6 rounded-full flex items-center justify-center gap-3 text-[17px] font-semibold active:scale-[0.98] transition-transform duration-100" onclick="deusGetStarted()">
+			Get Started
+			<i class="fa-solid fa-arrow-right text-base"></i>
+		</button>
+	</div>
+</div>
+<!-- END: DEUS intro modal -->

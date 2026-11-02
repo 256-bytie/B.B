@@ -212,7 +212,6 @@ function closeBusinessesView() {
 
 function updateBottomNav(viewName) {
     const composeFab = document.getElementById('compose-fab');
-    const gpaFab = document.getElementById('gpa-fab');
     const libraryFab = document.getElementById('library-contribute-fab');
 
     const bottomNav = document.getElementById('bottom-nav');
@@ -235,10 +234,9 @@ function updateBottomNav(viewName) {
     }
 
     // gpa-calculator is a true full-screen takeover: no FAB should render
-    // behind/around it.
+    // behind/around it. (It is opened from Courses > 3-dot menu.)
     if (viewName === 'gpa-calculator') {
         if (composeFab) composeFab.classList.add('hidden');
-        if (gpaFab) gpaFab.classList.add('hidden');
         if (libraryFab) libraryFab.classList.add('hidden');
         return;
     }
@@ -252,13 +250,12 @@ function updateBottomNav(viewName) {
         }
     }
 
-    // Show GPA calculator FAB only on courses view
-    if (gpaFab) {
-        if (viewName === 'courses') {
-            gpaFab.classList.remove('hidden');
-        } else {
-            gpaFab.classList.add('hidden');
-        }
+    // Courses tab: one-time DEUS intro on first open; always dismiss it on
+    // the way out of the tab.
+    if (viewName === 'courses') {
+        if (typeof onCoursesViewShown === 'function') onCoursesViewShown();
+    } else if (typeof onCoursesViewHidden === 'function') {
+        onCoursesViewHidden();
     }
 
     // Show Contribute FAB only on the Library home view (not the
