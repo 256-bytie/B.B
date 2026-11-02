@@ -435,6 +435,7 @@ function onCoursesViewHidden() {
     closeCourseFolderDialog();
     closeCourseFileDialog();
     closeCourseFileMenu();
+    closeCourseFolderMenu();
     closeCourseFileCategorySheet();
     closeCourseConfirm();
     closeCourseCategories();
@@ -699,12 +700,55 @@ async function courseErrorMessage(res, fallback) {
 }
 
 // ---- Cards ----
+// Tap and hold a folder card to open its Rename / Delete menu.
+const COURSE_LONG_PRESS_MS = 500;
+const COURSE_LONG_PRESS_SLOP = 10;
+
+function attachCourseFolderLongPress(card, folder) {
+    let timer = null, startX = 0, startY = 0;
+    function cancel() { if (timer) { clearTimeout(timer); timer = null; } }
+    function fire() {
+        timer = null;
+        card._lpBlock = true;
+        if (navigator.vibrate) { try { navigator.vibrate(10); } catch (e) {} }
+        openCourseFolderMenu(folder);
+    }
+    card.addEventListener('pointerdown', function(e) {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        card._lpBlock = false;
+        startX = e.clientX;
+        startY = e.clientY;
+        cancel();
+        timer = setTimeout(fire, COURSE_LONG_PRESS_MS);
+    });
+    card.addEventListener('pointermove', function(e) {
+        if (timer && (Math.abs(e.clientX - startX) > COURSE_LONG_PRESS_SLOP || Math.abs(e.clientY - startY) > COURSE_LONG_PRESS_SLOP)) cancel();
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(function(type) {
+        card.addEventListener(type, cancel);
+    });
+    // Native long-press / right-click menu: replace it with ours.
+    card.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        if (card._lpBlock) return;
+        cancel();
+        card._lpBlock = true;
+        openCourseFolderMenu(folder);
+    });
+}
+
 function buildCourseFolderCard(folder, isNew) {
     const card = document.createElement('button');
     card.type = 'button';
     card.dataset.id = folder.id;
     card.className = 'course-folder-card course-card-shadow w-full flex items-center gap-4 p-3.5 rounded-2xl bg-white border border-gray-100 text-left active:scale-[0.98] transition-transform duration-100' + (isNew ? ' course-folder-new' : '');
-    card.addEventListener('click', function() { openCourseFolder(folder.id, { name: folder.name }); });
+    card.style.webkitTouchCallout = 'none';
+    card.style.userSelect = 'none';
+    card.addEventListener('click', function() {
+        if (card._lpBlock) { card._lpBlock = false; return; } // click that ends a long press
+        openCourseFolder(folder.id, { name: folder.name });
+    });
+    attachCourseFolderLongPress(card, folder);
 
     const tile = document.createElement('span');
     tile.className = 'course-folder-tile shrink-0 w-14 h-14 rounded-2xl flex items-center justify-center';
@@ -1027,9 +1071,13 @@ function closeCourseFolder() {
 }
 
 // ---- Add folder dialog ----
-function openCourseFolderDialog() {
+let courseFolderEditing = null; // folder being renamed; null = adding
+function openCourseFolderDialog(folder) {
+    courseFolderEditing = folder || null;
+    document.getElementById('course-folder-dialog-title').textContent = courseFolderEditing ? 'Rename folder' : 'Add folder';
+    document.getElementById('course-folder-submit').textContent = courseFolderEditing ? 'Save' : 'Add';
     const input = document.getElementById('course-folder-input');
-    input.value = '';
+    input.value = courseFolderEditing ? courseFolderEditing.name : '';
     onCourseFolderInput();
     document.getElementById('course-folder-dialog').classList.remove('hidden');
     setTimeout(function() { input.focus(); }, 50);
@@ -1043,8 +1091,9 @@ function closeCourseFolderDialog() {
 function courseFolderNameError(raw) {
     const lower = raw.trim().toLowerCase();
     if (!lower) return '';
-    return courseCurrentFolders().some(function(f) { return f.name.trim().toLowerCase() === lower; })
-        ? 'A folder with this name already exists' : '';
+    return courseCurrentFolders().some(function(f) {
+        return (!courseFolderEditing || f.id !== courseFolderEditing.id) && f.name.trim().toLowerCase() === lower;
+    }) ? 'A folder with this name already exists' : '';
 }
 
 function setCourseFolderHelper(error) {
@@ -1067,15 +1116,27 @@ async function submitCourseFolder() {
     if (submit.disabled || courseFolderSaving) return;
     const name = document.getElementById('course-folder-input').value.trim().slice(0, COURSE_FOLDER_MAX_LENGTH);
     if (!name || courseFolderNameError(name)) return;
+    if (courseFolderEditing && name === courseFolderEditing.name) { closeCourseFolderDialog(); return; }
     courseFolderSaving = true;
     submit.disabled = true;
     try {
-        const res = await apiFetch('/api/courses/folders', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: name, parent_id: openCourseFolderId })
-        });
-        if (res.ok) {
+        const renaming = courseFolderEditing;
+        const res = renaming
+            ? await apiFetch('/api/courses/folders/' + encodeURIComponent(renaming.id), {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name })
+            })
+            : await apiFetch('/api/courses/folders', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name, parent_id: openCourseFolderId })
+            });
+        if (res.ok && renaming) {
+            closeCourseFolderDialog();
+            showToast('Folder renamed');
+            reloadCourseLevel();
+        } else if (res.ok) {
             const data = await res.json();
             if (openCourseFolderId === null && coursesActiveCategory !== 'all') {
                 setCourseFolderCategory(data.folder.id, coursesActiveCategory);
@@ -1083,7 +1144,7 @@ async function submitCourseFolder() {
             closeCourseFolderDialog();
             reloadCourseLevel({ type: 'folder', id: data.folder.id });
         } else {
-            setCourseFolderHelper(await courseErrorMessage(res, 'Could not create the folder.'));
+            setCourseFolderHelper(await courseErrorMessage(res, courseFolderEditing ? 'Could not rename the folder.' : 'Could not create the folder.'));
             submit.disabled = false;
         }
     } catch (e) {
@@ -1315,6 +1376,38 @@ function openCourseFileMenu(file) {
     document.getElementById('course-file-menu-backdrop').classList.remove('hidden');
 }
 
+// ---- Folder options sheet (opened by tap and hold) ----
+let courseMenuFolder = null;
+let courseDeleteKind = 'file'; // what the confirm dialog is about: 'file' | 'folder'
+
+function openCourseFolderMenu(folder) {
+    courseMenuFolder = folder;
+    document.getElementById('course-folder-menu-title').textContent = folder.name;
+    document.getElementById('course-folder-menu-sheet').classList.remove('hidden');
+    document.getElementById('course-file-menu-backdrop').classList.remove('hidden');
+}
+
+function closeCourseFolderMenu() {
+    const sheet = document.getElementById('course-folder-menu-sheet');
+    const backdrop = document.getElementById('course-file-menu-backdrop');
+    if (sheet) sheet.classList.add('hidden');
+    if (backdrop) backdrop.classList.add('hidden');
+}
+
+function courseFolderMenuAction(action) {
+    const folder = courseMenuFolder;
+    closeCourseFolderMenu();
+    if (!folder) return;
+    if (action === 'rename') {
+        openCourseFolderDialog(folder);
+    } else if (action === 'delete') {
+        courseDeleteKind = 'folder';
+        document.getElementById('course-confirm-title').textContent = 'Delete folder?';
+        document.getElementById('course-confirm-message').textContent = '\u201c' + folder.name + '\u201d and everything inside it will be permanently deleted.';
+        document.getElementById('course-confirm-dialog').classList.remove('hidden');
+    }
+}
+
 function closeCourseFileMenu() {
     const sheet = document.getElementById('course-file-menu-sheet');
     const backdrop = document.getElementById('course-file-menu-backdrop');
@@ -1333,6 +1426,8 @@ function courseFileMenuAction(action) {
     } else if (action === 'download') {
         downloadCourseFile(file);
     } else if (action === 'delete') {
+        courseDeleteKind = 'file';
+        document.getElementById('course-confirm-title').textContent = 'Delete file?';
         document.getElementById('course-confirm-message').textContent = '\u201c' + file.name + '.' + file.file_type + '\u201d will be permanently deleted.';
         document.getElementById('course-confirm-dialog').classList.remove('hidden');
     }
@@ -1345,18 +1440,20 @@ function closeCourseConfirm() {
 
 let courseDeleting = false;
 async function confirmCourseDelete() {
-    const file = courseMenuFile;
-    if (!file || courseDeleting) return;
+    const isFolder = courseDeleteKind === 'folder';
+    const target = isFolder ? courseMenuFolder : courseMenuFile;
+    if (!target || courseDeleting) return;
     courseDeleting = true;
     try {
-        const res = await apiFetch('/api/courses/files/' + encodeURIComponent(file.id), { method: 'DELETE' });
+        const res = await apiFetch('/api/courses/' + (isFolder ? 'folders/' : 'files/') + encodeURIComponent(target.id), { method: 'DELETE' });
         closeCourseConfirm();
         if (res.ok) {
-            setCourseFileCategory(file.id, null);
-            showToast('File deleted');
+            if (isFolder) setCourseFolderCategory(target.id, null);
+            else setCourseFileCategory(target.id, null);
+            showToast(isFolder ? 'Folder deleted' : 'File deleted');
             reloadCourseLevel();
         } else {
-            showToast(await courseErrorMessage(res, 'Could not delete the file.'));
+            showToast(await courseErrorMessage(res, isFolder ? 'Could not delete the folder.' : 'Could not delete the file.'));
         }
     } catch (e) {
         closeCourseConfirm();
