@@ -74,11 +74,13 @@ function resetDeusIntro() {
     modal.classList.add('hidden');
 }
 
-// Upload flow is not built yet. Everything that starts an upload goes through
-// requestCourseUpload() and lands here, so the flow is wired in one place.
-// (The DEUS FAB just opens the intro modal via openDeusIntro().)
+// Open the file picker. The upload buttons (header, folder screen) call this
+// directly: storing a file needs no AI consent. Only the DEUS "Get Started"
+// path goes through requestCourseUpload() (consent first) before landing here.
+// The destination is whatever folder is on screen (top level when none).
 function startCourseUpload() {
-    // TODO: open the course upload flow.
+    const picker = document.getElementById('course-file-picker');
+    if (picker) picker.click();
 }
 
 // ---- Category tabs + category data ----
@@ -142,6 +144,7 @@ function renderCourseCategoryTabs() {
         tab.addEventListener('click', function() { selectCourseCategory(cat.id); });
         row.appendChild(tab);
     });
+    renderCourseTop();
 }
 
 function selectCourseCategory(category) {
@@ -150,7 +153,6 @@ function selectCourseCategory(category) {
     const row = document.getElementById('courses-category-row');
     const active = row && row.querySelector('.course-tab.is-active');
     if (active) active.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
-    // TODO: re-render / filter #courses-list for coursesActiveCategory.
 }
 
 // ---- Edit categories view ----
@@ -208,9 +210,11 @@ function renderCourseCategoryList() {
 }
 
 function deleteCourseCategory(id) {
-    // TODO: when courses carry a category, confirm first and move them to All.
+    // Documents in the deleted category simply fall back to "All" only.
     courseCategories = courseCategories.filter(function(c) { return c.id !== id; });
     saveCourseCategories();
+    pruneCourseFileCategories();
+    pruneCourseFolderCategories();
     renderCourseCategoryList();
     renderCourseCategoryTabs();
     showToast('Category deleted');
@@ -422,14 +426,17 @@ function submitCourseCategory() {
 function onCoursesViewShown() {
     loadCourseCategories();
     renderCourseCategoryTabs();
-    loadCourseFolders();
-    renderCourseFolders();
+    onCourseDataShown();
     maybeShowDeusIntro();
 }
 
 function onCoursesViewHidden() {
-    closeCourseFolder();
+    hideCourseFolderView();
     closeCourseFolderDialog();
+    closeCourseFileDialog();
+    closeCourseFileMenu();
+    closeCourseFileCategorySheet();
+    closeCourseConfirm();
     closeCourseCategories();
     closeDeusConsent();
     resetDeusIntro();
@@ -625,101 +632,398 @@ function acceptDeusConsent() {
     startCourseUpload();
 }
 
-// ---- Folders ----
-// A folder is {id, name, createdAt}. Stored per account in localStorage as a
-// placeholder (same caveat as categories); folders cannot hold courses yet.
-const COURSE_FOLDERS_KEY_PREFIX = 'beebo_course_folders_v1:';
+// ---- Courses data: folders + files (server-backed) ----
+// Folders and files live on the server (/api/courses/*), private to the user.
+// The top level renders into #courses-list; a folder (and any folder inside
+// it) renders on the folder screen. One folder's contents = its subfolders
+// and files, folders first, newest first (the server sorts).
+const COURSE_LOCAL_FOLDERS_KEY_PREFIX = 'beebo_course_folders_v1:'; // legacy, migrated once
 const COURSE_FOLDER_MAX_LENGTH = 30;
-let courseFolders = [];
-let openCourseFolderId = null;
+const COURSE_FILE_NAME_MAX_LENGTH = 100;
+const COURSE_MAX_FILE_BYTES = 50 * 1024 * 1024;
+const COURSE_ALLOWED_TYPES = ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'txt', 'md', 'jpg', 'jpeg', 'png', 'webp'];
+const COURSE_INLINE_TYPES = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
+const COURSE_FILE_STYLES = {
+    pdf:  { bg: 'bg-red-500',    icon: 'fa-file-pdf' },
+    doc:  { bg: 'bg-blue-500',   icon: 'fa-file-word' },
+    docx: { bg: 'bg-blue-500',   icon: 'fa-file-word' },
+    ppt:  { bg: 'bg-orange-500', icon: 'fa-file-powerpoint' },
+    pptx: { bg: 'bg-orange-500', icon: 'fa-file-powerpoint' },
+    xls:  { bg: 'bg-green-500',  icon: 'fa-file-excel' },
+    xlsx: { bg: 'bg-green-500',  icon: 'fa-file-excel' },
+    txt:  { bg: 'bg-gray-500',   icon: 'fa-file-lines' },
+    md:   { bg: 'bg-gray-500',   icon: 'fa-file-lines' },
+    jpg:  { bg: 'bg-sky-500',    icon: 'fa-file-image' },
+    jpeg: { bg: 'bg-sky-500',    icon: 'fa-file-image' },
+    png:  { bg: 'bg-sky-500',    icon: 'fa-file-image' },
+    webp: { bg: 'bg-sky-500',    icon: 'fa-file-image' }
+};
+const COURSE_DEFAULT_FILE_STYLE = { bg: 'bg-gray-400', icon: 'fa-file' };
 
-function courseFoldersKey() {
-    if (typeof session === 'undefined' || !session || !session.user) return null;
-    return COURSE_FOLDERS_KEY_PREFIX + String(session.user.id);
-}
+let courseTopData = null;          // last top-level response
+let courseFolderData = null;       // last response for the folder on screen
+let openCourseFolderId = null;     // folder on the folder screen (null = none open)
+let courseFolderShownId = null;    // folder whose contents are currently rendered
+let courseFolderStack = [];        // parents we came from, for Back
+let courseTopLoadToken = 0;
+let courseFolderLoadToken = 0;
+let courseDataUserId = null;
 
-function loadCourseFolders() {
-    courseFolders = [];
-    const key = courseFoldersKey();
-    if (!key) return;
-    try {
-        const raw = JSON.parse(localStorage.getItem(key) || '[]');
-        if (Array.isArray(raw)) {
-            courseFolders = raw.filter(function(f) {
-                return f && typeof f.id === 'string' && typeof f.name === 'string' && f.name.trim();
-            });
-        }
-    } catch (e) { courseFolders = []; }
-}
-
-function saveCourseFolders() {
-    const key = courseFoldersKey();
-    if (!key) return;
-    try { localStorage.setItem(key, JSON.stringify(courseFolders)); } catch (e) {}
-}
-
-// "Empty" for a folder with nothing in it, otherwise "1 Item" / "N Items".
-// An item is anything inside, whether another folder or a file. Folders can't
-// hold anything yet, so folder.items does not exist and the count is 0.
-function courseFolderSubtitle(folder) {
-    const count = folder && Array.isArray(folder.items) ? folder.items.length : 0;
-    if (count === 0) return 'Empty';
+function courseItemCountText(count) {
+    if (!count) return 'Empty';
     return count + (count === 1 ? ' Item' : ' Items');
 }
 
-// Renders the folder cards into #courses-list (newest first). The "No courses
-// yet" empty state only shows while there are no folders either.
-function renderCourseFolders(newId) {
-    const list = document.getElementById('courses-list');
-    const empty = document.getElementById('courses-empty');
-    if (!list) return;
-    list.replaceChildren();
-    if (empty) empty.classList.toggle('hidden', courseFolders.length > 0);
+function courseFileStyle(type) {
+    return COURSE_FILE_STYLES[type] || COURSE_DEFAULT_FILE_STYLE;
+}
 
-    courseFolders.forEach(function(folder) {
-        const card = document.createElement('button');
-        card.type = 'button';
-        card.dataset.id = folder.id;
-        card.className = 'course-folder-card course-card-shadow w-full flex items-center gap-4 p-3.5 rounded-2xl bg-white border border-gray-100 text-left active:scale-[0.98] transition-transform duration-100' +
-            (folder.id === newId ? ' course-folder-new' : '');
-        card.addEventListener('click', function() { openCourseFolder(folder.id); });
+function courseCurrentFolders() {
+    const data = openCourseFolderId === null ? courseTopData : courseFolderData;
+    return data ? data.folders : [];
+}
 
-        const tile = document.createElement('span');
-        tile.className = 'course-folder-tile shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center';
-        tile.innerHTML = '<i class="fa-solid fa-folder text-[22px]"></i>';
+async function fetchCourseItems(folderId) {
+    const url = '/api/courses/items' + (folderId !== null ? '?folder_id=' + encodeURIComponent(folderId) : '');
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('load failed');
+    return res.json();
+}
 
-        const text = document.createElement('span');
-        text.className = 'flex-1 min-w-0';
-        const name = document.createElement('span');
-        name.className = 'block truncate text-[16px] font-semibold text-gray-900';
-        name.textContent = folder.name;
-        const sub = document.createElement('span');
-        sub.className = 'block text-[13px] text-gray-500 mt-0.5';
-        sub.textContent = courseFolderSubtitle(folder);
-        text.append(name, sub);
+async function courseErrorMessage(res, fallback) {
+    try {
+        const data = await res.json();
+        if (data && typeof data.error === 'string' && data.error) return data.error;
+    } catch (e) {}
+    return fallback;
+}
 
-        const chevron = document.createElement('i');
-        chevron.className = 'fa-solid fa-chevron-right text-[14px] text-gray-400 pr-1';
+// ---- Cards ----
+function buildCourseFolderCard(folder, isNew) {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.dataset.id = folder.id;
+    card.className = 'course-folder-card course-card-shadow w-full flex items-center gap-4 p-3.5 rounded-2xl bg-white border border-gray-100 text-left active:scale-[0.98] transition-transform duration-100' + (isNew ? ' course-folder-new' : '');
+    card.addEventListener('click', function() { openCourseFolder(folder.id, { name: folder.name }); });
 
-        card.append(tile, text, chevron);
-        list.appendChild(card);
+    const tile = document.createElement('span');
+    tile.className = 'course-folder-tile shrink-0 w-14 h-14 rounded-2xl flex items-center justify-center';
+    tile.innerHTML = '<i class="fa-solid fa-folder text-[24px]"></i>';
+
+    const text = document.createElement('span');
+    text.className = 'flex-1 min-w-0';
+    const name = document.createElement('span');
+    name.className = 'block truncate text-[17px] font-semibold text-gray-900';
+    name.textContent = folder.name;
+    const sub = document.createElement('span');
+    sub.className = 'block text-[14px] text-gray-500 mt-0.5';
+    sub.textContent = courseItemCountText(folder.item_count);
+    text.append(name, sub);
+
+    const chevron = document.createElement('i');
+    chevron.className = 'fa-solid fa-chevron-right text-[14px] text-gray-400 pr-1';
+
+    card.append(tile, text, chevron);
+    return card;
+}
+
+// File card: type tile, name, date uploaded, and a ⋮ menu. Department, level
+// and uploader are deliberately not shown for personal files.
+function buildCourseFileCard(file, isNew) {
+    const style = courseFileStyle(file.file_type);
+    const card = document.createElement('div');
+    card.setAttribute('role', 'button');
+    card.tabIndex = 0;
+    card.dataset.id = file.id;
+    card.className = 'course-file-card course-card-shadow w-full flex items-center gap-4 p-3.5 rounded-2xl bg-white border border-gray-100 cursor-pointer active:scale-[0.98] transition-transform duration-100' + (isNew ? ' course-folder-new' : '');
+    card.addEventListener('click', function() { openCourseFile(file); });
+    card.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCourseFile(file); }
+    });
+
+    const tile = document.createElement('span');
+    tile.className = 'shrink-0 w-14 h-14 rounded-2xl flex items-center justify-center text-white ' + style.bg;
+    tile.innerHTML = '<i class="fa-solid ' + style.icon + ' text-[24px]"></i>';
+
+    const text = document.createElement('span');
+    text.className = 'flex-1 min-w-0';
+    const name = document.createElement('span');
+    name.className = 'block truncate text-[17px] font-semibold text-gray-900';
+    name.textContent = file.name;
+    const date = document.createElement('span');
+    date.className = 'block text-[14px] text-gray-400 mt-0.5';
+    date.textContent = typeof formatTimeAgo === 'function' ? formatTimeAgo(file.created_at) : '';
+    text.append(name, date);
+
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'shrink-0 w-10 h-10 -mr-1 rounded-full flex items-center justify-center text-gray-400 active:bg-gray-100 transition-colors';
+    more.setAttribute('aria-label', 'File options');
+    more.innerHTML = '<i class="fa-solid fa-ellipsis-vertical text-[18px]"></i>';
+    more.addEventListener('click', function(e) { e.stopPropagation(); openCourseFileMenu(file); });
+
+    card.append(tile, text, more);
+    return card;
+}
+
+// newKey = {type: 'folder' | 'file', id} gets the entry animation.
+function renderCourseItems(listEl, data, newKey) {
+    listEl.replaceChildren();
+    data.folders.forEach(function(f) {
+        listEl.appendChild(buildCourseFolderCard(f, !!newKey && newKey.type === 'folder' && newKey.id === f.id));
+    });
+    data.files.forEach(function(f) {
+        listEl.appendChild(buildCourseFileCard(f, !!newKey && newKey.type === 'file' && newKey.id === f.id));
     });
 }
 
-// ---- Folder screen ----
-function openCourseFolder(id) {
-    const folder = courseFolders.find(function(f) { return f.id === id; });
-    if (!folder) return;
-    openCourseFolderId = id;
-    document.getElementById('course-folder-title').textContent = folder.name;
-    document.getElementById('course-folder-subtitle').textContent = courseFolderSubtitle(folder);
-    document.getElementById('course-folder-view').classList.remove('hidden');
+// ---- Top level ----
+async function loadCourseTop(newKey) {
+    const token = ++courseTopLoadToken;
+    const list = document.getElementById('courses-list');
+    const empty = document.getElementById('courses-empty');
+    if (!list) return;
+    if (!courseTopData) { list.replaceChildren(); if (empty) empty.classList.add('hidden'); }
+    try {
+        const data = await fetchCourseItems(null);
+        if (token !== courseTopLoadToken) return;
+        courseTopData = data;
+        renderCourseTop(newKey);
+    } catch (e) {
+        if (token !== courseTopLoadToken) return;
+        showToast('Could not load your courses.');
+        if (empty && !courseTopData) empty.classList.remove('hidden');
+    }
 }
 
-function closeCourseFolder() {
+// ---- Category filter (top level) ----
+// "All" shows everything: every folder and every document. Any other category
+// shows only the folders and documents assigned to it.
+//
+// A document's category is kept per account in localStorage as {fileId:
+// categoryId}, a placeholder like the categories themselves: it needs a
+// category_id column and a server-side category list to be real. Because the
+// API lists one folder at a time, only top-level documents can be assigned,
+// and a category tab shows those.
+const COURSE_FILE_CATEGORIES_KEY_PREFIX = 'beebo_course_file_categories_v1:';
+
+function courseFileCategoriesKey() {
+    if (typeof session === 'undefined' || !session || !session.user) return null;
+    return COURSE_FILE_CATEGORIES_KEY_PREFIX + String(session.user.id);
+}
+
+function loadCourseFileCategories() {
+    const key = courseFileCategoriesKey();
+    if (!key) return {};
+    try {
+        const raw = JSON.parse(localStorage.getItem(key) || '{}');
+        return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    } catch (e) { return {}; }
+}
+
+function saveCourseFileCategories(map) {
+    const key = courseFileCategoriesKey();
+    if (!key) return;
+    try { localStorage.setItem(key, JSON.stringify(map)); } catch (e) {}
+}
+
+// The file's category id, or null if it has none (or that category is gone).
+function courseFileCategoryId(fileId) {
+    const id = loadCourseFileCategories()[String(fileId)];
+    return id && courseCategories.some(function(c) { return c.id === id; }) ? id : null;
+}
+
+function setCourseFileCategory(fileId, categoryId) {
+    const map = loadCourseFileCategories();
+    if (categoryId) map[String(fileId)] = categoryId;
+    else delete map[String(fileId)];
+    saveCourseFileCategories(map);
+}
+
+function pruneCourseFileCategories() {
+    const map = loadCourseFileCategories();
+    let changed = false;
+    Object.keys(map).forEach(function(fileId) {
+        if (!courseCategories.some(function(c) { return c.id === map[fileId]; })) { delete map[fileId]; changed = true; }
+    });
+    if (changed) saveCourseFileCategories(map);
+}
+
+// Top-level folders get the same treatment: {folderId: categoryId}. A folder
+// created while a category tab is open is assigned to it and also appears
+// under "All" (which lists everything).
+const COURSE_FOLDER_CATEGORIES_KEY_PREFIX = 'beebo_course_folder_categories_v1:';
+
+function courseFolderCategoriesKey() {
+    if (typeof session === 'undefined' || !session || !session.user) return null;
+    return COURSE_FOLDER_CATEGORIES_KEY_PREFIX + String(session.user.id);
+}
+
+function loadCourseFolderCategories() {
+    const key = courseFolderCategoriesKey();
+    if (!key) return {};
+    try {
+        const raw = JSON.parse(localStorage.getItem(key) || '{}');
+        return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    } catch (e) { return {}; }
+}
+
+function saveCourseFolderCategories(map) {
+    const key = courseFolderCategoriesKey();
+    if (!key) return;
+    try { localStorage.setItem(key, JSON.stringify(map)); } catch (e) {}
+}
+
+function setCourseFolderCategory(folderId, categoryId) {
+    const map = loadCourseFolderCategories();
+    if (categoryId) map[String(folderId)] = categoryId;
+    else delete map[String(folderId)];
+    saveCourseFolderCategories(map);
+}
+
+function pruneCourseFolderCategories() {
+    const map = loadCourseFolderCategories();
+    let changed = false;
+    Object.keys(map).forEach(function(folderId) {
+        if (!courseCategories.some(function(c) { return c.id === map[folderId]; })) { delete map[folderId]; changed = true; }
+    });
+    if (changed) saveCourseFolderCategories(map);
+}
+
+function renderCourseTop(newKey) {
+    const list = document.getElementById('courses-list');
+    const empty = document.getElementById('courses-empty');
+    const categoryEmpty = document.getElementById('courses-category-empty');
+    if (!list || !courseTopData) return;
+    const isAll = coursesActiveCategory === 'all';
+    let data = courseTopData;
+    if (!isAll) {
+        const map = loadCourseFileCategories();
+        const folderMap = loadCourseFolderCategories();
+        data = {
+            folders: courseTopData.folders.filter(function(f) { return folderMap[String(f.id)] === coursesActiveCategory; }),
+            files: courseTopData.files.filter(function(f) { return map[String(f.id)] === coursesActiveCategory; })
+        };
+    }
+    renderCourseItems(list, data, newKey);
+    const hasItems = data.folders.length + data.files.length > 0;
+    if (empty) empty.classList.toggle('hidden', !isAll || hasItems);
+    if (categoryEmpty) {
+        const cat = courseCategories.find(function(c) { return c.id === coursesActiveCategory; });
+        document.getElementById('courses-category-empty-title').textContent = cat ? 'Nothing in \u201c' + cat.name + '\u201d' : '';
+        categoryEmpty.classList.toggle('hidden', isAll || hasItems);
+    }
+}
+
+function reloadCourseLevel(newKey) {
+    if (openCourseFolderId !== null) openCourseFolder(openCourseFolderId, { push: false, newKey: newKey });
+    else loadCourseTop(newKey);
+}
+
+// Folders that existed only in this browser (the old localStorage version)
+// are created on the server once, then the local copy is removed.
+async function migrateLocalCourseFolders() {
+    if (typeof session === 'undefined' || !session || !session.user) return;
+    const key = COURSE_LOCAL_FOLDERS_KEY_PREFIX + String(session.user.id);
+    let local = [];
+    try { local = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { return; }
+    if (!Array.isArray(local) || !local.length) {
+        try { localStorage.removeItem(key); } catch (e) {}
+        return;
+    }
+    for (let i = local.length - 1; i >= 0; i--) { // stored newest first; create oldest first
+        const name = local[i] && typeof local[i].name === 'string' ? local[i].name.trim().slice(0, COURSE_FOLDER_MAX_LENGTH) : '';
+        if (!name) continue;
+        try {
+            const res = await apiFetch('/api/courses/folders', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name })
+            });
+            if (!res.ok && res.status !== 409 && res.status !== 400) return; // keep local copy, retry next time
+        } catch (e) { return; }
+    }
+    try { localStorage.removeItem(key); } catch (e) {}
+}
+
+async function onCourseDataShown() {
+    const uid = (typeof session !== 'undefined' && session && session.user) ? session.user.id : null;
+    if (uid !== courseDataUserId) { // another account: drop the previous user's lists
+        courseDataUserId = uid;
+        courseTopData = null;
+        courseFolderData = null;
+        const list = document.getElementById('courses-list');
+        if (list) list.replaceChildren();
+    }
+    if (uid === null) return;
+    await migrateLocalCourseFolders();
+    loadCourseTop();
+}
+
+// ---- Folder screen ----
+async function openCourseFolder(id, opts) {
+    const o = opts || {};
+    const push = o.push !== false;
+    const view = document.getElementById('course-folder-view');
+    const list = document.getElementById('course-folder-list');
+    const empty = document.getElementById('course-folder-empty');
+    const title = document.getElementById('course-folder-title');
+    const subtitle = document.getElementById('course-folder-subtitle');
+    const wasOpen = !view.classList.contains('hidden');
+
+    if (push) {
+        if (wasOpen && openCourseFolderId !== null && openCourseFolderId !== id) courseFolderStack.push(openCourseFolderId);
+        if (!wasOpen) courseFolderStack = [];
+    }
+    openCourseFolderId = id;
+    view.classList.remove('hidden');
+
+    if (courseFolderShownId !== id) { // different folder: clear immediately, no stale contents
+        courseFolderShownId = null;
+        courseFolderData = null;
+        list.replaceChildren();
+        empty.classList.add('hidden');
+        subtitle.textContent = '';
+        title.textContent = o.name || '';
+    }
+
+    const token = ++courseFolderLoadToken;
+    try {
+        const data = await fetchCourseItems(id);
+        if (token !== courseFolderLoadToken || openCourseFolderId !== id) return;
+        courseFolderData = data;
+        courseFolderShownId = id;
+        title.textContent = data.folder.name;
+        subtitle.textContent = courseItemCountText(data.folder.item_count);
+        renderCourseItems(list, data, o.newKey);
+        empty.classList.toggle('hidden', data.folders.length + data.files.length > 0);
+    } catch (e) {
+        if (token !== courseFolderLoadToken) return;
+        showToast('Could not open this folder.');
+        closeCourseFolder();
+    }
+}
+
+function hideCourseFolderView() {
     openCourseFolderId = null;
+    courseFolderShownId = null;
+    courseFolderData = null;
+    courseFolderStack = [];
+    courseFolderLoadToken++;
     const view = document.getElementById('course-folder-view');
     if (view) view.classList.add('hidden');
+}
+
+// Back: one folder up if we came from one, otherwise back to the list
+// (refreshed, so folder counts are current).
+function closeCourseFolder() {
+    if (courseFolderStack.length) {
+        const parent = courseFolderStack.pop();
+        openCourseFolder(parent, { push: false });
+        return;
+    }
+    hideCourseFolderView();
+    loadCourseTop();
 }
 
 // ---- Add folder dialog ----
@@ -739,27 +1043,372 @@ function closeCourseFolderDialog() {
 function courseFolderNameError(raw) {
     const lower = raw.trim().toLowerCase();
     if (!lower) return '';
-    return courseFolders.some(function(f) { return f.name.trim().toLowerCase() === lower; })
+    return courseCurrentFolders().some(function(f) { return f.name.trim().toLowerCase() === lower; })
         ? 'A folder with this name already exists' : '';
+}
+
+function setCourseFolderHelper(error) {
+    const helper = document.getElementById('course-folder-helper');
+    helper.textContent = error || '*required';
+    helper.classList.toggle('text-red-600', !!error);
+    helper.classList.toggle('text-gray-500', !error);
 }
 
 function onCourseFolderInput() {
     const input = document.getElementById('course-folder-input');
-    const helper = document.getElementById('course-folder-helper');
     const error = courseFolderNameError(input.value);
-    helper.textContent = error || '*required';
-    helper.classList.toggle('text-red-600', !!error);
-    helper.classList.toggle('text-gray-500', !error);
+    setCourseFolderHelper(error);
     document.getElementById('course-folder-submit').disabled = !input.value.trim() || !!error;
 }
 
-function submitCourseFolder() {
-    if (document.getElementById('course-folder-submit').disabled) return;
+let courseFolderSaving = false;
+async function submitCourseFolder() {
+    const submit = document.getElementById('course-folder-submit');
+    if (submit.disabled || courseFolderSaving) return;
     const name = document.getElementById('course-folder-input').value.trim().slice(0, COURSE_FOLDER_MAX_LENGTH);
     if (!name || courseFolderNameError(name)) return;
-    const folder = { id: 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: name, createdAt: new Date().toISOString() };
-    courseFolders.unshift(folder);
-    saveCourseFolders();
-    closeCourseFolderDialog();
-    renderCourseFolders(folder.id);
+    courseFolderSaving = true;
+    submit.disabled = true;
+    try {
+        const res = await apiFetch('/api/courses/folders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name, parent_id: openCourseFolderId })
+        });
+        if (res.ok) {
+            const data = await res.json();
+            if (openCourseFolderId === null && coursesActiveCategory !== 'all') {
+                setCourseFolderCategory(data.folder.id, coursesActiveCategory);
+            }
+            closeCourseFolderDialog();
+            reloadCourseLevel({ type: 'folder', id: data.folder.id });
+        } else {
+            setCourseFolderHelper(await courseErrorMessage(res, 'Could not create the folder.'));
+            submit.disabled = false;
+        }
+    } catch (e) {
+        setCourseFolderHelper('Network error. Please try again.');
+        submit.disabled = false;
+    } finally {
+        courseFolderSaving = false;
+    }
+}
+
+// ---- Open a file ----
+function courseFileUrl(file, inline) {
+    return '/api/courses/files/' + encodeURIComponent(file.id) + '/download' + (inline ? '?inline=1' : '');
+}
+
+function downloadCourseFile(file) {
+    const a = document.createElement('a');
+    a.href = courseFileUrl(file, false);
+    a.download = file.name + '.' + file.file_type;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+}
+
+// PDFs and images open in a new tab; everything else downloads.
+function openCourseFile(file) {
+    if (COURSE_INLINE_TYPES.indexOf(file.file_type) !== -1) window.open(courseFileUrl(file, true), '_blank');
+    else downloadCourseFile(file);
+}
+
+// ---- Save / rename file dialog ----
+// mode 'upload': opened right after a file is picked. Name is prefilled
+// (without extension, which is fixed), so Save with no edits = "save as is".
+// mode 'rename': same dialog for an existing file.
+const courseFileDialog = { mode: null, file: null, ext: '', fileId: null, originalName: '', xhr: null, busy: false };
+
+function courseFileExt(filename) {
+    const i = filename.lastIndexOf('.');
+    return i > -1 ? filename.slice(i + 1).toLowerCase() : '';
+}
+
+function courseFileBaseName(filename) {
+    const i = filename.lastIndexOf('.');
+    return (i > 0 ? filename.slice(0, i) : filename).trim();
+}
+
+function formatCourseBytes(bytes) {
+    if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(0) + ' MB';
+    return Math.max(1, Math.round(bytes / 1024)) + ' KB';
+}
+
+function onCourseFilePicked(input) {
+    const file = input.files && input.files[0];
+    input.value = ''; // so picking the same file again still fires change
+    if (!file) return;
+    const ext = courseFileExt(file.name);
+    if (COURSE_ALLOWED_TYPES.indexOf(ext) === -1) {
+        showToast('This file type is not supported.');
+        return;
+    }
+    if (file.size > COURSE_MAX_FILE_BYTES) {
+        showToast('File is too large (max ' + formatCourseBytes(COURSE_MAX_FILE_BYTES) + ').');
+        return;
+    }
+    if (file.size === 0) {
+        showToast('This file is empty.');
+        return;
+    }
+    openCourseFileDialog('upload', { file: file, ext: ext, name: courseFileBaseName(file.name) });
+}
+
+function openCourseFileDialog(mode, o) {
+    courseFileDialog.mode = mode;
+    courseFileDialog.file = o.file || null;
+    courseFileDialog.fileId = o.fileId || null;
+    courseFileDialog.ext = o.ext;
+    courseFileDialog.originalName = o.name;
+    courseFileDialog.busy = false;
+    document.getElementById('course-file-dialog-title').textContent = mode === 'rename' ? 'Rename file' : 'Save file';
+    document.getElementById('course-file-submit').textContent = mode === 'rename' ? 'Rename' : 'Save';
+    document.getElementById('course-file-ext').textContent = '.' + o.ext;
+    const input = document.getElementById('course-file-name');
+    input.value = o.name.slice(0, COURSE_FILE_NAME_MAX_LENGTH);
+    input.disabled = false;
+    document.getElementById('course-file-progress').classList.add('hidden');
+    setCourseFileProgress(0);
+    setCourseFileHelper('');
+    onCourseFileNameInput();
+    document.getElementById('course-file-dialog').classList.remove('hidden');
+    setTimeout(function() { input.focus(); input.select(); }, 50);
+}
+
+function closeCourseFileDialog() {
+    if (courseFileDialog.xhr) { // closing mid-upload cancels it
+        try { courseFileDialog.xhr.abort(); } catch (e) {}
+        courseFileDialog.xhr = null;
+    }
+    courseFileDialog.busy = false;
+    courseFileDialog.file = null;
+    const dialog = document.getElementById('course-file-dialog');
+    if (dialog) dialog.classList.add('hidden');
+}
+
+function setCourseFileHelper(error) {
+    const helper = document.getElementById('course-file-helper');
+    if (!helper) return;
+    helper.textContent = error || '*required';
+    helper.classList.toggle('text-red-600', !!error);
+    helper.classList.toggle('text-gray-500', !error);
+}
+
+function setCourseFileProgress(fraction) {
+    const bar = document.getElementById('course-file-progress-bar');
+    const wrap = document.getElementById('course-file-progress');
+    const pct = Math.round(Math.max(0, Math.min(1, fraction)) * 100);
+    if (bar) bar.style.width = pct + '%';
+    if (wrap) wrap.setAttribute('aria-valuenow', String(pct));
+}
+
+function onCourseFileNameInput() {
+    if (courseFileDialog.busy) return;
+    const name = document.getElementById('course-file-name').value.trim();
+    setCourseFileHelper('');
+    const unchanged = courseFileDialog.mode === 'rename' && name === courseFileDialog.originalName;
+    document.getElementById('course-file-submit').disabled = !name || unchanged;
+}
+
+function submitCourseFileDialog() {
+    const submit = document.getElementById('course-file-submit');
+    if (submit.disabled || courseFileDialog.busy) return;
+    const name = document.getElementById('course-file-name').value.trim().slice(0, COURSE_FILE_NAME_MAX_LENGTH);
+    if (!name) return;
+    if (courseFileDialog.mode === 'rename') renameCourseFile(name);
+    else uploadCourseFile(name);
+}
+
+function setCourseFileBusy(busy, label) {
+    courseFileDialog.busy = busy;
+    const submit = document.getElementById('course-file-submit');
+    document.getElementById('course-file-name').disabled = busy;
+    submit.disabled = busy;
+    submit.textContent = label;
+}
+
+function uploadCourseFile(name) {
+    const file = courseFileDialog.file;
+    if (!file) return;
+    const form = new FormData();
+    form.append('file', file);
+    form.append('name', name); // display name without extension
+    if (openCourseFolderId !== null) form.append('folder_id', String(openCourseFolderId));
+
+    const xhr = new XMLHttpRequest(); // fetch cannot report upload progress
+    courseFileDialog.xhr = xhr;
+    xhr.open('POST', '/api/courses/files');
+    if (typeof csrfToken === 'string' && csrfToken) xhr.setRequestHeader('X-CSRF-Token', csrfToken);
+
+    document.getElementById('course-file-progress').classList.remove('hidden');
+    setCourseFileProgress(0);
+    setCourseFileHelper('');
+    setCourseFileBusy(true, 'Uploading 0%');
+
+    function fail(message) {
+        courseFileDialog.xhr = null;
+        setCourseFileBusy(false, 'Save');
+        document.getElementById('course-file-progress').classList.add('hidden');
+        setCourseFileHelper(message);
+        onCourseFileNameInput();
+        setCourseFileHelper(message); // onCourseFileNameInput clears the helper
+    }
+
+    xhr.upload.onprogress = function(e) {
+        if (!e.lengthComputable) return;
+        const fraction = e.loaded / e.total;
+        setCourseFileProgress(fraction);
+        setCourseFileBusy(true, fraction >= 1 ? 'Saving…' : 'Uploading ' + Math.round(fraction * 100) + '%');
+    };
+    xhr.onload = function() {
+        courseFileDialog.xhr = null;
+        let data = {};
+        try { data = JSON.parse(xhr.responseText); } catch (e) {}
+        if (xhr.status === 201 && data.file) {
+            closeCourseFileDialog();
+            reloadCourseLevel({ type: 'file', id: data.file.id });
+        } else if (xhr.status === 401) {
+            fail('Please log in again.');
+        } else {
+            fail(typeof data.error === 'string' && data.error ? data.error : 'Upload failed. Please try again.');
+        }
+    };
+    xhr.onerror = function() { fail('Network error. Please try again.'); };
+    xhr.send(form);
+}
+
+async function renameCourseFile(name) {
+    const id = courseFileDialog.fileId;
+    setCourseFileBusy(true, 'Saving…');
+    try {
+        const res = await apiFetch('/api/courses/files/' + encodeURIComponent(id), {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name })
+        });
+        if (res.ok) {
+            closeCourseFileDialog();
+            reloadCourseLevel();
+        } else {
+            const message = await courseErrorMessage(res, 'Could not rename the file.');
+            setCourseFileBusy(false, 'Rename');
+            onCourseFileNameInput();
+            setCourseFileHelper(message);
+        }
+    } catch (e) {
+        setCourseFileBusy(false, 'Rename');
+        onCourseFileNameInput();
+        setCourseFileHelper('Network error. Please try again.');
+    }
+}
+
+// ---- File options sheet + delete confirm ----
+let courseMenuFile = null;
+
+function openCourseFileMenu(file) {
+    courseMenuFile = file;
+    document.getElementById('course-file-menu-title').textContent = file.name + '.' + file.file_type;
+    // Categories apply to top-level documents only (see the category filter note).
+    document.getElementById('course-file-menu-category').classList.toggle('hidden', openCourseFolderId !== null);
+    document.getElementById('course-file-menu-sheet').classList.remove('hidden');
+    document.getElementById('course-file-menu-backdrop').classList.remove('hidden');
+}
+
+function closeCourseFileMenu() {
+    const sheet = document.getElementById('course-file-menu-sheet');
+    const backdrop = document.getElementById('course-file-menu-backdrop');
+    if (sheet) sheet.classList.add('hidden');
+    if (backdrop) backdrop.classList.add('hidden');
+}
+
+function courseFileMenuAction(action) {
+    const file = courseMenuFile;
+    closeCourseFileMenu();
+    if (!file) return;
+    if (action === 'rename') {
+        openCourseFileDialog('rename', { fileId: file.id, ext: file.file_type, name: file.name });
+    } else if (action === 'category') {
+        openCourseFileCategorySheet(file);
+    } else if (action === 'download') {
+        downloadCourseFile(file);
+    } else if (action === 'delete') {
+        document.getElementById('course-confirm-message').textContent = '\u201c' + file.name + '.' + file.file_type + '\u201d will be permanently deleted.';
+        document.getElementById('course-confirm-dialog').classList.remove('hidden');
+    }
+}
+
+function closeCourseConfirm() {
+    const dialog = document.getElementById('course-confirm-dialog');
+    if (dialog) dialog.classList.add('hidden');
+}
+
+let courseDeleting = false;
+async function confirmCourseDelete() {
+    const file = courseMenuFile;
+    if (!file || courseDeleting) return;
+    courseDeleting = true;
+    try {
+        const res = await apiFetch('/api/courses/files/' + encodeURIComponent(file.id), { method: 'DELETE' });
+        closeCourseConfirm();
+        if (res.ok) {
+            setCourseFileCategory(file.id, null);
+            showToast('File deleted');
+            reloadCourseLevel();
+        } else {
+            showToast(await courseErrorMessage(res, 'Could not delete the file.'));
+        }
+    } catch (e) {
+        closeCourseConfirm();
+        showToast('Network error. Please try again.');
+    } finally {
+        courseDeleting = false;
+    }
+}
+
+// ---- Choose a document's category ----
+function openCourseFileCategorySheet(file) {
+    const options = document.getElementById('course-file-category-options');
+    const current = courseFileCategoryId(file.id);
+    options.replaceChildren();
+
+    function addOption(label, categoryId) {
+        const selected = categoryId === current;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'w-full flex items-center gap-4 px-5 py-3.5 text-left transition-colors duration-100 active:bg-gray-50';
+        const text = document.createElement('span');
+        text.className = 'flex-1 min-w-0 truncate text-[15px] text-gray-900' + (selected ? ' font-semibold' : ' font-medium');
+        text.textContent = label;
+        const check = document.createElement('i');
+        check.className = 'fa-solid fa-check text-[15px] text-sky-600' + (selected ? '' : ' invisible');
+        btn.append(text, check);
+        btn.addEventListener('click', function() { pickCourseFileCategory(file, categoryId); });
+        options.appendChild(btn);
+    }
+
+    if (!courseCategories.length) {
+        const note = document.createElement('p');
+        note.className = 'px-5 py-4 text-[14px] leading-5 text-gray-500';
+        note.textContent = 'You have no categories yet. Create one from the Courses menu under Categories.';
+        options.appendChild(note);
+    } else {
+        addOption('None', null);
+        courseCategories.forEach(function(c) { addOption(c.name, c.id); });
+    }
+    document.getElementById('course-file-category-sheet').classList.remove('hidden');
+    document.getElementById('course-file-menu-backdrop').classList.remove('hidden');
+}
+
+function closeCourseFileCategorySheet() {
+    const sheet = document.getElementById('course-file-category-sheet');
+    if (sheet) sheet.classList.add('hidden');
+    const backdrop = document.getElementById('course-file-menu-backdrop');
+    if (backdrop) backdrop.classList.add('hidden');
+}
+
+function pickCourseFileCategory(file, categoryId) {
+    setCourseFileCategory(file.id, categoryId);
+    closeCourseFileCategorySheet();
+    renderCourseTop();
 }
