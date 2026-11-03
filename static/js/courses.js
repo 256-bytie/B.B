@@ -1416,11 +1416,11 @@ function downloadCourseFile(file) {
     a.remove();
 }
 
-// PDFs and images open in a new tab; .docx opens in the in-app reader;
+// .pdf and .docx open in the in-app reader; images open in a new tab;
 // everything else downloads.
 function openCourseFile(file) {
-    if (COURSE_INLINE_TYPES.indexOf(file.file_type) !== -1) window.open(courseFileUrl(file, true), '_blank');
-    else if (file.file_type === 'docx') openCourseReader(file);
+    if (file.file_type === 'pdf' || file.file_type === 'docx') openCourseReader(file);
+    else if (COURSE_INLINE_TYPES.indexOf(file.file_type) !== -1) window.open(courseFileUrl(file, true), '_blank');
     else downloadCourseFile(file);
 }
 
@@ -1500,11 +1500,20 @@ function setCourseReaderState(state, message) {
     document.getElementById('course-reader-loading').classList.toggle('hidden', state !== 'loading');
     document.getElementById('course-reader-error').classList.toggle('hidden', state !== 'error');
     document.getElementById('course-reader-content').classList.toggle('hidden', state !== 'ready');
+    document.getElementById('course-reader-pdf').classList.toggle('hidden', state !== 'pdf');
     if (state === 'error') document.getElementById('course-reader-error-text').textContent = message || 'This document could not be displayed.';
+}
+
+function courseReaderErrorMessage(e) {
+    const name = e && e.name;
+    if (name === 'PasswordException') return 'This PDF is password-protected.';
+    if (name === 'InvalidPDFException') return 'This file is not a valid PDF.';
+    return 'This document could not be displayed.';
 }
 
 async function openCourseReader(file) {
     const token = ++courseReaderToken;
+    teardownCoursePdf();
     courseReaderFile = file;
     const view = document.getElementById('course-reader');
     document.getElementById('course-reader-title').textContent = file.name;
@@ -1514,6 +1523,8 @@ async function openCourseReader(file) {
     view.classList.remove('hidden');
 
     try {
+        if (file.file_type === 'pdf') { await openCoursePdf(file, token); return; }
+
         const results = await Promise.all([loadCourseMammoth(), fetch(courseFileUrl(file, false))]);
         const mammoth = results[0], res = results[1];
         if (!res.ok) {
@@ -1540,13 +1551,14 @@ async function openCourseReader(file) {
         setCourseReaderState('ready');
     } catch (e) {
         if (token !== courseReaderToken) return;
-        setCourseReaderState('error', 'This document could not be displayed.');
+        setCourseReaderState('error', courseReaderErrorMessage(e));
     }
 }
 
 function closeCourseReader() {
     courseReaderToken++;
     courseReaderFile = null;
+    teardownCoursePdf();
     const view = document.getElementById('course-reader');
     if (!view) return;
     view.classList.add('hidden');
@@ -1555,6 +1567,249 @@ function closeCourseReader() {
 
 function downloadCourseReaderFile() {
     if (courseReaderFile) downloadCourseFile(courseReaderFile);
+}
+
+// ---- PDF pages ----
+// Uses PDF.js (github.com/mozilla/pdf.js), pinned 3.11.174 classic build,
+// loaded lazily from jsDelivr like mammoth. Phone browsers cannot show a PDF
+// inline in an iframe (Android Chrome offers a download, iOS Safari shows only
+// page 1), so pages are drawn to canvases instead. Only pages near the
+// viewport hold a canvas; the rest are empty, correctly-sized placeholders, so
+// long documents stay light on memory. isEvalSupported is off (PDF.js'
+// recommended hardening against malicious PDFs).
+const COURSE_PDFJS_SRC = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js';
+const COURSE_PDFJS_WORKER_SRC = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+const COURSE_PDF_ZOOMS = [1, 1.5, 2, 3];
+const COURSE_PDF_PAD = 12;               // px around/between pages (matches .course-pdf-pages)
+const COURSE_PDF_MAX_CANVAS_PX = 6e6;    // keeps canvases inside iOS limits
+let coursePdfJsPromise = null;
+let coursePdf = null; // active PDF state, or null
+
+function loadCoursePdfJs() {
+    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    if (!coursePdfJsPromise) {
+        coursePdfJsPromise = new Promise(function(resolve, reject) {
+            const script = document.createElement('script');
+            script.src = COURSE_PDFJS_SRC;
+            script.async = true;
+            script.onload = function() {
+                if (!window.pdfjsLib) { reject(new Error('pdfjs missing')); return; }
+                window.pdfjsLib.GlobalWorkerOptions.workerSrc = COURSE_PDFJS_WORKER_SRC;
+                resolve(window.pdfjsLib);
+            };
+            script.onerror = function() { coursePdfJsPromise = null; script.remove(); reject(new Error('pdfjs load failed')); };
+            document.head.appendChild(script);
+        });
+    }
+    return coursePdfJsPromise;
+}
+
+async function openCoursePdf(file, token) {
+    const results = await Promise.all([loadCoursePdfJs(), fetch(courseFileUrl(file, false))]);
+    const lib = results[0], res = results[1];
+    if (!res.ok) {
+        if (token !== courseReaderToken) return;
+        setCourseReaderState('error', res.status === 404 ? 'This file no longer exists.' : 'Could not open this document.');
+        return;
+    }
+    const data = new Uint8Array(await res.arrayBuffer());
+    if (token !== courseReaderToken) return;
+    const pdf = await lib.getDocument({ data: data, isEvalSupported: false }).promise;
+    if (token !== courseReaderToken) { pdf.destroy(); return; }
+    await buildCoursePdf(pdf, token);
+}
+
+async function buildCoursePdf(pdf, token) {
+    const scrollEl = document.getElementById('course-reader-scroll');
+    const pagesEl = document.getElementById('course-reader-pdf');
+    const first = await pdf.getPage(1);
+    if (token !== courseReaderToken) { pdf.destroy(); return; }
+    const vp = first.getViewport({ scale: 1 });
+
+    const d = {
+        pdf: pdf, scrollEl: scrollEl, pagesEl: pagesEl, total: pdf.numPages,
+        zoom: 1, gen: 0, cssW: 0, wraps: [], aspect: [], defaultAspect: vp.height / vp.width,
+        raf: 0, pillTimer: 0, onScroll: null, onResize: null
+    };
+    d.aspect[1] = d.defaultAspect;
+    coursePdf = d;
+
+    pagesEl.replaceChildren();
+    for (let n = 1; n <= d.total; n++) {
+        const wrap = document.createElement('div');
+        wrap.className = 'course-pdf-page';
+        d.wraps.push(wrap);
+        pagesEl.appendChild(wrap);
+    }
+    scrollEl.style.overflowX = 'auto';
+    setCourseReaderState('pdf');
+    document.getElementById('course-reader-tools').classList.remove('hidden');
+    layoutCoursePdf(d);
+    updateCoursePdfZoomUi(d);
+
+    d.onScroll = function() { scheduleCoursePdfUpdate(d, true); };
+    d.onResize = function() { relayoutCoursePdf(d); };
+    scrollEl.addEventListener('scroll', d.onScroll, { passive: true });
+    window.addEventListener('resize', d.onResize);
+    updateCoursePdfVisible(d, false);
+    sizeCoursePdfPages(d); // fire and forget: exact heights for pages 2..n
+}
+
+function layoutCoursePdf(d) {
+    d.pagesEl.style.width = (d.zoom * 100) + '%';
+    d.cssW = Math.max(1, d.pagesEl.clientWidth - COURSE_PDF_PAD * 2);
+    d.wraps.forEach(function(w, i) {
+        w.style.height = Math.round(d.cssW * (d.aspect[i + 1] || d.defaultAspect)) + 'px';
+    });
+}
+
+// Learns each page's real aspect ratio in the background so placeholders are
+// the right height before they are scrolled to.
+async function sizeCoursePdfPages(d) {
+    for (let n = 2; n <= d.total; n++) {
+        if (coursePdf !== d) return;
+        try {
+            const page = await d.pdf.getPage(n);
+            if (coursePdf !== d) return;
+            const v = page.getViewport({ scale: 1 });
+            d.aspect[n] = v.height / v.width;
+            d.wraps[n - 1].style.height = Math.round(d.cssW * d.aspect[n]) + 'px';
+        } catch (e) { return; }
+        if (n % 20 === 0) scheduleCoursePdfUpdate(d, false);
+        await new Promise(function(r) { setTimeout(r, 0); });
+    }
+    scheduleCoursePdfUpdate(d, false);
+}
+
+function scheduleCoursePdfUpdate(d, showPill) {
+    if (d.raf) return;
+    d.raf = requestAnimationFrame(function() {
+        d.raf = 0;
+        if (coursePdf === d) updateCoursePdfVisible(d, showPill);
+    });
+}
+
+function updateCoursePdfVisible(d, showPill) {
+    const vr = d.scrollEl.getBoundingClientRect();
+    const vh = vr.height;
+    const nearTop = vr.top - vh * 1.5, nearBottom = vr.bottom + vh * 1.5;
+    const farTop = vr.top - vh * 3, farBottom = vr.bottom + vh * 3;
+    const mid = vr.top + vh / 2;
+    let current = 1, best = Infinity;
+    d.wraps.forEach(function(w, i) {
+        const r = w.getBoundingClientRect();
+        if (r.bottom >= nearTop && r.top <= nearBottom) {
+            if (!w._done && !w._busy) renderCoursePdfPage(d, i + 1);
+        } else if ((r.bottom < farTop || r.top > farBottom) && (w._done || w._busy)) {
+            releaseCoursePdfPage(w);
+        }
+        const dist = Math.abs((r.top + r.bottom) / 2 - mid);
+        if (dist < best) { best = dist; current = i + 1; }
+    });
+    d.current = current;
+    const pill = document.getElementById('course-reader-page');
+    pill.textContent = current + ' / ' + d.total;
+    if (showPill && d.total > 1) {
+        pill.classList.add('show');
+        clearTimeout(d.pillTimer);
+        d.pillTimer = setTimeout(function() { pill.classList.remove('show'); }, 1400);
+    }
+}
+
+async function renderCoursePdfPage(d, n) {
+    const wrap = d.wraps[n - 1];
+    if (wrap._busy || wrap._done) return;
+    wrap._busy = true;
+    const gen = d.gen;
+    try {
+        const page = await d.pdf.getPage(n);
+        if (coursePdf !== d || gen !== d.gen) return;
+        const base = page.getViewport({ scale: 1 });
+        const cssScale = d.cssW / base.width;
+        let outScale = cssScale * Math.min(window.devicePixelRatio || 1, 2);
+        const area = base.width * base.height * outScale * outScale;
+        if (area > COURSE_PDF_MAX_CANVAS_PX) outScale *= Math.sqrt(COURSE_PDF_MAX_CANVAS_PX / area);
+        const viewport = page.getViewport({ scale: outScale });
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        canvas.style.cssText = 'display:block;width:100%;height:100%';
+        const task = page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport });
+        wrap._task = task;
+        await task.promise;
+        if (coursePdf !== d || gen !== d.gen) { canvas.width = canvas.height = 0; return; }
+        wrap.replaceChildren(canvas);
+        wrap._done = true;
+        d.aspect[n] = base.height / base.width;
+        wrap.style.height = Math.round(d.cssW * d.aspect[n]) + 'px';
+    } catch (e) {
+        // cancelled renders are expected; a failed page just stays blank
+    } finally {
+        wrap._busy = false;
+        wrap._task = null;
+    }
+}
+
+function releaseCoursePdfPage(wrap) {
+    if (wrap._task) { try { wrap._task.cancel(); } catch (e) {} }
+    const canvas = wrap.firstChild;
+    if (canvas && canvas.tagName === 'CANVAS') canvas.width = canvas.height = 0;
+    wrap.replaceChildren();
+    wrap._done = false;
+}
+
+// Re-fit after a zoom change or rotation, keeping the same spot in view.
+function relayoutCoursePdf(d, newZoom) {
+    const sc = d.scrollEl;
+    const oldW = d.pagesEl.scrollWidth || 1;
+    const oldHeight = d.pagesEl.scrollHeight || 1;
+    const anchorY = (sc.scrollTop + sc.clientHeight / 2) / oldHeight;
+    const anchorX = (sc.scrollLeft + sc.clientWidth / 2) / oldW;
+    d.gen++;
+    if (newZoom) d.zoom = newZoom;
+    d.wraps.forEach(function(w) { if (w._done || w._busy) releaseCoursePdfPage(w); });
+    layoutCoursePdf(d);
+    sc.scrollTop = anchorY * d.pagesEl.scrollHeight - sc.clientHeight / 2;
+    sc.scrollLeft = anchorX * d.pagesEl.scrollWidth - sc.clientWidth / 2;
+    updateCoursePdfZoomUi(d);
+    updateCoursePdfVisible(d, false);
+}
+
+function updateCoursePdfZoomUi(d) {
+    document.getElementById('course-reader-zoom-label').textContent = Math.round(d.zoom * 100) + '%';
+    document.getElementById('course-reader-zoom-out').disabled = d.zoom <= COURSE_PDF_ZOOMS[0];
+    document.getElementById('course-reader-zoom-in').disabled = d.zoom >= COURSE_PDF_ZOOMS[COURSE_PDF_ZOOMS.length - 1];
+}
+
+function courseReaderZoom(direction) {
+    const d = coursePdf;
+    if (!d) return;
+    const i = COURSE_PDF_ZOOMS.indexOf(d.zoom);
+    const next = COURSE_PDF_ZOOMS[Math.min(COURSE_PDF_ZOOMS.length - 1, Math.max(0, i + direction))];
+    if (next !== d.zoom) relayoutCoursePdf(d, next);
+}
+
+function teardownCoursePdf() {
+    const d = coursePdf;
+    const scrollEl = document.getElementById('course-reader-scroll');
+    const pagesEl = document.getElementById('course-reader-pdf');
+    const tools = document.getElementById('course-reader-tools');
+    if (!scrollEl || !pagesEl) { coursePdf = null; return; }
+    if (d) {
+        coursePdf = null;
+        cancelAnimationFrame(d.raf);
+        clearTimeout(d.pillTimer);
+        scrollEl.removeEventListener('scroll', d.onScroll);
+        window.removeEventListener('resize', d.onResize);
+        d.wraps.forEach(function(w) { if (w._done || w._busy) releaseCoursePdfPage(w); });
+        try { d.pdf.destroy(); } catch (e) {}
+    }
+    pagesEl.replaceChildren();
+    pagesEl.style.width = '';
+    scrollEl.style.overflowX = '';
+    if (tools) tools.classList.add('hidden');
+    const pill = document.getElementById('course-reader-page');
+    if (pill) pill.classList.remove('show');
 }
 
 // In-document links (footnotes, bookmarks) scroll inside the reader.

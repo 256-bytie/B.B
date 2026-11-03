@@ -92,7 +92,7 @@
 </div>
 <!-- END: Course file dialogs -->
 
-<!-- BEGIN: Read-only document reader (opened by tapping a .docx in Courses; see openCourseReader in courses.js) -->
+<!-- BEGIN: Read-only document reader (opened by tapping a .docx or .pdf in Courses; see openCourseReader in courses.js) -->
 <div id="course-reader" class="hidden fixed inset-y-0 left-0 right-0 z-[61] bg-[#fafafa] max-w-[430px] mx-auto flex flex-col" role="dialog" aria-modal="true" aria-labelledby="course-reader-title">
 	<header class="flex items-center gap-3 px-4 h-16 shrink-0 border-b border-gray-100">
 		<button type="button" class="w-10 h-10 -ml-1 rounded-full flex items-center justify-center text-gray-900 active:bg-gray-100 transition-colors" aria-label="Back" onclick="closeCourseReader()">
@@ -101,6 +101,11 @@
 		<div class="min-w-0 flex-1">
 			<h1 id="course-reader-title" class="text-[18px] leading-6 font-semibold text-gray-900 truncate"></h1>
 			<p class="text-[13px] leading-4 text-gray-500">Read only</p>
+		</div>
+		<div id="course-reader-tools" class="hidden flex items-center shrink-0">
+			<button type="button" id="course-reader-zoom-out" class="w-10 h-10 rounded-full flex items-center justify-center text-gray-900 active:bg-gray-100 transition-colors disabled:opacity-30" aria-label="Zoom out" onclick="courseReaderZoom(-1)"><i class="fa-solid fa-minus text-[16px]"></i></button>
+			<span id="course-reader-zoom-label" class="w-11 text-center text-[13px] font-medium text-gray-500">100%</span>
+			<button type="button" id="course-reader-zoom-in" class="w-10 h-10 rounded-full flex items-center justify-center text-gray-900 active:bg-gray-100 transition-colors disabled:opacity-30" aria-label="Zoom in" onclick="courseReaderZoom(1)"><i class="fa-solid fa-plus text-[16px]"></i></button>
 		</div>
 	</header>
 	<div id="course-reader-scroll" class="flex-1 overflow-y-auto overscroll-contain">
@@ -116,6 +121,8 @@
 			<button type="button" class="mt-5 px-5 h-11 rounded-full bg-gray-100 text-[15px] font-semibold text-gray-900 active:bg-gray-200 transition-colors" onclick="downloadCourseReaderFile()">Download file</button>
 		</div>
 		<article id="course-reader-content" class="course-reader-content hidden"></article>
+		<div id="course-reader-pdf" class="course-pdf-pages hidden"></div>
 	</div>
+	<div id="course-reader-page" class="course-reader-page-pill" aria-hidden="true"></div>
 </div>
 <!-- END: Document reader -->
