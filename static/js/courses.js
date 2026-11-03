@@ -1577,13 +1577,21 @@ function downloadCourseReaderFile() {
 // viewport hold a canvas; the rest are empty, correctly-sized placeholders, so
 // long documents stay light on memory. isEvalSupported is off (PDF.js'
 // recommended hardening against malicious PDFs).
+//
+// Two view modes (toolbar button):
+//   scroll - every page stacked in one continuous scroll (default)
+//   paged  - one page at a time, fitted to the screen; swipe left/right (or
+//            use the pager) for next/previous
+// The rotate button turns every page 90 degrees clockwise, in both modes.
 const COURSE_PDFJS_SRC = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js';
 const COURSE_PDFJS_WORKER_SRC = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 const COURSE_PDF_ZOOMS = [1, 1.5, 2, 3];
 const COURSE_PDF_PAD = 12;               // px around/between pages (matches .course-pdf-pages)
 const COURSE_PDF_MAX_CANVAS_PX = 6e6;    // keeps canvases inside iOS limits
+const COURSE_PDF_SWIPE_MIN = 50;         // px of horizontal travel that counts as a swipe
 let coursePdfJsPromise = null;
-let coursePdf = null; // active PDF state, or null
+let coursePdf = null;        // active PDF state, or null
+let coursePdfPaged = false;  // chosen view mode, kept between PDFs while the app is open
 
 function loadCoursePdfJs() {
     if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
@@ -1628,10 +1636,12 @@ async function buildCoursePdf(pdf, token) {
 
     const d = {
         pdf: pdf, scrollEl: scrollEl, pagesEl: pagesEl, total: pdf.numPages,
+        mode: coursePdfPaged ? 'paged' : 'scroll', page: 1, current: 1, rotation: 0,
         zoom: 1, gen: 0, cssW: 0, wraps: [], aspect: [], defaultAspect: vp.height / vp.width,
-        raf: 0, pillTimer: 0, onScroll: null, onResize: null
+        raf: 0, pillTimer: 0, touch: null,
+        onScroll: null, onResize: null, onTouchStart: null, onTouchEnd: null
     };
-    d.aspect[1] = d.defaultAspect;
+    d.aspect[1] = d.defaultAspect; // natural (unrotated) height / width
     coursePdf = d;
 
     pagesEl.replaceChildren();
@@ -1645,26 +1655,84 @@ async function buildCoursePdf(pdf, token) {
     setCourseReaderState('pdf');
     document.getElementById('course-reader-tools').classList.remove('hidden');
     layoutCoursePdf(d);
-    updateCoursePdfZoomUi(d);
+    updateCoursePdfUi(d);
 
-    d.onScroll = function() { scheduleCoursePdfUpdate(d, true); };
+    d.onScroll = function() { if (d.mode === 'scroll') scheduleCoursePdfUpdate(d, true); };
     d.onResize = function() { relayoutCoursePdf(d); };
+    d.onTouchStart = function(e) {
+        if (d.mode !== 'paged' || e.touches.length !== 1) { d.touch = null; return; }
+        const t = e.touches[0];
+        d.touch = { x: t.clientX, y: t.clientY, left: scrollEl.scrollLeft };
+    };
+    d.onTouchEnd = function(e) {
+        const start = d.touch;
+        d.touch = null;
+        if (!start || d.mode !== 'paged') return;
+        const t = e.changedTouches[0];
+        const dx = t.clientX - start.x, dy = t.clientY - start.y;
+        if (Math.abs(dx) < COURSE_PDF_SWIPE_MIN || Math.abs(dx) < Math.abs(dy) * 1.5) return; // not a horizontal swipe
+        if (scrollEl.scrollLeft !== start.left) return; // the page was panned (zoomed in), not swiped
+        const atLeft = scrollEl.scrollLeft <= 1;
+        const atRight = scrollEl.scrollLeft + scrollEl.clientWidth >= scrollEl.scrollWidth - 1;
+        if (dx < 0 && atRight) courseReaderPage(1);
+        else if (dx > 0 && atLeft) courseReaderPage(-1);
+    };
     scrollEl.addEventListener('scroll', d.onScroll, { passive: true });
+    scrollEl.addEventListener('touchstart', d.onTouchStart, { passive: true });
+    scrollEl.addEventListener('touchend', d.onTouchEnd, { passive: true });
     window.addEventListener('resize', d.onResize);
     updateCoursePdfVisible(d, false);
-    sizeCoursePdfPages(d); // fire and forget: exact heights for pages 2..n
+    sizeCoursePdfPages(d); // fire and forget: exact aspect ratios for pages 2..n
+}
+
+// Aspect ratio (height / width) of page n as currently displayed, i.e. with
+// the user's rotation applied.
+function coursePdfAspect(d, n) {
+    const a = d.aspect[n] || d.defaultAspect;
+    return d.rotation % 180 ? 1 / a : a;
+}
+
+// CSS-pixel size page n is displayed at.
+function coursePdfBox(d, n) {
+    const asp = coursePdfAspect(d, n);
+    let w;
+    if (d.mode === 'paged') {
+        // whole page fits the screen at 100%; zoom multiplies that
+        const availW = Math.max(1, d.scrollEl.clientWidth - COURSE_PDF_PAD * 2);
+        const availH = Math.max(1, d.scrollEl.clientHeight - COURSE_PDF_PAD * 2);
+        w = Math.min(availW, availH / asp) * d.zoom;
+    } else {
+        w = d.cssW;
+    }
+    return { w: w, h: w * asp };
+}
+
+function applyCoursePdfWrapSize(d, n) {
+    const box = coursePdfBox(d, n);
+    const wrap = d.wraps[n - 1];
+    wrap.style.height = Math.round(box.h) + 'px';
+    wrap.style.width = d.mode === 'paged' ? Math.round(box.w) + 'px' : '';
 }
 
 function layoutCoursePdf(d) {
-    d.pagesEl.style.width = (d.zoom * 100) + '%';
-    d.cssW = Math.max(1, d.pagesEl.clientWidth - COURSE_PDF_PAD * 2);
+    const paged = d.mode === 'paged';
+    d.pagesEl.classList.toggle('paged', paged);
+    if (paged) {
+        d.pagesEl.style.width = '';
+        d.pagesEl.style.minHeight = d.scrollEl.clientHeight + 'px';
+    } else {
+        d.pagesEl.style.width = (d.zoom * 100) + '%';
+        d.pagesEl.style.minHeight = '';
+        d.cssW = Math.max(1, d.pagesEl.clientWidth - COURSE_PDF_PAD * 2);
+    }
     d.wraps.forEach(function(w, i) {
-        w.style.height = Math.round(d.cssW * (d.aspect[i + 1] || d.defaultAspect)) + 'px';
+        applyCoursePdfWrapSize(d, i + 1);
+        w.style.display = (paged && i + 1 !== d.page) ? 'none' : '';
     });
 }
 
 // Learns each page's real aspect ratio in the background so placeholders are
-// the right height before they are scrolled to.
+// the right size before they are shown.
 async function sizeCoursePdfPages(d) {
     for (let n = 2; n <= d.total; n++) {
         if (coursePdf !== d) return;
@@ -1673,7 +1741,7 @@ async function sizeCoursePdfPages(d) {
             if (coursePdf !== d) return;
             const v = page.getViewport({ scale: 1 });
             d.aspect[n] = v.height / v.width;
-            d.wraps[n - 1].style.height = Math.round(d.cssW * d.aspect[n]) + 'px';
+            applyCoursePdfWrapSize(d, n);
         } catch (e) { return; }
         if (n % 20 === 0) scheduleCoursePdfUpdate(d, false);
         await new Promise(function(r) { setTimeout(r, 0); });
@@ -1690,6 +1758,17 @@ function scheduleCoursePdfUpdate(d, showPill) {
 }
 
 function updateCoursePdfVisible(d, showPill) {
+    if (d.mode === 'paged') {
+        // current page first, then its neighbours so a swipe lands on a drawn page
+        renderCoursePdfPage(d, d.page);
+        d.wraps.forEach(function(w, i) {
+            const n = i + 1;
+            if (n === d.page) return;
+            if (Math.abs(n - d.page) === 1) { if (!w._done && !w._busy) renderCoursePdfPage(d, n); }
+            else if (w._done || w._busy) releaseCoursePdfPage(w);
+        });
+        return;
+    }
     const vr = d.scrollEl.getBoundingClientRect();
     const vh = vr.height;
     const nearTop = vr.top - vh * 1.5, nearBottom = vr.bottom + vh * 1.5;
@@ -1724,12 +1803,14 @@ async function renderCoursePdfPage(d, n) {
     try {
         const page = await d.pdf.getPage(n);
         if (coursePdf !== d || gen !== d.gen) return;
-        const base = page.getViewport({ scale: 1 });
-        const cssScale = d.cssW / base.width;
+        const rotation = (page.rotate + d.rotation) % 360;
+        const base = page.getViewport({ scale: 1, rotation: rotation });
+        const box = coursePdfBox(d, n);
+        const cssScale = box.w / base.width;
         let outScale = cssScale * Math.min(window.devicePixelRatio || 1, 2);
         const area = base.width * base.height * outScale * outScale;
         if (area > COURSE_PDF_MAX_CANVAS_PX) outScale *= Math.sqrt(COURSE_PDF_MAX_CANVAS_PX / area);
-        const viewport = page.getViewport({ scale: outScale });
+        const viewport = page.getViewport({ scale: outScale, rotation: rotation });
         const canvas = document.createElement('canvas');
         canvas.width = Math.floor(viewport.width);
         canvas.height = Math.floor(viewport.height);
@@ -1740,8 +1821,8 @@ async function renderCoursePdfPage(d, n) {
         if (coursePdf !== d || gen !== d.gen) { canvas.width = canvas.height = 0; return; }
         wrap.replaceChildren(canvas);
         wrap._done = true;
-        d.aspect[n] = base.height / base.width;
-        wrap.style.height = Math.round(d.cssW * d.aspect[n]) + 'px';
+        d.aspect[n] = d.rotation % 180 ? base.width / base.height : base.height / base.width;
+        applyCoursePdfWrapSize(d, n);
     } catch (e) {
         // cancelled renders are expected; a failed page just stays blank
     } finally {
@@ -1758,27 +1839,45 @@ function releaseCoursePdfPage(wrap) {
     wrap._done = false;
 }
 
-// Re-fit after a zoom change or rotation, keeping the same spot in view.
+function releaseAllCoursePdf(d) {
+    d.gen++; // invalidates any render still in flight
+    d.wraps.forEach(function(w) { if (w._done || w._busy) releaseCoursePdfPage(w); });
+}
+
+function scrollCoursePdfToPage(d, n) {
+    const w = d.wraps[n - 1];
+    d.scrollEl.scrollTop += w.getBoundingClientRect().top - d.scrollEl.getBoundingClientRect().top - COURSE_PDF_PAD;
+}
+
+// Re-fit after a zoom change or device rotation, keeping the same spot in view.
 function relayoutCoursePdf(d, newZoom) {
     const sc = d.scrollEl;
     const oldW = d.pagesEl.scrollWidth || 1;
     const oldHeight = d.pagesEl.scrollHeight || 1;
     const anchorY = (sc.scrollTop + sc.clientHeight / 2) / oldHeight;
     const anchorX = (sc.scrollLeft + sc.clientWidth / 2) / oldW;
-    d.gen++;
     if (newZoom) d.zoom = newZoom;
-    d.wraps.forEach(function(w) { if (w._done || w._busy) releaseCoursePdfPage(w); });
+    releaseAllCoursePdf(d);
     layoutCoursePdf(d);
     sc.scrollTop = anchorY * d.pagesEl.scrollHeight - sc.clientHeight / 2;
     sc.scrollLeft = anchorX * d.pagesEl.scrollWidth - sc.clientWidth / 2;
-    updateCoursePdfZoomUi(d);
+    updateCoursePdfUi(d);
     updateCoursePdfVisible(d, false);
 }
 
-function updateCoursePdfZoomUi(d) {
+function updateCoursePdfUi(d) {
+    const paged = d.mode === 'paged';
     document.getElementById('course-reader-zoom-label').textContent = Math.round(d.zoom * 100) + '%';
     document.getElementById('course-reader-zoom-out').disabled = d.zoom <= COURSE_PDF_ZOOMS[0];
     document.getElementById('course-reader-zoom-in').disabled = d.zoom >= COURSE_PDF_ZOOMS[COURSE_PDF_ZOOMS.length - 1];
+    const modeBtn = document.getElementById('course-reader-mode');
+    modeBtn.classList.toggle('course-reader-btn-on', paged);
+    modeBtn.setAttribute('aria-pressed', paged ? 'true' : 'false');
+    document.getElementById('course-reader-pager').style.display = paged ? 'flex' : 'none';
+    document.getElementById('course-reader-pager-label').textContent = d.page + ' / ' + d.total;
+    document.getElementById('course-reader-prev').disabled = d.page <= 1;
+    document.getElementById('course-reader-next').disabled = d.page >= d.total;
+    if (paged) document.getElementById('course-reader-page').classList.remove('show');
 }
 
 function courseReaderZoom(direction) {
@@ -1788,6 +1887,64 @@ function courseReaderZoom(direction) {
     const next = COURSE_PDF_ZOOMS[Math.min(COURSE_PDF_ZOOMS.length - 1, Math.max(0, i + direction))];
     if (next !== d.zoom) relayoutCoursePdf(d, next);
 }
+
+// Toolbar: switch between continuous scroll and one page at a time.
+function courseReaderToggleMode() {
+    const d = coursePdf;
+    if (!d) return;
+    const cur = d.mode === 'paged' ? d.page : (d.current || 1);
+    d.mode = d.mode === 'paged' ? 'scroll' : 'paged';
+    coursePdfPaged = d.mode === 'paged';
+    d.page = cur;
+    releaseAllCoursePdf(d);
+    d.scrollEl.scrollTop = 0;
+    d.scrollEl.scrollLeft = 0;
+    layoutCoursePdf(d);
+    if (d.mode === 'scroll') scrollCoursePdfToPage(d, cur);
+    updateCoursePdfUi(d);
+    updateCoursePdfVisible(d, false);
+}
+
+// Toolbar: rotate every page 90 degrees clockwise, in sync.
+function courseReaderRotate() {
+    const d = coursePdf;
+    if (!d) return;
+    const cur = d.mode === 'paged' ? d.page : (d.current || 1);
+    d.rotation = (d.rotation + 90) % 360;
+    releaseAllCoursePdf(d);
+    d.scrollEl.scrollLeft = 0;
+    if (d.mode === 'paged') d.scrollEl.scrollTop = 0;
+    layoutCoursePdf(d);
+    if (d.mode === 'scroll') scrollCoursePdfToPage(d, cur);
+    updateCoursePdfUi(d);
+    updateCoursePdfVisible(d, false);
+}
+
+// Paged mode: go to the next (+1) or previous (-1) page.
+function courseReaderPage(delta) {
+    const d = coursePdf;
+    if (!d || d.mode !== 'paged') return;
+    const n = Math.min(d.total, Math.max(1, d.page + delta));
+    if (n === d.page) return;
+    d.wraps[d.page - 1].style.display = 'none';
+    d.page = n;
+    const wrap = d.wraps[n - 1];
+    wrap.style.display = '';
+    d.scrollEl.scrollTop = 0;
+    d.scrollEl.scrollLeft = 0;
+    wrap.classList.remove('course-pdf-slide-next', 'course-pdf-slide-prev');
+    void wrap.offsetWidth; // restart the slide-in animation
+    wrap.classList.add(delta > 0 ? 'course-pdf-slide-next' : 'course-pdf-slide-prev');
+    updateCoursePdfUi(d);
+    updateCoursePdfVisible(d, false);
+}
+
+document.addEventListener('keydown', function(e) {
+    const d = coursePdf;
+    if (!d || d.mode !== 'paged') return;
+    if (e.key === 'ArrowRight' || e.key === 'PageDown') courseReaderPage(1);
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') courseReaderPage(-1);
+});
 
 function teardownCoursePdf() {
     const d = coursePdf;
@@ -1800,14 +1957,20 @@ function teardownCoursePdf() {
         cancelAnimationFrame(d.raf);
         clearTimeout(d.pillTimer);
         scrollEl.removeEventListener('scroll', d.onScroll);
+        scrollEl.removeEventListener('touchstart', d.onTouchStart);
+        scrollEl.removeEventListener('touchend', d.onTouchEnd);
         window.removeEventListener('resize', d.onResize);
         d.wraps.forEach(function(w) { if (w._done || w._busy) releaseCoursePdfPage(w); });
         try { d.pdf.destroy(); } catch (e) {}
     }
     pagesEl.replaceChildren();
     pagesEl.style.width = '';
+    pagesEl.style.minHeight = '';
+    pagesEl.classList.remove('paged');
     scrollEl.style.overflowX = '';
     if (tools) tools.classList.add('hidden');
+    const pager = document.getElementById('course-reader-pager');
+    if (pager) pager.style.display = 'none';
     const pill = document.getElementById('course-reader-page');
     if (pill) pill.classList.remove('show');
 }

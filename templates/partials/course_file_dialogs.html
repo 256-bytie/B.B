@@ -102,12 +102,18 @@
 			<h1 id="course-reader-title" class="text-[18px] leading-6 font-semibold text-gray-900 truncate"></h1>
 			<p class="text-[13px] leading-4 text-gray-500">Read only</p>
 		</div>
-		<div id="course-reader-tools" class="hidden flex items-center shrink-0">
+	</header>
+	<div id="course-reader-tools" class="hidden flex items-center justify-between shrink-0 h-12 px-3 border-b border-gray-100">
+		<div class="flex items-center gap-1">
+			<button type="button" id="course-reader-mode" class="w-10 h-10 rounded-full flex items-center justify-center text-gray-900 active:bg-gray-100 transition-colors" aria-label="One page at a time" aria-pressed="false" onclick="courseReaderToggleMode()"><i class="fa-regular fa-file text-[18px]"></i></button>
+			<button type="button" id="course-reader-rotate" class="w-10 h-10 rounded-full flex items-center justify-center text-gray-900 active:bg-gray-100 transition-colors" aria-label="Rotate clockwise" onclick="courseReaderRotate()"><i class="fa-solid fa-rotate-right text-[18px]"></i></button>
+		</div>
+		<div class="flex items-center">
 			<button type="button" id="course-reader-zoom-out" class="w-10 h-10 rounded-full flex items-center justify-center text-gray-900 active:bg-gray-100 transition-colors disabled:opacity-30" aria-label="Zoom out" onclick="courseReaderZoom(-1)"><i class="fa-solid fa-minus text-[16px]"></i></button>
 			<span id="course-reader-zoom-label" class="w-11 text-center text-[13px] font-medium text-gray-500">100%</span>
 			<button type="button" id="course-reader-zoom-in" class="w-10 h-10 rounded-full flex items-center justify-center text-gray-900 active:bg-gray-100 transition-colors disabled:opacity-30" aria-label="Zoom in" onclick="courseReaderZoom(1)"><i class="fa-solid fa-plus text-[16px]"></i></button>
 		</div>
-	</header>
+	</div>
 	<div id="course-reader-scroll" class="flex-1 overflow-y-auto overscroll-contain">
 		<div id="course-reader-loading" class="flex flex-col items-center px-8 pt-32 text-center">
 			<i class="fa-solid fa-circle-notch fa-spin text-[28px] text-gray-400"></i>
@@ -124,5 +130,10 @@
 		<div id="course-reader-pdf" class="course-pdf-pages hidden"></div>
 	</div>
 	<div id="course-reader-page" class="course-reader-page-pill" aria-hidden="true"></div>
+	<div id="course-reader-pager" class="course-reader-pager" style="display:none">
+		<button type="button" id="course-reader-prev" aria-label="Previous page" onclick="courseReaderPage(-1)"><i class="fa-solid fa-chevron-left"></i></button>
+		<span id="course-reader-pager-label">1 / 1</span>
+		<button type="button" id="course-reader-next" aria-label="Next page" onclick="courseReaderPage(1)"><i class="fa-solid fa-chevron-right"></i></button>
+	</div>
 </div>
 <!-- END: Document reader -->

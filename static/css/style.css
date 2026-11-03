@@ -2512,3 +2512,23 @@ html.dark .course-reader-content th { background: #1f2937; }
     opacity: 0; transition: opacity 160ms ease;
 }
 .course-reader-page-pill.show { opacity: 1; }
+
+/* ---- PDF reader: one-page mode, pager, toolbar state ---- */
+.course-pdf-pages.paged { display: flex; }
+.course-pdf-pages.paged .course-pdf-page { margin: auto; flex: none; }
+@keyframes course-pdf-slide-next { from { opacity: 0; transform: translateX(28%); } to { opacity: 1; transform: none; } }
+@keyframes course-pdf-slide-prev { from { opacity: 0; transform: translateX(-28%); } to { opacity: 1; transform: none; } }
+.course-pdf-slide-next { animation: course-pdf-slide-next 180ms ease-out; }
+.course-pdf-slide-prev { animation: course-pdf-slide-prev 180ms ease-out; }
+.course-reader-pager {
+    position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); transform: translateX(-50%);
+    align-items: center; gap: 2px; padding: 4px; border-radius: 9999px;
+    background: rgba(17, 24, 39, 0.88); color: #fff; font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums;
+}
+.course-reader-pager button { width: 40px; height: 36px; border-radius: 9999px; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+.course-reader-pager button:active { background: rgba(255, 255, 255, 0.15); }
+.course-reader-pager button:disabled { opacity: 0.35; }
+.course-reader-pager span { min-width: 52px; text-align: center; }
+.course-reader-btn-on { background: #e5e7eb; }
+html.dark .course-reader-btn-on { background: #374151; }
+@media (prefers-reduced-motion: reduce) { .course-pdf-slide-next, .course-pdf-slide-prev { animation: none; } }
