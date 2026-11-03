@@ -50,6 +50,9 @@ function sideNavAvailable() {
 	// (which stays .active underneath), so it has to be checked on its own.
 	const commentOverlay = document.getElementById('comment-overlay');
 	if (commentOverlay && !commentOverlay.classList.contains('hidden')) return false;
+	// Same for the full-screen image viewer: no edge-swipe open while it is up.
+	const imageViewer = document.getElementById('image-viewer-overlay');
+	if (imageViewer && !imageViewer.classList.contains('hidden')) return false;
 	const activeView = document.querySelector('.view-section.active');
 	return !!activeView && SIDE_NAV_ELIGIBLE_VIEWS.includes(activeView.id);
 }

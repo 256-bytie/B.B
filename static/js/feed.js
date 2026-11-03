@@ -618,6 +618,7 @@ function openImageViewer(images, startIndex) {
     const counter = document.getElementById('image-viewer-counter');
     if (!overlay || !track || !counter || !Array.isArray(images) || images.length === 0) return;
 
+    if (typeof closeSideNav === 'function') closeSideNav();
     track.innerHTML = images.map(url => `
 <div class="w-full h-full shrink-0 snap-center flex items-center justify-center">
 <img src="${escapeHtml(url)}" alt="Post attachment" class="max-w-full max-h-full object-contain"/>

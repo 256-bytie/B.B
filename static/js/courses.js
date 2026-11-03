@@ -741,7 +741,7 @@ function buildCourseFolderCard(folder, isNew) {
     const card = document.createElement('button');
     card.type = 'button';
     card.dataset.id = folder.id;
-    card.className = 'course-folder-card course-card-shadow w-full flex items-center gap-4 p-3.5 rounded-2xl bg-white border border-gray-100 text-left active:scale-[0.98] transition-transform duration-100' + (isNew ? ' course-folder-new' : '');
+    card.className = 'course-folder-card course-card-shadow w-full flex items-center gap-3 p-3 rounded-2xl bg-white border border-gray-100 text-left active:scale-[0.98] transition-transform duration-100' + (isNew ? ' course-folder-new' : '');
     card.style.webkitTouchCallout = 'none';
     card.style.userSelect = 'none';
     card.addEventListener('click', function() {
@@ -751,21 +751,21 @@ function buildCourseFolderCard(folder, isNew) {
     attachCourseFolderLongPress(card, folder);
 
     const tile = document.createElement('span');
-    tile.className = 'course-folder-tile shrink-0 w-14 h-14 rounded-2xl flex items-center justify-center';
-    tile.innerHTML = '<i class="fa-solid fa-folder text-[24px]"></i>';
+    tile.className = 'course-folder-tile shrink-0 w-[35px] h-[35px] rounded-xl flex items-center justify-center';
+    tile.innerHTML = '<i class="fa-solid fa-folder text-[16px]"></i>';
 
     const text = document.createElement('span');
     text.className = 'flex-1 min-w-0';
     const name = document.createElement('span');
-    name.className = 'block truncate text-[17px] font-semibold text-gray-900';
+    name.className = 'block truncate text-[16px] leading-[19px] font-semibold text-gray-900';
     name.textContent = folder.name;
     const sub = document.createElement('span');
-    sub.className = 'block text-[14px] text-gray-500 mt-0.5';
+    sub.className = 'block text-[9px] leading-4 text-gray-500';
     sub.textContent = courseItemCountText(folder.item_count);
     text.append(name, sub);
 
     const chevron = document.createElement('i');
-    chevron.className = 'fa-solid fa-chevron-right text-[14px] text-gray-400 pr-1';
+    chevron.className = 'fa-solid fa-chevron-right text-[12px] text-gray-400 pr-1';
 
     card.append(tile, text, chevron);
     return card;
@@ -779,31 +779,31 @@ function buildCourseFileCard(file, isNew) {
     card.setAttribute('role', 'button');
     card.tabIndex = 0;
     card.dataset.id = file.id;
-    card.className = 'course-file-card course-card-shadow w-full flex items-center gap-4 p-3.5 rounded-2xl bg-white border border-gray-100 cursor-pointer active:scale-[0.98] transition-transform duration-100' + (isNew ? ' course-folder-new' : '');
+    card.className = 'course-file-card course-card-shadow w-full flex items-center gap-3 p-3 rounded-2xl bg-white border border-gray-100 cursor-pointer active:scale-[0.98] transition-transform duration-100' + (isNew ? ' course-folder-new' : '');
     card.addEventListener('click', function() { openCourseFile(file); });
     card.addEventListener('keydown', function(e) {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCourseFile(file); }
     });
 
     const tile = document.createElement('span');
-    tile.className = 'shrink-0 w-14 h-14 rounded-2xl flex items-center justify-center text-white ' + style.bg;
-    tile.innerHTML = '<i class="fa-solid ' + style.icon + ' text-[24px]"></i>';
+    tile.className = 'shrink-0 w-[35px] h-[35px] rounded-xl flex items-center justify-center text-white ' + style.bg;
+    tile.innerHTML = '<i class="fa-solid ' + style.icon + ' text-[16px]"></i>';
 
     const text = document.createElement('span');
     text.className = 'flex-1 min-w-0';
     const name = document.createElement('span');
-    name.className = 'block truncate text-[17px] font-semibold text-gray-900';
+    name.className = 'block truncate text-[16px] leading-[19px] font-semibold text-gray-900';
     name.textContent = file.name;
     const date = document.createElement('span');
-    date.className = 'block text-[14px] text-gray-400 mt-0.5';
+    date.className = 'block text-[13px] leading-4 text-gray-400';
     date.textContent = typeof formatTimeAgo === 'function' ? formatTimeAgo(file.created_at) : '';
     text.append(name, date);
 
     const more = document.createElement('button');
     more.type = 'button';
-    more.className = 'shrink-0 w-10 h-10 -mr-1 rounded-full flex items-center justify-center text-gray-400 active:bg-gray-100 transition-colors';
+    more.className = 'shrink-0 w-10 h-10 -my-1 -mr-1 rounded-full flex items-center justify-center text-gray-400 active:bg-gray-100 transition-colors';
     more.setAttribute('aria-label', 'File options');
-    more.innerHTML = '<i class="fa-solid fa-ellipsis-vertical text-[18px]"></i>';
+    more.innerHTML = '<i class="fa-solid fa-ellipsis-vertical text-[16px]"></i>';
     more.addEventListener('click', function(e) { e.stopPropagation(); openCourseFileMenu(file); });
 
     card.append(tile, text, more);
