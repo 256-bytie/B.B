@@ -431,10 +431,12 @@ function onCoursesViewShown() {
 }
 
 function onCoursesViewHidden() {
+    closeCourseReader();
     hideCourseFolderView();
     closeCourseFolderDialog();
     closeCourseFileDialog();
     closeCourseFileMenu();
+    endCourseDrag(false);
     closeCourseFolderMenu();
     closeCourseFileCategorySheet();
     closeCourseConfirm();
@@ -773,6 +775,245 @@ function buildCourseFolderCard(folder, isNew) {
 
 // File card: type tile, name, date uploaded, and a ⋮ menu. Department, level
 // and uploader are deliberately not shown for personal files.
+// ---- Drag a file into a folder (tap and hold a file card) ----
+// Hold a file card ~0.45 s: it dims in place, a floating chip follows the
+// finger (offset above it so the finger never covers it), every folder card
+// becomes a dashed drop target, and the folder under the finger lights up and
+// opens. Release over a folder to move the file there (PATCH folder_id);
+// release anywhere else, or press Escape, to cancel. Near the top/bottom edge
+// the list auto-scrolls.
+const COURSE_DRAG_HOLD_MS = 450;
+const COURSE_DRAG_SLOP = 6;        // px of movement that cancels the hold (lets the page scroll)
+const COURSE_DRAG_EDGE = 80;       // px from the scroll edge where auto-scroll kicks in
+const COURSE_DRAG_SCROLL_MAX = 16; // px per frame at the very edge
+
+let courseDrag = null; // active drag state, or null
+
+// While a drag is active, stop the browser from scrolling the page under the
+// finger. Registered once, non-passive, so preventDefault works.
+document.addEventListener('touchmove', function(e) {
+    if (courseDrag && e.cancelable) e.preventDefault();
+}, { passive: false });
+
+document.addEventListener('keydown', function(e) {
+    if (courseDrag && e.key === 'Escape') endCourseDrag(false);
+});
+
+function courseScrollParent(el) {
+    for (let n = el.parentElement; n && n !== document.body; n = n.parentElement) {
+        const oy = getComputedStyle(n).overflowY;
+        if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight) return n;
+    }
+    return document.scrollingElement || document.documentElement;
+}
+
+function courseFolderForCard(card) {
+    if (!card) return null;
+    return courseCurrentFolders().find(function(f) { return String(f.id) === card.dataset.id; }) || null;
+}
+
+function buildCourseDragGhost(file) {
+    const style = courseFileStyle(file.file_type);
+    const outer = document.createElement('div');
+    outer.className = 'course-drag-ghost';
+    const inner = document.createElement('div');
+    inner.className = 'course-drag-ghost-inner';
+    const tile = document.createElement('span');
+    tile.className = 'course-drag-ghost-tile ' + style.bg;
+    tile.innerHTML = '<i class="fa-solid ' + style.icon + '"></i>';
+    const name = document.createElement('span');
+    name.className = 'course-drag-ghost-name';
+    name.textContent = file.name;
+    inner.append(tile, name);
+    outer.appendChild(inner);
+    return outer;
+}
+
+function positionCourseDragGhost(d) {
+    const offsetY = d.pointerType === 'mouse' ? 20 : 68;
+    const x = Math.min(Math.max(8, d.x - d.gw / 2), window.innerWidth - d.gw - 8);
+    const y = Math.max(8, d.y - d.gh - offsetY);
+    d.ghost.style.transform = 'translate3d(' + Math.round(x) + 'px,' + Math.round(y) + 'px,0)';
+}
+
+function setCourseDropTarget(card) {
+    const d = courseDrag;
+    if (!d || d.hoverCard === card) return;
+    if (d.hoverCard) {
+        d.hoverCard.classList.remove('course-drop-hover');
+        const prevIcon = d.hoverCard.querySelector('.course-folder-tile i');
+        if (prevIcon) prevIcon.className = 'fa-solid fa-folder text-[16px]';
+    }
+    d.hoverCard = card;
+    if (card) {
+        card.classList.add('course-drop-hover');
+        const icon = card.querySelector('.course-folder-tile i');
+        if (icon) icon.className = 'fa-solid fa-folder-open text-[16px]';
+        if (navigator.vibrate) { try { navigator.vibrate(6); } catch (e) {} }
+    }
+    const folder = courseFolderForCard(card);
+    d.hint.classList.toggle('ready', !!folder);
+    if (folder) d.hint.textContent = 'Move to \u201c' + folder.name + '\u201d';
+    else d.hint.textContent = d.hasFolders ? 'Drop on a folder to move' : 'No folder here to drop into';
+}
+
+function updateCourseDrag(x, y) {
+    const d = courseDrag;
+    if (!d) return;
+    d.x = x;
+    d.y = y;
+    positionCourseDragGhost(d);
+    const el = document.elementFromPoint(x, y);
+    setCourseDropTarget(el ? el.closest('.course-folder-card') : null);
+}
+
+function courseDragTick() {
+    const d = courseDrag;
+    if (!d) return;
+    const root = document.scrollingElement || document.documentElement;
+    const rect = (d.scroller === root || d.scroller === document.documentElement)
+        ? { top: 0, bottom: window.innerHeight }
+        : d.scroller.getBoundingClientRect();
+    let dy = 0;
+    if (d.y < rect.top + COURSE_DRAG_EDGE) {
+        dy = -Math.ceil(COURSE_DRAG_SCROLL_MAX * (1 - Math.max(0, d.y - rect.top) / COURSE_DRAG_EDGE));
+    } else if (d.y > rect.bottom - COURSE_DRAG_EDGE) {
+        dy = Math.ceil(COURSE_DRAG_SCROLL_MAX * (1 - Math.max(0, rect.bottom - d.y) / COURSE_DRAG_EDGE));
+    }
+    if (dy) {
+        d.scroller.scrollTop += dy;
+        updateCourseDrag(d.x, d.y); // the content moved under a still finger
+    }
+    d.raf = requestAnimationFrame(courseDragTick);
+}
+
+function startCourseDrag(card, file, pointerId, pointerType, x, y) {
+    if (courseDrag) return;
+    const ghost = buildCourseDragGhost(file);
+    document.body.appendChild(ghost);
+    const hint = document.createElement('div');
+    hint.className = 'course-drag-hint';
+    document.body.appendChild(hint);
+    requestAnimationFrame(function() { hint.classList.add('show'); });
+
+    courseDrag = {
+        file: file, card: card, ghost: ghost, hint: hint,
+        pointerId: pointerId, pointerType: pointerType,
+        x: x, y: y, gw: ghost.offsetWidth, gh: ghost.offsetHeight,
+        hoverCard: null, raf: 0, scroller: courseScrollParent(card),
+        hasFolders: courseCurrentFolders().length > 0
+    };
+    card._dragBlock = true; // swallow the click that ends the gesture
+    card.classList.add('course-dragging-source');
+    document.body.classList.add('course-drag-active');
+    try { card.setPointerCapture(pointerId); } catch (e) {}
+    if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
+    hint.textContent = courseDrag.hasFolders ? 'Drop on a folder to move' : 'No folder here to drop into';
+    updateCourseDrag(x, y);
+    courseDrag.raf = requestAnimationFrame(courseDragTick);
+}
+
+function endCourseDrag(commit) {
+    const d = courseDrag;
+    if (!d) return;
+    courseDrag = null;
+    cancelAnimationFrame(d.raf);
+    document.body.classList.remove('course-drag-active');
+    d.card.classList.remove('course-dragging-source');
+    try { d.card.releasePointerCapture(d.pointerId); } catch (e) {}
+    setTimeout(function() { d.card._dragBlock = false; }, 400);
+
+    const targetCard = commit ? d.hoverCard : null;
+    const folder = courseFolderForCard(targetCard);
+    if (d.hoverCard) d.hoverCard.classList.remove('course-drop-hover');
+
+    d.hint.classList.remove('show');
+    setTimeout(function() { d.hint.remove(); }, 160);
+
+    if (folder) {
+        // Chip shrinks into the folder it was dropped on.
+        const r = targetCard.getBoundingClientRect();
+        const tx = Math.round(r.left + r.width / 2 - d.gw / 2);
+        const ty = Math.round(r.top + r.height / 2 - d.gh / 2);
+        d.ghost.style.transition = 'transform 200ms cubic-bezier(0.4, 0, 0.2, 1), opacity 200ms ease';
+        d.ghost.style.transform = 'translate3d(' + tx + 'px,' + ty + 'px,0) scale(0.35)';
+        d.ghost.style.opacity = '0';
+        setTimeout(function() { d.ghost.remove(); }, 220);
+        moveCourseFile(d.file, folder, d.card);
+    } else {
+        d.ghost.style.transition = 'opacity 140ms ease';
+        d.ghost.style.opacity = '0';
+        setTimeout(function() { d.ghost.remove(); }, 160);
+        if (d.hoverCard) {
+            const icon = d.hoverCard.querySelector('.course-folder-tile i');
+            if (icon) icon.className = 'fa-solid fa-folder text-[16px]';
+        }
+    }
+}
+
+async function moveCourseFile(file, folder, card) {
+    card.style.display = 'none'; // leaves the list immediately; restored on failure
+    try {
+        const res = await apiFetch('/api/courses/files/' + encodeURIComponent(file.id), {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folder_id: folder.id })
+        });
+        if (res.ok) {
+            setCourseFileCategory(file.id, null); // no longer a top-level file
+            showToast('Moved to \u201c' + folder.name + '\u201d');
+            reloadCourseLevel();
+        } else {
+            card.style.display = '';
+            showToast(await courseErrorMessage(res, 'Could not move the file.'));
+        }
+    } catch (e) {
+        card.style.display = '';
+        showToast('Could not move the file.');
+    }
+}
+
+function attachCourseFileDrag(card, file) {
+    let timer = null, startX = 0, startY = 0, lastX = 0, lastY = 0, pid = null, ptype = 'touch';
+    function cancelHold() { if (timer) { clearTimeout(timer); timer = null; } }
+    card.addEventListener('pointerdown', function(e) {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        if (e.target.closest('button') || courseDrag) return; // the "more" button keeps its own tap
+        card._dragBlock = false;
+        pid = e.pointerId;
+        ptype = e.pointerType;
+        startX = lastX = e.clientX;
+        startY = lastY = e.clientY;
+        cancelHold();
+        timer = setTimeout(function() {
+            timer = null;
+            startCourseDrag(card, file, pid, ptype, lastX, lastY);
+        }, COURSE_DRAG_HOLD_MS);
+    });
+    card.addEventListener('pointermove', function(e) {
+        if (e.pointerId !== pid) return;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        if (timer) {
+            if (Math.abs(lastX - startX) > COURSE_DRAG_SLOP || Math.abs(lastY - startY) > COURSE_DRAG_SLOP) cancelHold();
+        } else if (courseDrag && courseDrag.card === card) {
+            updateCourseDrag(lastX, lastY);
+        }
+    });
+    card.addEventListener('pointerup', function(e) {
+        if (e.pointerId !== pid) return;
+        cancelHold();
+        if (courseDrag && courseDrag.card === card) endCourseDrag(true);
+    });
+    card.addEventListener('pointercancel', function(e) {
+        if (e.pointerId !== pid) return;
+        cancelHold();
+        if (courseDrag && courseDrag.card === card) endCourseDrag(false);
+    });
+    // Replace the native long-press / right-click menu.
+    card.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+}
+
 function buildCourseFileCard(file, isNew) {
     const style = courseFileStyle(file.file_type);
     const card = document.createElement('div');
@@ -780,10 +1021,16 @@ function buildCourseFileCard(file, isNew) {
     card.tabIndex = 0;
     card.dataset.id = file.id;
     card.className = 'course-file-card course-card-shadow w-full flex items-center gap-3 p-3 rounded-2xl bg-white border border-gray-100 cursor-pointer active:scale-[0.98] transition-transform duration-100' + (isNew ? ' course-folder-new' : '');
-    card.addEventListener('click', function() { openCourseFile(file); });
+    card.style.webkitTouchCallout = 'none';
+    card.style.userSelect = 'none';
+    card.addEventListener('click', function() {
+        if (card._dragBlock) { card._dragBlock = false; return; } // click that ends a drag
+        openCourseFile(file);
+    });
     card.addEventListener('keydown', function(e) {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCourseFile(file); }
     });
+    attachCourseFileDrag(card, file);
 
     const tile = document.createElement('span');
     tile.className = 'shrink-0 w-[35px] h-[35px] rounded-xl flex items-center justify-center text-white ' + style.bg;
@@ -1169,11 +1416,160 @@ function downloadCourseFile(file) {
     a.remove();
 }
 
-// PDFs and images open in a new tab; everything else downloads.
+// PDFs and images open in a new tab; .docx opens in the in-app reader;
+// everything else downloads.
 function openCourseFile(file) {
     if (COURSE_INLINE_TYPES.indexOf(file.file_type) !== -1) window.open(courseFileUrl(file, true), '_blank');
+    else if (file.file_type === 'docx') openCourseReader(file);
     else downloadCourseFile(file);
 }
+
+// ---- Read-only .docx reader ----
+// Uses mammoth.js (github.com/mwilliamson/mammoth.js): converts the .docx to
+// clean, semantic HTML in the browser, so the text reflows to the phone width
+// (unlike page-faithful renderers). Loaded lazily from a pinned jsDelivr
+// build the first time a .docx is opened. Legacy .doc is not supported by
+// mammoth and keeps downloading.
+const COURSE_MAMMOTH_SRC = 'https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js';
+let courseMammothPromise = null;
+let courseReaderToken = 0; // bumped on every open/close so a stale load is discarded
+let courseReaderFile = null;
+
+function loadCourseMammoth() {
+    if (window.mammoth) return Promise.resolve(window.mammoth);
+    if (!courseMammothPromise) {
+        courseMammothPromise = new Promise(function(resolve, reject) {
+            const script = document.createElement('script');
+            script.src = COURSE_MAMMOTH_SRC;
+            script.async = true;
+            script.onload = function() { window.mammoth ? resolve(window.mammoth) : reject(new Error('mammoth missing')); };
+            script.onerror = function() { courseMammothPromise = null; script.remove(); reject(new Error('mammoth load failed')); };
+            document.head.appendChild(script);
+        });
+    }
+    return courseMammothPromise;
+}
+
+// Mammoth does not sanitise its output, so it is filtered before it touches
+// the page: whitelisted tags only, no inline styles/handlers, links limited
+// to http(s)/mailto/tel, images limited to embedded raster data URIs.
+const COURSE_READER_TAGS = new Set(['p', 'br', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'b', 'em', 'i', 'u', 's', 'strike', 'del', 'sup', 'sub', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th', 'a', 'img', 'blockquote', 'pre', 'code', 'span', 'div', 'hr']);
+const COURSE_READER_DROP = new Set(['script', 'style', 'iframe', 'object', 'embed', 'link', 'meta', 'form', 'input', 'button', 'textarea', 'select', 'svg', 'math', 'base', 'noscript', 'template', 'audio', 'video']);
+
+function sanitizeCourseReaderHtml(html) {
+    const doc = new DOMParser().parseFromString('<body>' + html + '</body>', 'text/html');
+    (function clean(parent) {
+        Array.from(parent.children).forEach(function(el) {
+            const tag = el.tagName.toLowerCase();
+            if (COURSE_READER_DROP.has(tag)) { el.remove(); return; }
+            clean(el);
+            if (!COURSE_READER_TAGS.has(tag)) { el.replaceWith.apply(el, Array.from(el.childNodes)); return; }
+
+            const id = el.getAttribute('id');
+            const href = tag === 'a' ? (el.getAttribute('href') || '').trim() : '';
+            const src = tag === 'img' ? (el.getAttribute('src') || '').trim() : '';
+            const alt = el.getAttribute('alt');
+            const colspan = parseInt(el.getAttribute('colspan'), 10);
+            const rowspan = parseInt(el.getAttribute('rowspan'), 10);
+            Array.from(el.attributes).forEach(function(a) { el.removeAttribute(a.name); });
+
+            if (id) el.id = 'cr-' + id; // prefixed so it can never collide with the app's own ids
+            if (tag === 'a') {
+                if (href.charAt(0) === '#') {
+                    el.dataset.crTarget = 'cr-' + href.slice(1); // in-document link (footnotes etc.), handled on click
+                } else if (/^(https?:|mailto:|tel:)/i.test(href)) {
+                    el.setAttribute('href', href);
+                    el.setAttribute('target', '_blank');
+                    el.setAttribute('rel', 'noopener noreferrer nofollow');
+                }
+            } else if (tag === 'img') {
+                if (!/^data:image\/(png|jpe?g|gif|webp|bmp);/i.test(src)) { el.remove(); return; }
+                el.setAttribute('src', src);
+                el.setAttribute('alt', alt || '');
+                el.setAttribute('decoding', 'async');
+            } else if ((tag === 'td' || tag === 'th')) {
+                if (colspan > 1 && colspan <= 50) el.setAttribute('colspan', String(colspan));
+                if (rowspan > 1 && rowspan <= 200) el.setAttribute('rowspan', String(rowspan));
+            }
+        });
+    })(doc.body);
+    return doc.body;
+}
+
+function setCourseReaderState(state, message) {
+    document.getElementById('course-reader-loading').classList.toggle('hidden', state !== 'loading');
+    document.getElementById('course-reader-error').classList.toggle('hidden', state !== 'error');
+    document.getElementById('course-reader-content').classList.toggle('hidden', state !== 'ready');
+    if (state === 'error') document.getElementById('course-reader-error-text').textContent = message || 'This document could not be displayed.';
+}
+
+async function openCourseReader(file) {
+    const token = ++courseReaderToken;
+    courseReaderFile = file;
+    const view = document.getElementById('course-reader');
+    document.getElementById('course-reader-title').textContent = file.name;
+    document.getElementById('course-reader-content').replaceChildren();
+    document.getElementById('course-reader-scroll').scrollTop = 0;
+    setCourseReaderState('loading');
+    view.classList.remove('hidden');
+
+    try {
+        const results = await Promise.all([loadCourseMammoth(), fetch(courseFileUrl(file, false))]);
+        const mammoth = results[0], res = results[1];
+        if (!res.ok) {
+            if (token !== courseReaderToken) return;
+            setCourseReaderState('error', res.status === 404 ? 'This file no longer exists.' : 'Could not open this document.');
+            return;
+        }
+        const converted = await mammoth.convertToHtml({ arrayBuffer: await res.arrayBuffer() });
+        if (token !== courseReaderToken) return; // closed or replaced while loading
+
+        const body = sanitizeCourseReaderHtml(converted.value || '');
+        const content = document.getElementById('course-reader-content');
+        content.replaceChildren.apply(content, Array.from(body.childNodes));
+        content.querySelectorAll('table').forEach(function(table) {
+            const wrap = document.createElement('div');
+            wrap.className = 'course-reader-table-wrap';
+            table.replaceWith(wrap);
+            wrap.appendChild(table);
+        });
+        if (!content.textContent.trim() && !content.querySelector('img')) {
+            setCourseReaderState('error', 'This document is empty.');
+            return;
+        }
+        setCourseReaderState('ready');
+    } catch (e) {
+        if (token !== courseReaderToken) return;
+        setCourseReaderState('error', 'This document could not be displayed.');
+    }
+}
+
+function closeCourseReader() {
+    courseReaderToken++;
+    courseReaderFile = null;
+    const view = document.getElementById('course-reader');
+    if (!view) return;
+    view.classList.add('hidden');
+    document.getElementById('course-reader-content').replaceChildren(); // free the document and its images
+}
+
+function downloadCourseReaderFile() {
+    if (courseReaderFile) downloadCourseFile(courseReaderFile);
+}
+
+// In-document links (footnotes, bookmarks) scroll inside the reader.
+document.getElementById('course-reader-content').addEventListener('click', function(e) {
+    const link = e.target.closest('[data-cr-target]');
+    if (!link) return;
+    e.preventDefault();
+    const target = document.getElementById(link.dataset.crTarget);
+    if (target && this.contains(target)) target.scrollIntoView({ block: 'center' });
+});
+
+document.addEventListener('keydown', function(e) {
+    const view = document.getElementById('course-reader');
+    if (e.key === 'Escape' && view && !view.classList.contains('hidden')) closeCourseReader();
+});
 
 // ---- Save / rename file dialog ----
 // mode 'upload': opened right after a file is picked. Name is prefilled

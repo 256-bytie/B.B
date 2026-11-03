@@ -50,6 +50,11 @@ function sideNavAvailable() {
 	// (which stays .active underneath), so it has to be checked on its own.
 	const commentOverlay = document.getElementById('comment-overlay');
 	if (commentOverlay && !commentOverlay.classList.contains('hidden')) return false;
+	// The Courses document reader is a full-screen takeover.
+	const courseReader = document.getElementById('course-reader');
+	if (courseReader && !courseReader.classList.contains('hidden')) return false;
+	// A Courses file being dragged into a folder owns the gesture.
+	if (document.body.classList.contains('course-drag-active')) return false;
 	// Same for the full-screen image viewer: no edge-swipe open while it is up.
 	const imageViewer = document.getElementById('image-viewer-overlay');
 	if (imageViewer && !imageViewer.classList.contains('hidden')) return false;
@@ -184,6 +189,7 @@ document.addEventListener('touchstart', function(e) {
 
 document.addEventListener('touchmove', function(e) {
 	if (!sideNavDragging) return;
+	if (document.body.classList.contains('course-drag-active')) { sideNavDragging = false; return; }
 	const touch = e.touches[0];
 	sideNavCurrentX = touch.clientX;
 

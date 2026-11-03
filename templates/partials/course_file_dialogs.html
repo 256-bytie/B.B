@@ -91,3 +91,31 @@
 	</div>
 </div>
 <!-- END: Course file dialogs -->
+
+<!-- BEGIN: Read-only document reader (opened by tapping a .docx in Courses; see openCourseReader in courses.js) -->
+<div id="course-reader" class="hidden fixed inset-y-0 left-0 right-0 z-[61] bg-[#fafafa] max-w-[430px] mx-auto flex flex-col" role="dialog" aria-modal="true" aria-labelledby="course-reader-title">
+	<header class="flex items-center gap-3 px-4 h-16 shrink-0 border-b border-gray-100">
+		<button type="button" class="w-10 h-10 -ml-1 rounded-full flex items-center justify-center text-gray-900 active:bg-gray-100 transition-colors" aria-label="Back" onclick="closeCourseReader()">
+			<i class="fa-solid fa-arrow-left text-xl"></i>
+		</button>
+		<div class="min-w-0 flex-1">
+			<h1 id="course-reader-title" class="text-[18px] leading-6 font-semibold text-gray-900 truncate"></h1>
+			<p class="text-[13px] leading-4 text-gray-500">Read only</p>
+		</div>
+	</header>
+	<div id="course-reader-scroll" class="flex-1 overflow-y-auto overscroll-contain">
+		<div id="course-reader-loading" class="flex flex-col items-center px-8 pt-32 text-center">
+			<i class="fa-solid fa-circle-notch fa-spin text-[28px] text-gray-400"></i>
+			<p class="text-[14px] text-gray-500 mt-4">Opening document…</p>
+		</div>
+		<div id="course-reader-error" class="hidden px-8 pt-28 text-center">
+			<span class="course-folder-tile mx-auto w-16 h-16 rounded-3xl flex items-center justify-center">
+				<i class="fa-regular fa-file-lines text-[26px]"></i>
+			</span>
+			<p id="course-reader-error-text" class="text-[16px] font-semibold text-gray-900 mt-5"></p>
+			<button type="button" class="mt-5 px-5 h-11 rounded-full bg-gray-100 text-[15px] font-semibold text-gray-900 active:bg-gray-200 transition-colors" onclick="downloadCourseReaderFile()">Download file</button>
+		</div>
+		<article id="course-reader-content" class="course-reader-content hidden"></article>
+	</div>
+</div>
+<!-- END: Document reader -->
