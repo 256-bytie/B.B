@@ -50,6 +50,9 @@ function sideNavAvailable() {
 	// (which stays .active underneath), so it has to be checked on its own.
 	const commentOverlay = document.getElementById('comment-overlay');
 	if (commentOverlay && !commentOverlay.classList.contains('hidden')) return false;
+	// An open Courses folder covers the screen; the drawer must not slide in behind it.
+	const courseFolder = document.getElementById('course-folder-view');
+	if (courseFolder && !courseFolder.classList.contains('hidden')) return false;
 	// The Courses document reader is a full-screen takeover.
 	const courseReader = document.getElementById('course-reader');
 	if (courseReader && !courseReader.classList.contains('hidden')) return false;
