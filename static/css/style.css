@@ -2532,3 +2532,13 @@ html.dark .course-reader-content th { background: #1f2937; }
 .course-reader-btn-on { background: #e5e7eb; }
 html.dark .course-reader-btn-on { background: #374151; }
 @media (prefers-reduced-motion: reduce) { .course-pdf-slide-next, .course-pdf-slide-prev { animation: none; } }
+
+/* ---- Notifications screen (templates/partials/notifications.html, static/js/notifications.js) ----
+   Unread rows are tinted via the existing bg-red-50 utility (already mapped
+   for dark mode above) plus a red dot; this block only adds the press state
+   and the ring that separates the type badge from the avatar. */
+.notif-row { transition: background-color 120ms ease; }
+.notif-row:active { background-color: rgba(0, 0, 0, 0.04); }
+.notif-row:focus-visible { outline: 2px solid var(--bb-text-primary, #111827); outline-offset: -2px; }
+html.dark .notif-row:active { background-color: rgba(255, 255, 255, 0.06); }
+.notif-type-badge { box-shadow: 0 0 0 2px var(--bb-bg-surface, #ffffff); }

@@ -1,0 +1,25 @@
+<!-- BEGIN: Notifications View -->
+<!-- Takeover screen opened from the feed header bell (see feed.html and
+     static/js/notifications.js). Not a bottom-nav tab. Renders one of four
+     states into #notifications-body: loading skeleton, empty, error, list. -->
+<div id="notifications-view" class="view-section bg-white min-h-screen relative">
+	<!-- BEGIN: Header -->
+	<header class="bg-white sticky top-0 z-10 w-full">
+		<div class="flex items-center gap-3 px-4 py-3.5 max-w-[640px] mx-auto">
+			<button type="button" aria-label="Back" onclick="closeNotificationsView()" class="p-1 -ml-1 text-gray-900 hover:opacity-80 transition-opacity active:scale-95 duration-100">
+				<svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+					<path d="m15 18-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"></path>
+				</svg>
+			</button>
+			<h1 class="flex-1 text-[22px] font-bold text-gray-900">Notifications</h1>
+			<!-- Shown only while at least one loaded notification is unread -->
+			<button type="button" id="notifications-mark-all" onclick="markAllNotificationsRead()" class="hidden shrink-0 text-[15px] font-semibold text-gray-500 hover:text-gray-700 active:scale-95 transition-transform duration-100">Mark all read</button>
+		</div>
+	</header>
+	<!-- END: Header -->
+
+	<main class="pb-24 max-w-[640px] mx-auto" aria-live="polite">
+		<div id="notifications-body"></div>
+	</main>
+</div>
+<!-- END: Notifications View -->
