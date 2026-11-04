@@ -1014,6 +1014,14 @@ function attachCourseFileDrag(card, file) {
     card.addEventListener('contextmenu', function(e) { e.preventDefault(); });
 }
 
+// Upload date as DD/MM/YYYY in the device's local time zone (server stores UTC).
+function formatCourseFileDate(createdAt) {
+    if (!createdAt) return '';
+    const d = new Date(String(createdAt).replace(' ', 'T') + 'Z');
+    if (isNaN(d.getTime())) return '';
+    return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
+}
+
 function buildCourseFileCard(file, isNew) {
     const style = courseFileStyle(file.file_type);
     const card = document.createElement('div');
@@ -1043,7 +1051,7 @@ function buildCourseFileCard(file, isNew) {
     name.textContent = file.name;
     const date = document.createElement('span');
     date.className = 'block text-[13px] leading-4 text-gray-400';
-    date.textContent = typeof formatTimeAgo === 'function' ? formatTimeAgo(file.created_at) : '';
+    date.textContent = formatCourseFileDate(file.created_at);
     text.append(name, date);
 
     const more = document.createElement('button');
