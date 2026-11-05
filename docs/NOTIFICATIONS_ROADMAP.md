@@ -6,14 +6,14 @@ Status key: **BUILT** = in the repo now. **EXISTS** = backend event/data already
 | Piece | Status |
 |---|---|
 | Notification screen (loading / empty / error / list, read vs unread, mark-all-read, pagination UI, type registry) — `templates/partials/notifications.html`, `static/js/notifications.js`, CSS block, `showView` wiring, feed bell + conditional badge | **BUILT** |
-| `GET /api/notifications`, `POST /api/notifications/read`, `notifications` table, event generation | **NEW** (not started, by design). Until it ships the screen shows its empty state (a 404 from the list endpoint is treated as "none"). |
+| `GET /api/notifications`, `POST /api/notifications/read`, `notifications` table, Phase 1 event generation | **BUILT** |
 
-## Phase 1 — Core (immediate value, all events EXIST)
+## Phase 1 — Core (**BUILT**)
 | Type | Trigger | Recipient | Payload | Backend hook | Depends on | Priority |
 |---|---|---|---|---|---|---|
 | `follow` | `toggle_follow` inserts a follow | followee | actor | after INSERT in `user_service.toggle_follow` (only when `following` becomes true) | `follows` | P0 |
 | `post_comment` | `create_comment`, no parent | post author (not self) | actor, post id, comment snippet, post snapshot | after INSERT in `post_service.create_comment` | `comments`, `posts` | P0 |
-| `comment_reply` | `create_comment` with parent | parent comment author (not self; skip if same as post author already notified) | actor, post id, comment id, snippet, snapshot | same | `parent_comment_id` | P0 |
+| `comment_reply` | `create_comment` with parent | parent comment author (not self) | actor, post id, comment id, snippet, snapshot | same | `parent_comment_id` | P0 |
 | `post_like` | like inserted in `_toggle_like` (target_type `post`) | post author (not self) | actor, post id, post snippet, snapshot | after the successful INSERT branch | `likes` | P0 |
 
 Frontend: nothing further (types already registered in `NOTIFICATION_TYPES`).
@@ -65,7 +65,7 @@ Store IDs, not rendered text or snippets: snippets and the post snapshot are pro
 
 ### Duplicate prevention
 - `dedupe_key` = `type:actor:target_type:target_id`. Re-like after unlike, or re-follow, hits the conflict and creates nothing. Comments/replies are unique per comment id, so each is notified once.
-- Unlike/unfollow: leave the notification (matches common behavior, avoids flicker). Optionally delete if unread; decide at implementation.
+- Unlike/unfollow: leave the notification. The dedupe key prevents a later relike or refollow from creating another row.
 - Reply to a comment on your own post: one notification (`comment_reply`), not two.
 
 ### Read / unread
@@ -88,7 +88,9 @@ Store IDs, not rendered text or snippets: snippets and the post snapshot are pro
 - Keep the generator (`notification_service`) separate from delivery. Push/email/realtime attach later as consumers of the same inserts; they are not part of Phase 1.
 - Tests: add `tests/test_notifications.sh` following `tests/test_follows.sh` conventions (self-notify suppressed, dedupe on re-like, ownership isolation, pagination, mark-read idempotency, deleted-post filtering).
 
-### Open decisions before implementing
-1. Add `GET /api/posts/<id>` vs. embed post snapshots in notifications (the screen supports snapshots now; CLAUDE.md warns against adding the endpoint casually).
-2. Delete unread notifications on unlike/unfollow, or keep.
-3. Retention (e.g. purge read notifications older than N days).
+### Phase 1 decisions
+1. Post snapshots are embedded in notification responses. No `GET /api/posts/<id>` endpoint was added.
+2. Unlike and unfollow keep existing notifications. The dedupe key prevents re-notification after relike or refollow.
+3. Replies notify only the parent comment author as `comment_reply`. Top-level comments notify only the post author as `post_comment`.
+4. Every event skips notification when recipient and actor are the same user.
+5. Retention purge is outside Phase 1.

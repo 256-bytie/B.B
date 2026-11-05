@@ -29,7 +29,7 @@ re-verified against the current tree.
 - DB: PostgreSQL selected by required `DATABASE_URL`; `beebo.db` and `migrations/*.sql` are legacy source artifacts and **never** the
   target of a test run — see Testing). Tables: `users`, `posts`,
   `post_images`, `comments`, `likes`, `follows`, `highlights`,
-  `search_history`, `library_files`, `course_folders`, `course_files`, `credit_transactions`, `businesses`. Schema created idempotently in
+  `search_history`, `library_files`, `course_folders`, `course_files`, `credit_transactions`, `businesses`, `notifications`. Schema created idempotently in
   `init_db()` (`app/db.py`); older columns/tables are migrated in place
   with `PRAGMA table_info` checks + `ALTER TABLE`, not a migration
   framework. New schema changes go in `migrations/*.sql` (see
@@ -97,7 +97,7 @@ re-verified against the current tree.
 | Search UI | `static/js/search.js`, `app/routes/search.py` |
 | Share sheet (feed card Share button → Repost/Quote sheet; slide-up, swipe-down, tap-outside, Esc) | `templates/partials/share_sheet.html`, `static/js/share-sheet.js`, `.share-sheet*` in `static/css/style.css`. Uses `.is-open` (not `hidden`) so it can animate; **Quote** opens the composer in quote mode (`openQuoteComposer`, `compose.js`); Repost still shows the standard "Coming soon" toast |
 | Quote posts (embedded card in feed/profile/search/community/overlay; composer quote mode) | `buildQuoteCardHtml` / `buildQuoteImagesHtml` in `static/js/feed.js`; `openQuoteComposer`, `renderComposeQuote`, `removeComposeQuote` in `static/js/compose.js`; `parseQuotedPost` / `quotedPostToPostData` / `#overlay-post-quote` in `static/js/comments.js` + `templates/partials/comment_overlay.html`; `.quote-card*` at end of `static/css/style.css`. Backend contract: `docs/QUOTE_BACKEND_PROMPT.md` |
-| Notifications screen (frontend only; bell on feed header → `showView('notifications')`; expects `GET /api/notifications` + `POST /api/notifications/read`, which do not exist yet — a 404 renders the empty state; type registry `NOTIFICATION_TYPES`) | `templates/partials/notifications.html`, `static/js/notifications.js`, `.notif-*` in `static/css/style.css`; audit + roadmap + backend spec in `docs/NOTIFICATIONS_AUDIT.md`, `docs/NOTIFICATIONS_ROADMAP.md` |
+| Notifications screen + Phase 1 backend (`follow`, `post_comment`, `comment_reply`, `post_like`; embedded post snapshots; keyset list/read APIs) | `templates/partials/notifications.html`, `static/js/notifications.js`, `app/routes/notifications.py`, `app/notification_service.py`, `migrations/pg/006_notifications.sql`; audit + roadmap in `docs/NOTIFICATIONS_AUDIT.md`, `docs/NOTIFICATIONS_ROADMAP.md` |
 | Wallet: balance / monthly free credits / history API | `app/routes/wallet.py` (HTTP) → `app/wallet.py` (logic, Flask-free) |
 | Wallet screen (side-nav → `openWalletView()`) | `templates/partials/wallet.html`, `static/js/wallet.js`, `showView('wallet')` hook in `static/js/core.js` |
 | Businesses: create (`POST`) / list (`GET`, newest first, cap 50, `?mine=1`) API | `app/routes/businesses.py` (HTTP) → `app/business_service.py` (validation + queries, Flask-free); schema `migrations/pg/002_businesses.sql`. Frontend: `static/js/businesses.js` (list loader + `buildBusinessCard`, shared with My Stores), `bcFinish` in `static/js/business-create.js`. Gaps: verification documents are collected but not stored (need access-controlled storage, not `static/uploads`); My Stores is still in-memory |

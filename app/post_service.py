@@ -352,6 +352,86 @@ def fetch_post_quote_data(conn, post_ids, current_user_id):
     return payloads, share_counts
 
 
+def _hydrate_post_rows(conn, rows, current_user_id):
+    """Hydrate selected post rows with images, communities, and quotes."""
+    if not rows:
+        return []
+
+    cursor = conn.cursor()
+    post_ids = [row[0] for row in rows]
+    placeholders = ','.join(['%s'] * len(post_ids))
+    cursor.execute(f'''
+        SELECT post_id, image_path
+        FROM post_images
+        WHERE post_id IN ({placeholders})
+        ORDER BY post_id, position ASC NULLS FIRST
+    ''', post_ids)
+    images_by_post = {}
+    for post_id, image_path in cursor.fetchall():
+        images_by_post.setdefault(post_id, []).append(image_path)
+    cursor.execute(f'''
+        SELECT posts.id, c.slug, c.name, c.type,
+               EXISTS(SELECT 1 FROM community_members m
+                      WHERE m.community_id = c.id AND m.user_id = %s)
+        FROM posts
+        JOIN communities c ON c.id = posts.community_id
+        WHERE posts.id IN ({placeholders})
+    ''', [current_user_id] + post_ids)
+    community_by_post = {
+        pid: {'slug': slug, 'name': name, 'is_member': bool(is_member), 'type': ctype}
+        for pid, slug, name, ctype, is_member in cursor.fetchall()
+    }
+    quoted_by_post, share_counts = fetch_post_quote_data(
+        conn, post_ids, current_user_id
+    )
+
+    posts = []
+    for row in rows:
+        image_list = [(img,) for img in images_by_post.get(row[0], [])]
+        post = serialize_post(
+            row,
+            image_list,
+            row[13],
+            quoted_post=quoted_by_post.get(row[0]),
+            share_count=share_counts.get(row[0], 0),
+        )
+        if row[0] in community_by_post:
+            post['community'] = community_by_post[row[0]]
+        posts.append(post)
+    return posts
+
+
+def fetch_posts_by_ids(conn, post_ids, viewer_id):
+    """Return visible serialized post snapshots keyed by post id."""
+    post_ids = list(dict.fromkeys(post_ids or []))
+    if not post_ids:
+        return {}
+
+    cursor = conn.cursor()
+    placeholders = ','.join(['%s'] * len(post_ids))
+    cursor.execute(f'''
+        SELECT posts.id, posts.user_id, posts.content, posts.audience,
+               posts.created_at, posts.comment_count, posts.like_count,
+               posts.view_count, users.full_name, users.email, users.profile_picture,
+               users.username, users.bio,
+               CASE WHEN likes.id IS NOT NULL THEN 1 ELSE 0 END as liked_by_user
+        FROM posts
+        JOIN users ON posts.user_id = users.id
+        LEFT JOIN communities c ON c.id = posts.community_id
+        LEFT JOIN likes ON likes.target_type = 'post'
+                       AND likes.target_id = posts.id
+                       AND likes.user_id = %s
+        WHERE posts.id IN ({placeholders})
+          AND (posts.community_id IS NULL OR c.type <> 'private' OR EXISTS (
+              SELECT 1 FROM community_members m
+              WHERE m.community_id = posts.community_id AND m.user_id = %s
+          ))
+    ''', [viewer_id] + post_ids + [viewer_id])
+    rows_by_id = {row[0]: row for row in cursor.fetchall()}
+    ordered_rows = [rows_by_id[post_id] for post_id in post_ids if post_id in rows_by_id]
+    return {post['id']: post for post in _hydrate_post_rows(conn, ordered_rows, viewer_id)}
+
+
 def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cursor_id, only_community_id=None):
     """Keyset-paginated page of posts, newest first, with joined author
     info and per-viewer liked_by_user.
@@ -431,53 +511,7 @@ def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cu
     page_rows = rows[:limit]
     next_cursor = page_rows[-1][0] if has_next and page_rows else None
 
-    if page_rows:
-        post_ids = [row[0] for row in page_rows]
-        placeholders = ','.join(['%s'] * len(post_ids))
-        cursor.execute(f'''
-            SELECT post_id, image_path
-            FROM post_images
-            WHERE post_id IN ({placeholders})
-            ORDER BY post_id, position ASC NULLS FIRST
-        ''', post_ids)
-        images_by_post = {}
-        for post_id, image_path in cursor.fetchall():
-            images_by_post.setdefault(post_id, []).append(image_path)
-        cursor.execute(f'''
-            SELECT posts.id, c.slug, c.name, c.type,
-                   EXISTS(SELECT 1 FROM community_members m
-                          WHERE m.community_id = c.id AND m.user_id = %s)
-            FROM posts
-            JOIN communities c ON c.id = posts.community_id
-            WHERE posts.id IN ({placeholders})
-        ''', [current_user_id] + post_ids)
-        community_by_post = {
-            pid: {'slug': slug, 'name': name, 'is_member': bool(is_member), 'type': ctype}
-            for pid, slug, name, ctype, is_member in cursor.fetchall()
-        }
-        quoted_by_post, share_counts = fetch_post_quote_data(
-            conn, post_ids, current_user_id
-        )
-    else:
-        images_by_post = {}
-        community_by_post = {}
-        quoted_by_post, share_counts = {}, {}
-
-    posts = []
-    for row in page_rows:
-        image_list = [(img,) for img in images_by_post.get(row[0], [])]
-        post = serialize_post(
-            row,
-            image_list,
-            row[13],
-            quoted_post=quoted_by_post.get(row[0]),
-            share_count=share_counts.get(row[0], 0),
-        )
-        if row[0] in community_by_post:
-            post['community'] = community_by_post[row[0]]
-        posts.append(post)
-
-    return posts, next_cursor
+    return _hydrate_post_rows(conn, page_rows, current_user_id), next_cursor
 
 
 def get_comments(conn, post_id, current_user_id):
@@ -485,9 +519,11 @@ def get_comments(conn, post_id, current_user_id):
     liked_by_user. Raises PostNotFoundError if post_id doesn't exist."""
     cursor = conn.cursor()
 
-    cursor.execute('SELECT id FROM posts WHERE id = %s', (post_id,))
-    if not cursor.fetchone():
+    cursor.execute('SELECT user_id FROM posts WHERE id = %s', (post_id,))
+    post_row = cursor.fetchone()
+    if not post_row:
         raise PostNotFoundError('Post not found')
+    post_author_id = post_row[0]
     _check_post_access(cursor, post_id, current_user_id, interact=False)
 
     cursor.execute('''
@@ -532,13 +568,15 @@ def create_comment(conn, post_id, user_id, content, parent_comment_id, image_fil
 
     cursor = conn.cursor()
 
-    cursor.execute('SELECT id FROM posts WHERE id = %s', (post_id,))
-    if not cursor.fetchone():
+    cursor.execute('SELECT user_id FROM posts WHERE id = %s', (post_id,))
+    post_row = cursor.fetchone()
+    if not post_row:
         raise PostNotFoundError('Post not found')
+    post_author_id = post_row[0]
     _check_post_access(cursor, post_id, user_id, interact='comment')
 
     if parent_comment_id is not None:
-        cursor.execute('SELECT post_id FROM comments WHERE id = %s', (parent_comment_id,))
+        cursor.execute('SELECT post_id, user_id FROM comments WHERE id = %s', (parent_comment_id,))
         parent_row = cursor.fetchone()
         if not parent_row:
             raise CommentNotFoundError('Parent comment not found')
@@ -569,6 +607,17 @@ def create_comment(conn, post_id, user_id, content, parent_comment_id, image_fil
             'UPDATE posts SET comment_count = comment_count + 1 WHERE id = %s',
             (post_id,)
         )
+        from app import notification_service
+        if parent_comment_id is None:
+            recipient_id = post_author_id
+            notification_type = 'post_comment'
+        else:
+            recipient_id = parent_row[1]
+            notification_type = 'comment_reply'
+        notification_service.create(
+            cursor, recipient_id, user_id, notification_type,
+            'comment', comment_id, post_id
+        )
         conn.commit()
     except Exception:
         # If DB insert fails after file was written, delete the file
@@ -588,7 +637,7 @@ def create_comment(conn, post_id, user_id, content, parent_comment_id, image_fil
     return serialize_comment(cursor.fetchone())
 
 
-def _toggle_like(conn, user_id, target_type, target_id, table, exists_query, not_found_error):
+def _toggle_like(conn, user_id, target_type, target_id, table, exists_query, not_found_error, on_inserted=None):
     """Shared like/unlike logic for posts and comments - same table
     (likes) and same race-handling shape for both, differing only in
     target_type and which table's like_count to adjust.
@@ -616,6 +665,8 @@ def _toggle_like(conn, user_id, target_type, target_id, table, exists_query, not
         ''', (user_id, target_type, target_id))
         if cursor.fetchone() is not None:
             cursor.execute(f'UPDATE {table} SET like_count = like_count + 1 WHERE id = %s', (target_id,))
+            if on_inserted is not None:
+                on_inserted(cursor)
         liked = True
 
     conn.commit()
@@ -630,13 +681,24 @@ def toggle_post_like(conn, user_id, post_id):
     """Like/unlike a post. Returns (liked, like_count). Raises
     PostNotFoundError if post_id doesn't exist."""
     cursor = conn.cursor()
-    cursor.execute('SELECT id FROM posts WHERE id = %s', (post_id,))
-    if not cursor.fetchone(): raise PostNotFoundError('Post not found')
+    cursor.execute('SELECT user_id FROM posts WHERE id = %s', (post_id,))
+    row = cursor.fetchone()
+    if not row: raise PostNotFoundError('Post not found')
+    post_author_id = row[0]
     _check_post_access(cursor, post_id, user_id, interact='like')
+
+    def notify_post_like(insert_cursor):
+        from app import notification_service
+        notification_service.create(
+            insert_cursor, post_author_id, user_id, 'post_like',
+            'post', post_id, post_id
+        )
+
     return _toggle_like(
         conn, user_id, 'post', post_id, 'posts',
         'SELECT id FROM posts WHERE id = %s',
         lambda: PostNotFoundError('Post not found'),
+        on_inserted=notify_post_like,
     )
 
 
@@ -705,6 +767,10 @@ def delete_comment(conn, user_id, comment_id):
         f"DELETE FROM likes WHERE target_type = 'comment' AND target_id IN ({placeholders})",
         subtree_ids
     )
+    cursor.execute(
+        f"DELETE FROM notifications WHERE target_type = 'comment' AND target_id IN ({placeholders})",
+        subtree_ids
+    )
 
     # Deleting just the root row - ON DELETE CASCADE removes every
     # reply beneath it automatically.
@@ -751,6 +817,7 @@ def delete_post(conn, user_id, post_id):
     comment_image_paths = [r[0] for r in cursor.fetchall()]
 
     cursor.execute('DELETE FROM post_images WHERE post_id = %s', (post_id,))
+    cursor.execute('DELETE FROM notifications WHERE post_id = %s', (post_id,))
 
     cursor.execute('''
         DELETE FROM likes

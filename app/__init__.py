@@ -80,7 +80,7 @@ def create_app():
 
     # Register blueprints
     from app import course_service
-    from app.routes import auth, posts, users, library, search, wallet, communities, chat, businesses, courses
+    from app.routes import auth, posts, users, library, search, wallet, communities, chat, businesses, courses, notifications
     course_service.configure(app.config['COURSE_FILES_ROOT'])
     app.register_blueprint(auth.bp)
     app.register_blueprint(posts.bp)
@@ -92,6 +92,7 @@ def create_app():
     app.register_blueprint(chat.bp)
     app.register_blueprint(businesses.bp)
     app.register_blueprint(courses.bp)
+    app.register_blueprint(notifications.bp)
 
     # Fast-fail on pool exhaustion instead of hanging the request.
     @app.errorhandler(PoolTimeout)

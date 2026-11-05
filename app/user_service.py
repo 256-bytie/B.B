@@ -150,6 +150,13 @@ def toggle_follow(conn, follower_id, followee_id):
             'ON CONFLICT (follower_id, followee_id) DO NOTHING RETURNING id',
             (follower_id, followee_id)
         )
+        inserted = cursor.fetchone() is not None
+        if inserted:
+            from app import notification_service
+            notification_service.create(
+                cursor, followee_id, follower_id, 'follow',
+                'user', followee_id, None
+            )
         following = True
 
     conn.commit()

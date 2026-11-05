@@ -253,6 +253,23 @@ def _iso_utc(value):
     return str(value).replace(' ', 'T') + 'Z'
 
 
+def serialize_notification(row, actor, preview_content, post):
+    """Shape a hydrated notification for the notifications screen."""
+    notification_id, notification_type, created_at, read_at = row[:4]
+    preview = ' '.join((preview_content or '').split()) or None
+    if preview and len(preview) > 120:
+        preview = preview[:117] + '...'
+    return {
+        'id': notification_id,
+        'type': notification_type,
+        'created_at': _iso_utc(created_at),
+        'read': read_at is not None,
+        'actor': actor,
+        'preview': preview,
+        'post': post,
+    }
+
+
 def serialize_credit_transaction(row):
     """Convert a credit_transactions row to a JSON-serializable dict.
 
