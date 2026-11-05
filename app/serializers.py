@@ -253,7 +253,7 @@ def _iso_utc(value):
     return str(value).replace(' ', 'T') + 'Z'
 
 
-def serialize_notification(row, actor, preview_content, post):
+def serialize_notification(row, actor, preview_content, post, others_count=0, community=None):
     """Shape a hydrated notification for the notifications screen."""
     notification_id, notification_type, created_at, read_at = row[:4]
     preview = ' '.join((preview_content or '').split()) or None
@@ -267,6 +267,8 @@ def serialize_notification(row, actor, preview_content, post):
         'actor': actor,
         'preview': preview,
         'post': post,
+        'others_count': others_count,
+        'community': community,
     }
 
 

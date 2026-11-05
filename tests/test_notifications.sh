@@ -6,13 +6,15 @@ RUN_ID="$(date +%s)$$"
 JAR_A="notif_a_${RUN_ID}.txt"
 JAR_B="notif_b_${RUN_ID}.txt"
 JAR_C="notif_c_${RUN_ID}.txt"
+JAR_D="notif_d_${RUN_ID}.txt"
+JAR_E="notif_e_${RUN_ID}.txt"
 JAR_ANON="notif_anon_${RUN_ID}.txt"
 PASSED=0
 FAILED=0
 
 pass() { echo "✓ PASS: $1"; PASSED=$((PASSED + 1)); }
 fail() { echo "✗ FAIL: $1"; FAILED=$((FAILED + 1)); }
-cleanup() { rm -f "$JAR_A" "$JAR_B" "$JAR_C" "$JAR_ANON"; }
+cleanup() { rm -f "$JAR_A" "$JAR_B" "$JAR_C" "$JAR_D" "$JAR_E" "$JAR_ANON"; }
 trap cleanup EXIT
 
 signup() {
@@ -52,9 +54,13 @@ assert_py() {
 A=$(signup "$JAR_A" "User A" "notif_a_${RUN_ID}@example.com")
 B=$(signup "$JAR_B" "User B" "notif_b_${RUN_ID}@example.com")
 C=$(signup "$JAR_C" "User C" "notif_c_${RUN_ID}@example.com")
+D=$(signup "$JAR_D" "User D" "notif_d_${RUN_ID}@example.com")
+E=$(signup "$JAR_E" "User E" "notif_e_${RUN_ID}@example.com")
 A_ID=$(echo "$A" | jq -r '.user.id'); A_USER=$(echo "$A" | jq -r '.user.username')
 B_ID=$(echo "$B" | jq -r '.user.id'); B_USER=$(echo "$B" | jq -r '.user.username')
 C_ID=$(echo "$C" | jq -r '.user.id'); C_USER=$(echo "$C" | jq -r '.user.username')
+D_ID=$(echo "$D" | jq -r '.user.id'); D_USER=$(echo "$D" | jq -r '.user.username')
+E_ID=$(echo "$E" | jq -r '.user.id'); E_USER=$(echo "$E" | jq -r '.user.username')
 curl -s -c "$JAR_ANON" "$BASE_URL/api/session" >/dev/null
 
 api "$JAR_A" POST "/api/users/$B_ID/follow"
@@ -82,6 +88,22 @@ api "$JAR_A" POST "/api/posts/$POST_ID/like"
 api "$JAR_B" GET '/api/notifications'
 assert_py "Unlike and relike do not re-notify" "sum(n['type'] == 'post_like' for n in d['notifications']) == 1"
 
+api "$JAR_C" POST "/api/posts/$POST_ID/like"
+api "$JAR_D" POST "/api/posts/$POST_ID/like"
+api "$JAR_B" GET '/api/notifications'
+assert_py "Post likes aggregate with newest actor" "sum(n['type'] == 'post_like' for n in d['notifications']) == 1 and next(n for n in d['notifications'] if n['type'] == 'post_like')['others_count'] == 2 and next(n for n in d['notifications'] if n['type'] == 'post_like')['actor']['id'] == $D_ID and d['unread_count'] == sum(not n['read'] for n in d['notifications'])"
+AGGREGATE_ID=$(echo "$BODY" | jq -r '.notifications[] | select(.type == "post_like") | .id')
+api "$JAR_B" POST '/api/notifications/read' "{\"ids\":[$AGGREGATE_ID]}"
+api "$JAR_B" GET '/api/notifications'
+assert_py "Marking an aggregate marks the whole group" "next(n for n in d['notifications'] if n['type'] == 'post_like')['read'] is True"
+COUNT_BEFORE_FOURTH=$(echo "$BODY" | jq -r '.unread_count')
+api "$JAR_E" POST "/api/posts/$POST_ID/like"
+api "$JAR_B" GET '/api/notifications'
+assert_py "A new like revives the aggregate unread" "d['notifications'][0]['type'] == 'post_like' and d['notifications'][0]['actor']['id'] == $E_ID and d['notifications'][0]['others_count'] == 3 and d['notifications'][0]['read'] is False and d['unread_count'] == $((COUNT_BEFORE_FOURTH + 1))"
+api "$JAR_E" POST "/api/posts/$POST_ID/like"
+api "$JAR_B" GET '/api/notifications'
+assert_py "Unlike leaves aggregate others_count unchanged" "next(n for n in d['notifications'] if n['type'] == 'post_like')['others_count'] == 3"
+
 LONG_COMMENT="$(python3 -c "print('word ' * 30)")"
 api "$JAR_A" POST "/api/posts/$POST_ID/comments" "{\"content\":\"$LONG_COMMENT\"}"
 COMMENT_A=$(echo "$BODY" | jq -r '.id')
@@ -95,6 +117,18 @@ pg_psql -c "UPDATE posts SET comment_count = comment_count + 1 WHERE id=$POST_ID
 api "$JAR_B" GET '/api/notifications'
 assert_py "Image-only comment preview is null" "any(n['type'] == 'post_comment' and n['preview'] is None for n in d['notifications'])"
 
+api "$JAR_C" POST "/api/comments/$COMMENT_A/like"
+api "$JAR_A" GET '/api/notifications'
+assert_py "Comment like includes comment preview and parent snapshot" "sum(n['type'] == 'comment_like' for n in d['notifications']) == 1 and any(n['type'] == 'comment_like' and n['actor']['id'] == $C_ID and n['preview'].startswith('word word') and n['post']['id'] == $POST_ID and n['community'] is None for n in d['notifications'])"
+api "$JAR_C" POST "/api/comments/$COMMENT_A/like"
+api "$JAR_C" POST "/api/comments/$COMMENT_A/like"
+api "$JAR_A" POST "/api/comments/$COMMENT_A/like"
+api "$JAR_A" GET '/api/notifications'
+assert_py "Comment re-like dedupes and self-like creates nothing" "sum(n['type'] == 'comment_like' for n in d['notifications']) == 1"
+api "$JAR_D" POST "/api/comments/$COMMENT_A/like"
+api "$JAR_A" GET '/api/notifications'
+assert_py "Comment likes aggregate separately from post likes" "sum(n['type'] == 'comment_like' for n in d['notifications']) == 1 and next(n for n in d['notifications'] if n['type'] == 'comment_like')['others_count'] == 1"
+
 api "$JAR_B" POST "/api/posts/$POST_ID/comments" "{\"content\":\"owner reply\",\"parent_comment_id\":$COMMENT_A}"
 api "$JAR_A" GET '/api/notifications'
 assert_py "Reply on own post notifies parent author" "sum(n['type'] == 'comment_reply' and n['actor']['id'] == $B_ID for n in d['notifications']) == 1"
@@ -105,6 +139,13 @@ api "$JAR_A" GET '/api/notifications'
 assert_py "Third-party reply notifies parent author only" "sum(n['type'] == 'comment_reply' and n['actor']['id'] == $C_ID for n in d['notifications']) == 1"
 api "$JAR_B" GET '/api/notifications'
 assert_py "Third-party reply does not notify post author" "all(not (n['type'] == 'comment_reply' and n['actor']['id'] == $C_ID) for n in d['notifications'])"
+
+api "$JAR_A" POST '/api/posts' '{"content":"second aggregation target"}'
+SECOND_POST=$(echo "$BODY" | jq -r '.id')
+api "$JAR_C" POST "/api/posts/$SECOND_POST/like"
+api "$JAR_D" POST "/api/posts/$SECOND_POST/like"
+api "$JAR_A" GET '/api/notifications'
+assert_py "Likes on different posts stay separate" "sum(n['type'] == 'post_like' for n in d['notifications']) == 1 and next(n for n in d['notifications'] if n['type'] == 'post_like')['post']['id'] == $SECOND_POST"
 
 api "$JAR_B" GET '/api/notifications?limit=2'
 PAGE1="$BODY"; CURSOR=$(echo "$BODY" | jq -r '.next_cursor')
@@ -150,6 +191,10 @@ api "$JAR_A" DELETE "/api/comments/$DELETE_COMMENT"
 api "$JAR_B" GET '/api/notifications'
 assert_py "Deleted comment removes notification from list and count" "all(n['id'] != $DELETE_NOTIFICATION for n in d['notifications']) and d['unread_count'] == sum(not n['read'] for n in d['notifications'])"
 
+api "$JAR_A" DELETE "/api/comments/$COMMENT_A"
+api "$JAR_A" GET '/api/notifications'
+assert_py "Deleting a comment removes its comment-like aggregate" "all(n['type'] != 'comment_like' for n in d['notifications'])"
+
 api "$JAR_C" POST '/api/posts' '{"content":"temporary post"}'
 DELETE_POST=$(echo "$BODY" | jq -r '.id')
 api "$JAR_A" POST "/api/posts/$DELETE_POST/like"
@@ -158,6 +203,19 @@ DELETE_POST_NOTIFICATION=$(echo "$BODY" | jq -r ".notifications[] | select(.post
 api "$JAR_C" DELETE "/api/posts/$DELETE_POST"
 api "$JAR_C" GET '/api/notifications'
 assert_py "Deleted post removes notification from list and count" "all(n['id'] != $DELETE_POST_NOTIFICATION for n in d['notifications']) and d['unread_count'] == sum(not n['read'] for n in d['notifications'])"
+
+api "$JAR_A" POST '/api/posts' '{"content":"quote source"}'
+QUOTE_SOURCE=$(echo "$BODY" | jq -r '.id')
+api "$JAR_C" POST '/api/posts' "{\"content\":\"quote notification text\",\"quoted_post_id\":$QUOTE_SOURCE}"
+QUOTE_POST=$(echo "$BODY" | jq -r '.id')
+api "$JAR_A" GET '/api/notifications'
+assert_py "Quote notification snapshots and opens the quote" "any(n['type'] == 'post_quote' and n['actor']['id'] == $C_ID and n['preview'] == 'quote notification text' and n['post']['id'] == $QUOTE_POST and n['post']['user_id'] == $C_ID and n['others_count'] == 0 for n in d['notifications'])"
+api "$JAR_A" POST '/api/posts' "{\"content\":\"self quote\",\"quoted_post_id\":$QUOTE_SOURCE}"
+api "$JAR_A" GET '/api/notifications'
+assert_py "Self quote creates no notification" "sum(n['type'] == 'post_quote' for n in d['notifications']) == 1"
+api "$JAR_C" DELETE "/api/posts/$QUOTE_POST"
+api "$JAR_A" GET '/api/notifications'
+assert_py "Deleting the quote post removes its notification" "all(not (n['type'] == 'post_quote' and n['post'] and n['post']['id'] == $QUOTE_POST) for n in d['notifications'])"
 
 COMM_ID=$(pg_psql -c "INSERT INTO communities (slug,name,description,topic,type,creator_id) VALUES ('notif-private-$RUN_ID','Private','x','x','private',$B_ID) RETURNING id;" | head -n1)
 pg_psql -c "INSERT INTO community_members (community_id,user_id,role) VALUES ($COMM_ID,$B_ID,'creator'),($COMM_ID,$A_ID,'member');" >/dev/null
@@ -168,6 +226,55 @@ assert_py "Private notification is visible while recipient is a member" "any(n['
 pg_psql -c "DELETE FROM community_members WHERE community_id=$COMM_ID AND user_id=$B_ID;" >/dev/null
 api "$JAR_B" GET '/api/notifications'
 assert_py "Losing private access hides notification and unread count" "all(not (n['post'] and n['post']['id'] == $PRIVATE_POST) for n in d['notifications']) and d['unread_count'] == sum(not n['read'] for n in d['notifications'])"
+
+JOIN_COMM_ID=$(pg_psql -c "INSERT INTO communities (slug,name,description,topic,type,creator_id) VALUES ('notif-join-$RUN_ID','Join Notices','x','x','public',$A_ID) RETURNING id;" | head -n1)
+pg_psql -c "INSERT INTO community_members (community_id,user_id,role) VALUES ($JOIN_COMM_ID,$A_ID,'creator'),($JOIN_COMM_ID,$B_ID,'moderator'),($JOIN_COMM_ID,$C_ID,'member');" >/dev/null
+api "$JAR_D" POST "/api/communities/notif-join-$RUN_ID/join"
+api "$JAR_A" GET '/api/notifications'
+assert_py "Community join notifies creator with payload" "sum(n['type'] == 'community_join' and n['actor']['id'] == $D_ID for n in d['notifications']) == 1 and any(n['type'] == 'community_join' and n['community'] == {'slug':'notif-join-$RUN_ID','name':'Join Notices'} and n['post'] is None and n['preview'] is None for n in d['notifications'])"
+api "$JAR_B" GET '/api/notifications'
+assert_py "Community join notifies moderators" "sum(n['type'] == 'community_join' and n['actor']['id'] == $D_ID for n in d['notifications']) == 1"
+api "$JAR_C" GET '/api/notifications'
+assert_py "Community join skips plain members" "all(not (n['type'] == 'community_join' and n['actor']['id'] == $D_ID) for n in d['notifications'])"
+api "$JAR_D" POST "/api/communities/notif-join-$RUN_ID/join"
+api "$JAR_D" POST "/api/communities/notif-join-$RUN_ID/leave"
+api "$JAR_D" POST "/api/communities/notif-join-$RUN_ID/join"
+api "$JAR_A" GET '/api/notifications'
+assert_py "Double join and rejoin do not create another row" "sum(n['type'] == 'community_join' and n['actor']['id'] == $D_ID for n in d['notifications']) == 1"
+
+PRIVATE_JOIN_ID=$(pg_psql -c "INSERT INTO communities (slug,name,description,topic,type,creator_id) VALUES ('notif-private-join-$RUN_ID','Private Join','x','x','private',$A_ID) RETURNING id;" | head -n1)
+pg_psql -c "INSERT INTO community_members (community_id,user_id,role) VALUES ($PRIVATE_JOIN_ID,$A_ID,'creator'),($PRIVATE_JOIN_ID,$B_ID,'moderator'),($PRIVATE_JOIN_ID,$D_ID,'member'); INSERT INTO notifications (recipient_id,actor_id,type,target_type,target_id,post_id,dedupe_key) VALUES ($B_ID,$D_ID,'community_join','community',$PRIVATE_JOIN_ID,NULL,'community_join:$D_ID:community:$PRIVATE_JOIN_ID');" >/dev/null
+api "$JAR_B" GET '/api/notifications'
+PRIVATE_JOIN_NOTIFICATION=$(echo "$BODY" | jq -r ".notifications[] | select(.community.slug == \"notif-private-join-$RUN_ID\") | .id")
+PRIVATE_COUNT_BEFORE=$(echo "$BODY" | jq -r '.unread_count')
+pg_psql -c "DELETE FROM community_members WHERE community_id=$PRIVATE_JOIN_ID AND user_id=$B_ID;" >/dev/null
+api "$JAR_B" GET '/api/notifications'
+assert_py "A moderator who leaves cannot see community joins" "all(n['id'] != $PRIVATE_JOIN_NOTIFICATION for n in d['notifications']) and d['unread_count'] == $((PRIVATE_COUNT_BEFORE - 1))"
+
+PRIVATE_QUOTE_COMM=$(pg_psql -c "INSERT INTO communities (slug,name,description,topic,type,creator_id) VALUES ('notif-private-quote-$RUN_ID','Private Quote','x','x','private',$C_ID) RETURNING id;" | head -n1)
+pg_psql -c "INSERT INTO community_members (community_id,user_id,role) VALUES ($PRIVATE_QUOTE_COMM,$C_ID,'creator');" >/dev/null
+api "$JAR_C" POST "/api/communities/notif-private-quote-$RUN_ID/posts" "{\"content\":\"hidden community quote\",\"quoted_post_id\":$QUOTE_SOURCE}"
+HIDDEN_QUOTE=$(echo "$BODY" | jq -r '.id')
+api "$JAR_A" GET '/api/notifications'
+assert_py "Private community quote is hidden from list and count" "all(not (n['post'] and n['post']['id'] == $HIDDEN_QUOTE) for n in d['notifications']) and d['unread_count'] == sum(not n['read'] for n in d['notifications'])"
+
+api "$JAR_B" GET '/api/notifications?limit=2'
+ALL_PAGES="$BODY"
+CURSOR=$(echo "$BODY" | jq -r '.next_cursor // empty')
+while [[ -n "$CURSOR" ]]; do
+    api "$JAR_B" GET "/api/notifications?limit=2&cursor=$CURSOR"
+    ALL_PAGES="$ALL_PAGES|$BODY"
+    CURSOR=$(echo "$BODY" | jq -r '.next_cursor // empty')
+done
+PAGES="$ALL_PAGES" python3 - <<'PY' && pass "Mixed pagination has no gaps and unread count matches" || fail "Mixed pagination aggregation"
+import json, os
+pages = [json.loads(value) for value in os.environ['PAGES'].split('|')]
+items = [item for page in pages for item in page['notifications']]
+ids = [item['id'] for item in items]
+assert len(ids) == len(set(ids))
+assert ids == sorted(ids, reverse=True)
+assert pages[0]['unread_count'] == sum(not item['read'] for item in items)
+PY
 
 echo "Notifications: $PASSED passed, $FAILED failed"
 [[ "$FAILED" == 0 ]]

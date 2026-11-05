@@ -89,10 +89,12 @@ def _validate_quote_target(cursor, quoted_post_id, viewer_id):
     Access failures intentionally collapse to PostNotFoundError so a private
     post cannot be discovered by trying to quote it.
     """
-    cursor.execute('SELECT id FROM posts WHERE id = %s', (quoted_post_id,))
-    if not cursor.fetchone():
+    cursor.execute('SELECT user_id FROM posts WHERE id = %s', (quoted_post_id,))
+    row = cursor.fetchone()
+    if not row:
         raise PostNotFoundError('Post not found')
     _check_post_access(cursor, quoted_post_id, viewer_id, interact=False)
+    return row[0]
 
 
 def _check_post_access(cursor, post_id, user_id, *, interact):
@@ -159,10 +161,11 @@ def create_post(conn, user_id, content, audience, files, community_id=None, quot
     _validate_images(files)
 
     cursor = conn.cursor()
+    quoted_post_author_id = None
     if quoted_post_id is not None:
         # Do this before the INSERT or any file write. A private target is
         # deliberately indistinguishable from a missing target.
-        _validate_quote_target(cursor, quoted_post_id, user_id)
+        quoted_post_author_id = _validate_quote_target(cursor, quoted_post_id, user_id)
 
     if community_id is None:
         # Main feed post: validate and use audience
@@ -202,6 +205,13 @@ def create_post(conn, user_id, content, audience, files, community_id=None, quot
                     'INSERT INTO post_images (post_id, image_path, position) VALUES (%s, %s, %s)',
                     (post_id, image_url, position)
                 )
+
+        if quoted_post_id is not None:
+            from app import notification_service
+            notification_service.create(
+                cursor, quoted_post_author_id, user_id, 'post_quote',
+                'post', post_id, post_id
+            )
 
         conn.commit()
     except Exception:
@@ -706,17 +716,27 @@ def toggle_comment_like(conn, user_id, comment_id):
     """Like/unlike a comment. Returns (liked, like_count). Raises
     CommentNotFoundError if comment_id doesn't exist."""
     cursor = conn.cursor()
-    cursor.execute('SELECT post_id FROM comments WHERE id = %s', (comment_id,))
+    cursor.execute('SELECT user_id, post_id FROM comments WHERE id = %s', (comment_id,))
     row = cursor.fetchone()
     if not row: raise CommentNotFoundError('Comment not found')
+    comment_author_id, post_id = row
     try:
-        _check_post_access(cursor, row[0], user_id, interact='like')
+        _check_post_access(cursor, post_id, user_id, interact='like')
     except PostNotFoundError:
         raise CommentNotFoundError('Comment not found')
+
+    def notify_comment_like(insert_cursor):
+        from app import notification_service
+        notification_service.create(
+            insert_cursor, comment_author_id, user_id, 'comment_like',
+            'comment', comment_id, post_id
+        )
+
     return _toggle_like(
         conn, user_id, 'comment', comment_id, 'comments',
         'SELECT id FROM comments WHERE id = %s',
         lambda: CommentNotFoundError('Comment not found'),
+        on_inserted=notify_comment_like,
     )
 
 

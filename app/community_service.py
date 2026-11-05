@@ -308,9 +308,22 @@ def join_community(conn, slug, user_id):
     if not can_join(row[5], role):
         raise CommunityPermissionError('This community is invite-only')
     cursor.execute(
-        "INSERT INTO community_members (community_id, user_id, role) VALUES (%s, %s, 'member') ON CONFLICT (community_id, user_id) DO NOTHING",
+        "INSERT INTO community_members (community_id, user_id, role) VALUES (%s, %s, 'member') ON CONFLICT (community_id, user_id) DO NOTHING RETURNING community_id",
         (row[0], user_id)
     )
+    if cursor.fetchone() is not None:
+        cursor.execute('''
+            SELECT user_id
+            FROM community_members
+            WHERE community_id = %s AND role IN ('creator', 'moderator')
+        ''', (row[0],))
+        recipient_ids = [recipient[0] for recipient in cursor.fetchall()]
+        from app import notification_service
+        for recipient_id in recipient_ids:
+            notification_service.create(
+                cursor, recipient_id, user_id, 'community_join',
+                'community', row[0], None
+            )
     conn.commit()
     return get_community(conn, slug, user_id)
 
