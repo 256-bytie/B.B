@@ -7,7 +7,7 @@ from pg_support import isolated_database
 isolated_database()
 
 from app.db import get_db, init_db  # noqa: E402
-from app import notification_service  # noqa: E402
+from app import notification_service, wallet  # noqa: E402
 
 
 class NotificationLogicTests(unittest.TestCase):
@@ -29,6 +29,27 @@ class NotificationLogicTests(unittest.TestCase):
 
     def tearDown(self):
         self.conn.close()
+
+    def test_extract_mentions_normalizes_filters_and_caps(self):
+        handles = notification_service.extract_mentions(
+            'email a@b.com @Alice... (@alice), @Bob_1 @a.b '
+            '@' + 'c' * 31 + ' @one @two @three @four @five @six @seven @eight @nine @ten @eleven'
+        )
+        self.assertEqual(
+            handles,
+            ['alice', 'bob_1', 'a.b', 'one', 'two', 'three', 'four', 'five', 'six', 'seven'],
+        )
+
+    def test_resolve_mentions_returns_user_id_to_handle(self):
+        self.conn.execute(
+            "INSERT INTO users (id, full_name, email, password_hash, username) "
+            "VALUES (3, 'Mixed', 'mixed@x.com', 'x', 'MiXeD_Name')"
+        )
+        self.conn.commit()
+        resolved = notification_service.resolve_mentions(
+            self.conn.cursor(), ['mixed_name', 'unknown']
+        )
+        self.assertEqual(resolved, {3: 'mixed_name'})
 
     def test_create_skips_self_and_duplicate(self):
         cursor = self.conn.cursor()
@@ -55,6 +76,7 @@ class NotificationLogicTests(unittest.TestCase):
         ''')
         self.conn.commit()
 
+        wallet.claim_monthly_reward(self.conn, 2)
         items, next_cursor, count = notification_service.list_notifications(self.conn, 2)
 
         self.assertEqual([item['type'] for item in items], ['legacy'])

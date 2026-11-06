@@ -1,5 +1,8 @@
 """Notification creation, retrieval, and read-state logic."""
 import logging
+import re
+from contextlib import contextmanager
+from datetime import timezone
 
 from app import post_service
 from app.serializers import serialize_notification
@@ -10,6 +13,8 @@ MAX_LIMIT = 50
 AGGREGATED_TYPES = ('post_like', 'comment_like')
 
 _LOG = logging.getLogger(__name__)
+POPULAR_LIKE_THRESHOLD = 5
+_MENTION_RE = re.compile(r'(?<![A-Za-z0-9_.@])@([A-Za-z0-9_.]{1,30})')
 _VISIBILITY_PREDICATE = '''
     (n.post_id IS NULL OR EXISTS (
         SELECT 1
@@ -60,6 +65,167 @@ def create(cursor, recipient_id, actor_id, type, target_type, target_id, post_id
         return False
 
 
+@contextmanager
+def event_savepoint(cursor):
+    """Contain lookup and fan-out failures within the triggering transaction."""
+    savepoint = 'notification_event'
+    try:
+        cursor.execute(f'SAVEPOINT {savepoint}')
+        yield
+        cursor.execute(f'RELEASE SAVEPOINT {savepoint}')
+    except Exception:
+        try:
+            cursor.execute(f'ROLLBACK TO SAVEPOINT {savepoint}')
+            cursor.execute(f'RELEASE SAVEPOINT {savepoint}')
+        except Exception:
+            pass
+        _LOG.exception('Failed to generate notifications')
+
+
+def notify_community_post(cursor, post_id, author_id, community_id, level):
+    """Notify eligible members once per post, preserving event precedence."""
+    cursor.execute('''
+        SELECT m.user_id FROM community_members m
+        WHERE m.community_id = %s AND m.notification_level = %s
+          AND m.user_id <> %s
+          AND NOT EXISTS (
+              SELECT 1 FROM notifications n
+              WHERE n.recipient_id = m.user_id AND n.post_id = %s
+                AND n.target_type = 'post' AND n.target_id = %s
+                AND n.type IN ('mention', 'post_quote', 'community_post')
+          )
+    ''', (community_id, level, author_id, post_id, post_id))
+    create_many(cursor, [row[0] for row in cursor.fetchall()], author_id,
+                'community_post', 'post', post_id, post_id)
+
+
+def extract_mentions(content):
+    """Return up to ten distinct normalized handles in encounter order."""
+    handles = []
+    seen = set()
+    for match in _MENTION_RE.finditer(content or ''):
+        handle = match.group(1).rstrip('.').lower()
+        if handle and handle not in seen:
+            seen.add(handle)
+            handles.append(handle)
+            if len(handles) == 10:
+                break
+    return handles
+
+
+def resolve_mentions(cursor, handles):
+    """Resolve normalized handles to user ids without changing their order."""
+    handles = list(dict.fromkeys(handles or []))
+    if not handles:
+        return {}
+    cursor.execute('SELECT id, lower(username) FROM users WHERE lower(username) = ANY(%s)', (handles,))
+    return {
+        row[0]: row[1]
+        for row in cursor.fetchall()
+        if row[1] in handles
+    }
+
+
+def create_many(cursor, recipient_ids, actor_id, type, target_type, target_id, post_id):
+    recipients = list(dict.fromkeys(r for r in recipient_ids if r != actor_id))
+    if not recipients:
+        return 0
+    savepoint = 'notification_create_many'
+    try:
+        cursor.execute(f'SAVEPOINT {savepoint}')
+        cursor.execute('''
+            INSERT INTO notifications
+                (recipient_id, actor_id, type, target_type, target_id, post_id, dedupe_key)
+            SELECT recipient_id, %s, %s, %s, %s, %s,
+                   %s || ':' || %s::text || ':' || %s || ':' || %s::text
+            FROM unnest(%s::bigint[]) AS recipients(recipient_id)
+            ON CONFLICT (recipient_id, dedupe_key) DO NOTHING
+        ''', (actor_id, type, target_type, target_id, post_id, type, actor_id,
+              target_type, target_id, recipients))
+        inserted = cursor.rowcount
+        cursor.execute(f'RELEASE SAVEPOINT {savepoint}')
+        return inserted
+    except Exception:
+        try:
+            cursor.execute(f'ROLLBACK TO SAVEPOINT {savepoint}')
+            cursor.execute(f'RELEASE SAVEPOINT {savepoint}')
+        except Exception:
+            pass
+        _LOG.exception('Failed to create notification batch')
+        return 0
+
+
+def create_system(cursor, recipient_id, type, dedupe_key):
+    savepoint = 'notification_create_system'
+    try:
+        cursor.execute(f'SAVEPOINT {savepoint}')
+        cursor.execute('''
+            INSERT INTO notifications
+                (recipient_id, actor_id, type, target_type, target_id, post_id, dedupe_key)
+            VALUES (%s, NULL, %s, NULL, NULL, NULL, %s)
+            ON CONFLICT (recipient_id, dedupe_key) DO NOTHING
+            RETURNING id
+        ''', (recipient_id, type, dedupe_key))
+        inserted = cursor.fetchone() is not None
+        cursor.execute(f'RELEASE SAVEPOINT {savepoint}')
+        return inserted
+    except Exception:
+        try:
+            cursor.execute(f'ROLLBACK TO SAVEPOINT {savepoint}')
+            cursor.execute(f'RELEASE SAVEPOINT {savepoint}')
+        except Exception:
+            pass
+        _LOG.exception('Failed to create system notification')
+        return False
+
+
+def clear_system(cursor, recipient_id, type):
+    savepoint = 'notification_clear_system'
+    try:
+        cursor.execute(f'SAVEPOINT {savepoint}')
+        cursor.execute('''
+            DELETE FROM notifications
+            WHERE recipient_id = %s AND type = %s
+        ''', (recipient_id, type))
+        cursor.execute(f'RELEASE SAVEPOINT {savepoint}')
+    except Exception:
+        try:
+            cursor.execute(f'ROLLBACK TO SAVEPOINT {savepoint}')
+            cursor.execute(f'RELEASE SAVEPOINT {savepoint}')
+        except Exception:
+            pass
+        _LOG.exception('Failed to clear system notification')
+
+
+def ensure_monthly_credits(conn, user_id):
+    """Best-effort lazy materialization of the current claimable reward."""
+    try:
+        from app import wallet
+        cursor = conn.cursor()
+        # Serialize this check with claims so a concurrent list cannot publish a
+        # stale cycle after the claim has committed.
+        cursor.execute('SELECT 1 FROM users WHERE id = %s FOR UPDATE', (user_id,))
+        if cursor.fetchone() is None:
+            conn.rollback()
+            return
+        status = wallet.get_monthly_reward_status(conn, user_id)
+        if not status['claimable']:
+            conn.commit()
+            return
+        claimed = status['last_claimed_at']
+        stamp = claimed.astimezone(timezone.utc).isoformat() if claimed else 'never'
+        create_system(cursor, user_id, 'monthly_credits', f'monthly_credits:{stamp}')
+        # Commit even on a conflict to release the user lock and finish this
+        # read-only transaction cleanly.
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        _LOG.exception('Failed to ensure monthly credits notification')
+
+
 def _count_visible(conn, user_id):
     cursor = conn.cursor()
     cursor.execute(f'''
@@ -80,6 +246,7 @@ def unread_count(conn, user_id):
 
 
 def list_notifications(conn, user_id, limit=DEFAULT_LIMIT, cursor_id=None):
+    ensure_monthly_credits(conn, user_id)
     limit = max(1, min(int(limit), MAX_LIMIT))
     cursor = conn.cursor()
     before_clause = ''
@@ -183,22 +350,40 @@ def list_notifications(conn, user_id, limit=DEFAULT_LIMIT, cursor_id=None):
             for row in cursor.fetchall()
         }
 
+    # Community-post notifications target the post so their post snapshot can
+    # be opened directly. Reuse the community payload already hydrated on the
+    # snapshot, with a small fallback for legacy snapshots.
+    for post in posts.values():
+        community = post.get('community')
+        if community:
+            communities[post['id']] = {
+                'slug': community['slug'],
+                'name': community['name'],
+            }
+
     items = []
     for row in page_rows:
         notification_type = row[1]
+        post = posts.get(row[7])
         preview_content = None
-        if notification_type in ('post_like', 'post_quote'):
-            post = posts.get(row[7])
-            preview_content = post.get('content') if post else None
-        elif notification_type in ('post_comment', 'comment_reply', 'comment_like'):
+        if row[5] == 'comment':
             preview_content = comment_content.get(row[6])
+        elif notification_type in ('post_like', 'post_quote', 'mention', 'community_post'):
+            preview_content = post.get('content') if post else None
+
+        if row[5] == 'community':
+            community = communities.get(row[6])
+        elif notification_type == 'community_post':
+            community = communities.get(row[7])
+        else:
+            community = None
         items.append(serialize_notification(
             row,
             actor=actors.get(row[4]),
             preview_content=preview_content,
-            post=posts.get(row[7]),
+            post=post,
             others_count=row[8],
-            community=communities.get(row[6]) if row[5] == 'community' else None,
+            community=community,
         ))
 
     return items, next_cursor, _count_visible(conn, user_id)

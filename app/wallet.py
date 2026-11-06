@@ -214,6 +214,10 @@ def claim_monthly_reward(conn, user_id, now=None):
             f'Claimed {MONTHLY_FREE_CREDITS} free credits',
             now=now,
         )
+        from app import notification_service
+        notification_service.clear_system(
+            conn.cursor(), user_id, 'monthly_credits'
+        )
         conn.commit()
         return transaction_id
     except AlreadyClaimedError:

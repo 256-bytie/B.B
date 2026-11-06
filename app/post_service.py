@@ -206,12 +206,22 @@ def create_post(conn, user_id, content, audience, files, community_id=None, quot
                     (post_id, image_url, position)
                 )
 
-        if quoted_post_id is not None:
-            from app import notification_service
-            notification_service.create(
-                cursor, quoted_post_author_id, user_id, 'post_quote',
-                'post', post_id, post_id
+        from app import notification_service
+        with notification_service.event_savepoint(cursor):
+            handles = notification_service.extract_mentions(content)
+            mentioned_ids = set(notification_service.resolve_mentions(cursor, handles))
+            notification_service.create_many(
+                cursor, mentioned_ids, user_id, 'mention', 'post', post_id, post_id
             )
+            if quoted_post_id is not None and quoted_post_author_id not in mentioned_ids:
+                notification_service.create(
+                    cursor, quoted_post_author_id, user_id, 'post_quote',
+                    'post', post_id, post_id
+                )
+            if community_id is not None:
+                notification_service.notify_community_post(
+                    cursor, post_id, user_id, community_id, 'all'
+                )
 
         conn.commit()
     except Exception:
@@ -618,16 +628,23 @@ def create_comment(conn, post_id, user_id, content, parent_comment_id, image_fil
             (post_id,)
         )
         from app import notification_service
-        if parent_comment_id is None:
-            recipient_id = post_author_id
-            notification_type = 'post_comment'
-        else:
-            recipient_id = parent_row[1]
-            notification_type = 'comment_reply'
-        notification_service.create(
-            cursor, recipient_id, user_id, notification_type,
-            'comment', comment_id, post_id
-        )
+        with notification_service.event_savepoint(cursor):
+            handles = notification_service.extract_mentions(comment_content)
+            mentioned_ids = set(notification_service.resolve_mentions(cursor, handles))
+            notification_service.create_many(
+                cursor, mentioned_ids, user_id, 'mention', 'comment', comment_id, post_id
+            )
+            if parent_comment_id is None:
+                recipient_id = post_author_id
+                notification_type = 'post_comment'
+            else:
+                recipient_id = parent_row[1]
+                notification_type = 'comment_reply'
+            if recipient_id not in mentioned_ids:
+                notification_service.create(
+                    cursor, recipient_id, user_id, notification_type,
+                    'comment', comment_id, post_id
+                )
         conn.commit()
     except Exception:
         # If DB insert fails after file was written, delete the file
@@ -699,10 +716,18 @@ def toggle_post_like(conn, user_id, post_id):
 
     def notify_post_like(insert_cursor):
         from app import notification_service
-        notification_service.create(
-            insert_cursor, post_author_id, user_id, 'post_like',
-            'post', post_id, post_id
-        )
+        with notification_service.event_savepoint(insert_cursor):
+            notification_service.create(
+                insert_cursor, post_author_id, user_id, 'post_like',
+                'post', post_id, post_id
+            )
+            insert_cursor.execute('SELECT community_id, like_count FROM posts WHERE id = %s', (post_id,))
+            community_row = insert_cursor.fetchone()
+            if (community_row and community_row[0] is not None
+                    and community_row[1] == notification_service.POPULAR_LIKE_THRESHOLD):
+                notification_service.notify_community_post(
+                    insert_cursor, post_id, post_author_id, community_row[0], 'popular'
+                )
 
     return _toggle_like(
         conn, user_id, 'post', post_id, 'posts',

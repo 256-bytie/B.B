@@ -63,6 +63,13 @@ D_ID=$(echo "$D" | jq -r '.user.id'); D_USER=$(echo "$D" | jq -r '.user.username
 E_ID=$(echo "$E" | jq -r '.user.id'); E_USER=$(echo "$E" | jq -r '.user.username')
 curl -s -c "$JAR_ANON" "$BASE_URL/api/session" >/dev/null
 
+# Keep the Phase 1/2 assertions focused on social notifications; monthly
+# credits are now materialized lazily by GET /api/notifications.
+for jar in "$JAR_A" "$JAR_B" "$JAR_C" "$JAR_D" "$JAR_E"; do
+    api "$jar" POST '/api/wallet/claim'
+    [[ "$CODE" == 201 ]] || fail "Claim fixture monthly credits: $CODE $BODY"
+done
+
 api "$JAR_A" POST "/api/users/$B_ID/follow"
 api "$JAR_B" GET '/api/notifications'
 assert_py "Follow creates one notification" "len(d['notifications']) == 1 and d['notifications'][0]['type'] == 'follow' and d['notifications'][0]['post'] is None"

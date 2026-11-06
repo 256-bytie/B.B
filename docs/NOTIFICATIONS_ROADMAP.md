@@ -6,7 +6,7 @@ Status key: **BUILT** = in the repo now. **EXISTS** = backend event/data already
 | Piece | Status |
 |---|---|
 | Notification screen (loading / empty / error / list, read vs unread, mark-all-read, pagination UI, type registry) — `templates/partials/notifications.html`, `static/js/notifications.js`, CSS block, `showView` wiring, feed bell + conditional badge | **BUILT** |
-| `GET /api/notifications`, `POST /api/notifications/read`, `notifications` table, Phase 1 event generation | **BUILT** |
+| `GET /api/notifications`, `POST /api/notifications/read`, `notifications` table, Phase 1 and Phase 2 event generation and read-time like aggregation | **BUILT** |
 
 ## Phase 1 — Core (**BUILT**)
 | Type | Trigger | Recipient | Payload | Backend hook | Depends on | Priority |
@@ -18,23 +18,39 @@ Status key: **BUILT** = in the repo now. **EXISTS** = backend event/data already
 
 Frontend: nothing further (types already registered in `NOTIFICATION_TYPES`).
 
-## Phase 2 — Additional social interactions
-| Type | Trigger | Recipient | Payload | Backend work | Priority |
+## Phase 2 — Additional social interactions (**BUILT**)
+| Type / behavior | Trigger | Recipient | Payload | Backend status | Priority |
 |---|---|---|---|---|---|
-| `comment_like` | like on a comment | comment author | actor, comment snippet, post id | EXISTS event; add hook in `_toggle_like` for `comment` | P1 |
-| `post_quote` | `create_post` with `quoted_post_id` | original author (not self) | actor, quote post id, snippet | EXISTS; hook in `create_post` | P1 |
-| `like` aggregation ("A and 3 others liked your post") | many likes on one target | target author | actor, `actor_count` | NEW: collapse by (recipient, type, target) at write or read time; screen needs `others_count` text | P1 |
-| `community_join` | member joins | community creator/mods | actor, community | EXISTS event; low volume | P2 |
+| `comment_like` | like on a comment | comment author (not self) | actor, comment snippet, parent post snapshot | **BUILT** in `_toggle_like` for `comment` | P1 |
+| `post_quote` | `create_post` with `quoted_post_id` | original author (not self) | actor, new quote post id and snapshot | **BUILT** in `create_post` | P1 |
+| Like aggregation | multiple likes on one target | target author | newest actor plus `others_count` | **BUILT** at read time for `post_like` and `comment_like` | P1 |
+| `community_join` | member joins | community creator and moderators (not self) | actor, community `{slug, name}` | **BUILT** on first successful join | P2 |
 
 ## Phase 3 — Advanced
 | Type | Notes | Backend work | Priority |
 |---|---|---|---|
-| `mention` | `@handle` in a post or comment | NEW: parse handles at write time (case-insensitive, `lower(username)` index exists), resolve to user ids, notify each once | P2 |
+| `mention` | **BUILT**: posts and comments parse up to ten distinct `@handle` mentions case-insensitively; mention delivery takes precedence over quote/comment/community events | Write-time parser and batched username resolution | P2 |
 | `repost` | Repost is not built | NEW feature first | P3 |
-| `community_post` | New post in a community the user belongs to | EXISTS preference (`notification_level`); NEW fan-out. Respect `off/muted`; `popular` needs a threshold rule | P3 |
-| `system` (e.g. monthly credits available) | Wallet claim status | NEW job or computed on read | P3 |
+| `community_post` | **BUILT**: `all` members are notified on creation; `popular` members are notified when the post reaches five likes; `off` and `muted` are excluded | Batched fan-out with per-post dedupe and precedence suppression | P3 |
+| `monthly_credits` | **BUILT**: lazily materialized on notification reads when claimable, with a nullable actor and stable last-claim dedupe key; successful claims clear pending rows | Read-time persistence and claim cleanup | P3 |
 | Push / email / realtime | Out of scope until in-app is proven. Prefer polling `unread_count`; SSE/long-poll only if needed (long-poll infra exists in `chat_service`, single-process) | NEW | P3 |
 | Per-type user preferences | Settings → Notifications is a stub | NEW table + settings UI | P3 |
+| Retention purge | No automatic deletion policy is implemented | NOT BUILT | P3 |
+
+### Phase 3 decisions
+1. Notification types in scope are `mention`, `community_post`, and system `monthly_credits`; repost, push/email/realtime delivery, per-type preferences, and retention purge remain not built.
+2. Mention matching uses `(?<![A-Za-z0-9_.@])@([A-Za-z0-9_.]{1,30})`; trailing periods are stripped, handles are lowercased, encounter order is preserved, duplicates are removed, and resolution is capped at ten handles.
+3. Mention handles resolve at create time only against `users.username`, case-insensitively via `LOWER(username) = ANY(...)`; posts and comments have no edit endpoints.
+4. There is one row per recipient and content item. Post precedence is mention, then `post_quote`, then `community_post`; comment precedence is mention, then `post_comment` or `comment_reply`. Self mentions and unknown handles are ignored.
+5. `community_post` respects `community_members.notification_level`: `all` is generated at post creation, `popular` is generated exactly when the post's like count first reaches `POPULAR_LIKE_THRESHOLD = 5`, and `off`/`muted` never generate this type. `muted` affects only `community_post`.
+6. Monthly-credit rows are computed on notification reads and persisted lazily, with no scheduler. They use `monthly_credits:<UTC-last-claim-ISO-or-never>`, have no actor or target, and are removed in the successful wallet claim transaction. Unlike keeps existing rows.
+
+### Phase 3 frontend follow-ups
+- Register `mention`, `community_post`, and `monthly_credits` in `NOTIFICATION_TYPES`.
+- Support `actor: null` for system notifications.
+- Show the community name for `community_post` items.
+- Open the wallet screen when a `monthly_credits` item is selected.
+
 
 ## Backend requirements (foundation for implementation prompts)
 
@@ -55,7 +71,7 @@ notifications
 INDEX (recipient_id, id DESC)                 -- keyset list
 INDEX (recipient_id) WHERE read_at IS NULL    -- unread count
 ```
-Store IDs, not rendered text or snippets: snippets and the post snapshot are produced at read time from live rows, so edits, deletions and privacy changes are honored. `read_at` instead of a boolean keeps history. If aggregation is added later, add `actor_count` rather than new rows.
+Store IDs, not rendered text or snippets: snippets and the post snapshot are produced at read time from live rows, so edits, deletions and privacy changes are honored. `read_at` instead of a boolean keeps history. Like aggregation retains one notification row per actor; it is computed from those rows at read time, so it needs no `actor_count` column or schema migration.
 
 ### Event generation
 - Single Flask-free function `notification_service.create(cursor, recipient_id, actor_id, type, target_type, target_id, post_id)` called **inside the triggering transaction, before `conn.commit()`**, so rollbacks leave nothing.
@@ -76,7 +92,9 @@ Store IDs, not rendered text or snippets: snippets and the post snapshot are pro
 - `GET /api/notifications?limit=&cursor=` — login required, `Cache-Control: no-store`, limit clamped to [1, 50] (default 20), keyset `id < cursor ORDER BY id DESC`, response `{notifications, next_cursor, unread_count}` — matches `/api/wallet/transactions` and `/api/posts`.
 - Hydration in batched queries (no N+1): actors via `serialize_user_public`-style fields (`id, full_name, handle, profile_picture`), post snapshots via the existing batched post pipeline, comment snippets by id.
 - Drop rows whose target no longer exists or is no longer visible to the recipient (deleted post, left private community) at read time. Add `ON DELETE` cleanup in `delete_post` / `delete_comment` for tidiness.
-- Item shape is the one documented at the top of `static/js/notifications.js`.
+- Item shape is the one documented at the top of `static/js/notifications.js`. Phase 2 adds `others_count` (integer, defaults to `0`) and `community` (`{slug, name}` for community notifications, otherwise `null`).
+- Like aggregation is applied after visibility filtering and before pagination. The keyset cursor and limit apply to grouped representative rows; `unread_count` counts visible display groups. Marking an aggregate representative read marks all rows in that recipient's matching group.
+- The visibility predicate uses `IS DISTINCT FROM` for nullable target types and checks current community membership for community-targeted notifications. Private-community post notifications are also visible only while the recipient remains a member.
 
 ### Ownership and security
 - Every query is scoped by `session['user_id']`; there is no endpoint that accepts a recipient id.
@@ -87,6 +105,21 @@ Store IDs, not rendered text or snippets: snippets and the post snapshot are pro
 - New type = one `type` string + one hook call + one entry in `NOTIFICATION_TYPES` (frontend). Unknown types already render as a generic row.
 - Keep the generator (`notification_service`) separate from delivery. Push/email/realtime attach later as consumers of the same inserts; they are not part of Phase 1.
 - Tests: add `tests/test_notifications.sh` following `tests/test_follows.sh` conventions (self-notify suppressed, dedupe on re-like, ownership isolation, pagination, mark-read idempotency, deleted-post filtering).
+
+### Phase 2 decisions
+1. Aggregation is computed at read time from per-actor notification rows; no actor-count column or write-time collapse is used.
+2. Only `post_like` and `comment_like` aggregate. They remain separate by type and target.
+3. Unlike keeps notification rows, so `others_count` can include people who later unliked.
+4. `community_join` notifies the community creator and moderators, regardless of `notification_level`; the joining actor is skipped as a self-notification.
+5. `post_quote` targets the newly created quote post and includes that post's snapshot.
+6. Visibility uses `IS DISTINCT FROM` for nullable target types and a community membership clause so notifications for community targets are hidden when the recipient is no longer a member.
+7. Notification items add `others_count` (integer, default `0`) and `community` (`{slug, name}` for community notifications; otherwise `null`).
+
+### Frontend follow-ups
+- Register `comment_like`, `post_quote`, and `community_join` in `NOTIFICATION_TYPES`.
+- Render aggregated likes as “A and N others”.
+- Add a `community_join` open handler using `community.slug`.
+- Refresh the bell badge from `unread_count` when outside the notifications screen.
 
 ### Phase 1 decisions
 1. Post snapshots are embedded in notification responses. No `GET /api/posts/<id>` endpoint was added.
