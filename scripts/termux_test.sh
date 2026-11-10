@@ -30,13 +30,30 @@ command -v termux-wake-lock >/dev/null && termux-wake-lock
 # --- helpers ----------------------------------------------------------------
 
 start_postgres() {
+    pg_isready -q && return 0
+
+    # A crashed or killed server leaves postmaster.pid behind, and Android
+    # recycles PIDs, so pg_ctl then refuses to start ("lock file already
+    # exists"). Remove the file only when the PID it names is not postgres.
+    local pidfile="$PGDATA/postmaster.pid" pid
+    if [ -f "$pidfile" ]; then
+        pid="$(head -n 1 "$pidfile" 2>/dev/null)"
+        if [ -n "$pid" ] && ps -p "$pid" -o args= 2>/dev/null | grep -q postgres; then
+            echo "A postgres process (PID $pid) exists but is not accepting connections; waiting for it ..."
+        else
+            echo "Removing stale $pidfile (PID ${pid:-unknown} is not postgres)"
+            rm -f "$pidfile"
+        fi
+    fi
+
     pg_isready -q || pg_ctl -D "$PGDATA" -l "$HOME/pg.log" start >/dev/null 2>&1
     local _
-    for _ in 1 2 3 4 5 6 7 8 9 10; do
+    for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
         pg_isready -q && return 0
         sleep 1
     done
-    echo "PostgreSQL failed to start. See ~/pg.log"
+    echo "PostgreSQL failed to start. Last lines of ~/pg.log:"
+    tail -n 5 "$HOME/pg.log" 2>/dev/null
     return 1
 }
 

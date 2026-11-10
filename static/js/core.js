@@ -43,6 +43,7 @@ function showView(viewName, { skipUrlSync = false } = {}) {
     if (typeof closeChatRowMenu === 'function') closeChatRowMenu(); // ...or the long-press row menu
     if (typeof closeChatGroupSheet === 'function') closeChatGroupSheet(); // ...or a Group info sheet
     if (typeof closeSettingsSheet === 'function') closeSettingsSheet(); // ...or the Settings appearance sheet
+    if ((viewName === 'login' || viewName === 'signup') && typeof closeSideNav === 'function') closeSideNav(); // ...or the side-nav drawer over an auth screen
     if (typeof chatOnViewChange === 'function') chatOnViewChange(viewName); // stop live chat polling outside chat screens
     const views = ['login', 'signup', 'feed', 'profile', 'edit-profile', 'user-profile', 'create-post', 'businesses', 'courses', 'gpa-calculator', 'chat', 'chat-conversation', 'chat-requests', 'chat-new-message', 'chat-new-group', 'chat-group-info', 'chat-group-media', 'library', 'library-contribute', 'search', 'wallet', 'notifications', 'settings', 'settings-search', 'payment-methods', 'payment-card-add', 'appearance-display', 'community', 'community-members', 'community-edit', 'community-create', 'community-browse', 'business-create', 'business-profile', 'business-theme', 'my-stores'];
     views.forEach(v => {
@@ -464,9 +465,11 @@ async function handleLogout() {
             // reusing it. checkSession()/updateSessionInfo() picks up a
             // fresh one on the next GET /api/session.
             csrfToken = null;
+            session = null;
             if (typeof setNotificationBadge === 'function') setNotificationBadge(0);
             document.getElementById('login-close-btn').classList.add('hidden');
             closeAccountSwitcher();
+            if (typeof closeSideNav === 'function') closeSideNav();
             showView('login');
         } else {
             console.error('Logout failed');

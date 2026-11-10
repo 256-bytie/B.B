@@ -124,9 +124,14 @@ req "$JAR_B" "$CSRF_B" POST "/api/communities/$SLUG/join"
 # --- Post ---
 req "$JAR_B" "$CSRF_B" POST "/api/communities/$SLUG/posts" '{"content":"   "}'
 [[ "$CODE" == "400" ]] && pass "Empty post -> 400" || fail "Empty post: $CODE $BODY"
-LONG=$(python3 -c "print('a'*2001)")
+LONG=$(python3 -c "print('a'*6001)")
 req "$JAR_B" "$CSRF_B" POST "/api/communities/$SLUG/posts" "{\"content\":\"$LONG\"}"
 [[ "$CODE" == "400" ]] && pass "Over-length post -> 400" || fail "Long post: $CODE"
+MAXLEN=$(python3 -c "print('a'*6000)")
+req "$JAR_B" "$CSRF_B" POST "/api/communities/$SLUG/posts" "{\"content\":\"$MAXLEN\"}"
+[[ "$CODE" == "201" ]] && pass "Post at the 6000-char limit accepted" || fail "6000-char post: $CODE"
+MAXLEN_ID=$(json_get "$BODY" "d['id']")
+req "$JAR_B" "$CSRF_B" DELETE "/api/posts/$MAXLEN_ID"
 
 for i in 1 2 3; do
     req "$JAR_B" "$CSRF_B" POST "/api/communities/$SLUG/posts" "{\"content\":\"community post $i $RUN_ID\"}"

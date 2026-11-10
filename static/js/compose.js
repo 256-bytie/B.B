@@ -2,7 +2,10 @@
 // composeState.images and composeState.audience are now sent to the server:
 // handlePostSubmit() uses multipart/form-data (content + audience + images[])
 // when images are attached, matching POST /api/posts on the backend.
-const COMPOSE_MAX_CHARS = 2000;
+// Keep in sync with MAX_CONTENT_LEN in app/post_service.py and with maxlength +
+// the initial counter text in templates/partials/post_create.html
+// (tests/test_post_limit_sync.py enforces all of them).
+const COMPOSE_MAX_CHARS = 6000;
 const COMPOSE_MAX_IMAGES = 4;
 const COMPOSE_DRAFT_KEY = 'beebo_draft_v1';
 
