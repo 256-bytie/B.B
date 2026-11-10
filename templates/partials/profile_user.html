@@ -71,15 +71,28 @@
 		</div>
 
 		<!-- BEGIN: UserProfileTabs -->
-		<div class="flex border-t border-gray-100">
-			<button type="button" id="user-profile-tab-posts" class="user-profile-tab flex-1 flex items-center justify-center gap-2 py-3.5 text-[12px] font-semibold tracking-wide text-gray-900 border-b-2 border-gray-900 transition-colors" data-tab="posts">
-				<i class="fa-solid fa-table-cells text-[14px]"></i> POSTS
+		<!-- Only the active tab shows its label; the rest are icon-only. Styling and the
+		     expand/underline animation live in style.css (.pf-tab). -->
+		<div class="flex border-t border-gray-100" role="tablist">
+			<button type="button" id="user-profile-tab-posts" class="user-profile-tab pf-tab is-active text-gray-900" data-tab="posts" role="tab" aria-selected="true" aria-controls="user-profile-posts-panel" aria-label="Posts">
+				<i class="fa-solid fa-table-cells"></i>
+				<span class="pf-tab-label" aria-hidden="true">POSTS</span>
+				<span class="pf-tab-indicator" aria-hidden="true"></span>
 			</button>
-			<button type="button" id="user-profile-tab-saved" class="user-profile-tab flex-1 flex items-center justify-center gap-2 py-3.5 text-[12px] font-semibold tracking-wide text-gray-400 border-b-2 border-transparent transition-colors" data-tab="saved">
-				<i class="fa-regular fa-bookmark text-[14px]"></i> SAVED
+			<button type="button" id="user-profile-tab-saved" class="user-profile-tab pf-tab text-gray-400" data-tab="saved" role="tab" aria-selected="false" aria-controls="user-profile-saved-panel" aria-label="Saved">
+				<i class="fa-regular fa-bookmark"></i>
+				<span class="pf-tab-label" aria-hidden="true">SAVED</span>
+				<span class="pf-tab-indicator" aria-hidden="true"></span>
 			</button>
-			<button type="button" id="user-profile-tab-likes" class="user-profile-tab flex-1 flex items-center justify-center gap-2 py-3.5 text-[12px] font-semibold tracking-wide text-gray-400 border-b-2 border-transparent transition-colors" data-tab="likes">
-				<i class="fa-regular fa-heart text-[14px]"></i> LIKES
+			<button type="button" id="user-profile-tab-likes" class="user-profile-tab pf-tab text-gray-400" data-tab="likes" role="tab" aria-selected="false" aria-controls="user-profile-likes-panel" aria-label="Likes">
+				<i class="fa-regular fa-heart"></i>
+				<span class="pf-tab-label" aria-hidden="true">LIKES</span>
+				<span class="pf-tab-indicator" aria-hidden="true"></span>
+			</button>
+			<button type="button" id="user-profile-tab-reposts" class="user-profile-tab pf-tab text-gray-400" data-tab="reposts" role="tab" aria-selected="false" aria-controls="user-profile-reposts-panel" aria-label="Reposts">
+				<i class="fa-solid fa-retweet"></i>
+				<span class="pf-tab-label" aria-hidden="true">REPOSTS</span>
+				<span class="pf-tab-indicator" aria-hidden="true"></span>
 			</button>
 		</div>
 		<!-- END: UserProfileTabs -->
@@ -97,6 +110,10 @@
 	<div id="user-profile-likes-panel" class="hidden flex flex-col items-center justify-center py-20 px-8 text-center text-gray-400 text-[14px] gap-2">
 		<i class="fa-regular fa-heart text-3xl text-gray-300"></i>
 		Liked posts are private.
+	</div>
+	<div id="user-profile-reposts-panel" class="hidden flex flex-col items-center justify-center py-20 px-8 text-center text-gray-400 text-[14px] gap-2">
+		<i class="fa-solid fa-retweet text-3xl text-gray-300"></i>
+		Reposts are coming soon.
 	</div>
 	<!-- END: UserProfileTabPanels -->
 </main>

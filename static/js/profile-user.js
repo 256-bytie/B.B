@@ -197,17 +197,17 @@ Loading posts...
 }
 
 function switchUserProfileTab(tabName) {
-    const tabs = ['posts', 'saved', 'likes'];
+    const tabs = ['posts', 'saved', 'likes', 'reposts'];
     tabs.forEach(function(name) {
         const tabBtn = document.getElementById(`user-profile-tab-${name}`);
         const panel = document.getElementById(`user-profile-${name}-panel`);
         const isActive = name === tabName;
 
         if (tabBtn) {
+            tabBtn.classList.toggle('is-active', isActive);
             tabBtn.classList.toggle('text-gray-900', isActive);
-            tabBtn.classList.toggle('border-gray-900', isActive);
             tabBtn.classList.toggle('text-gray-400', !isActive);
-            tabBtn.classList.toggle('border-transparent', !isActive);
+            tabBtn.setAttribute('aria-selected', isActive ? 'true' : 'false');
         }
         if (panel) {
             panel.classList.toggle('hidden', !isActive);

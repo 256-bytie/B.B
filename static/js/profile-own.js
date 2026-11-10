@@ -547,20 +547,20 @@ function syncAvatarAcrossRenderedPosts(userId, newAvatarUrl) {
 })();
 
 // Switches the visible panel under the Profile tab bar. Only "posts" is
-// backed by real data right now; "saved" and "likes" have no backing
-// feature yet, so they just show a placeholder state.
+// backed by real data right now; "saved", "likes" and "reposts" have no
+// backing feature yet, so they just show a placeholder state.
 function switchProfileTab(tabName) {
-    const tabs = ['posts', 'saved', 'likes'];
+    const tabs = ['posts', 'saved', 'likes', 'reposts'];
     tabs.forEach(function(name) {
         const tabBtn = document.getElementById(`profile-tab-${name}`);
         const panel = document.getElementById(`profile-${name}-panel`);
         const isActive = name === tabName;
 
         if (tabBtn) {
+            tabBtn.classList.toggle('is-active', isActive);
             tabBtn.classList.toggle('text-gray-900', isActive);
-            tabBtn.classList.toggle('border-gray-900', isActive);
             tabBtn.classList.toggle('text-gray-400', !isActive);
-            tabBtn.classList.toggle('border-transparent', !isActive);
+            tabBtn.setAttribute('aria-selected', isActive ? 'true' : 'false');
         }
         if (panel) {
             panel.classList.toggle('hidden', !isActive);
