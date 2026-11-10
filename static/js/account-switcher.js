@@ -101,6 +101,8 @@ async function switchAccount(userId) {
 
         setCsrfTokenFromResponseData(data);
         await updateSessionInfo();
+        if (typeof setNotificationBadge === 'function') setNotificationBadge(0);
+        if (typeof refreshNotificationBadge === 'function') refreshNotificationBadge();
         closeAccountSwitcher();
         showToast(`Switched to ${data.user.full_name}`);
 

@@ -45,12 +45,8 @@ Frontend: nothing further (types already registered in `NOTIFICATION_TYPES`).
 5. `community_post` respects `community_members.notification_level`: `all` is generated at post creation, `popular` is generated exactly when the post's like count first reaches `POPULAR_LIKE_THRESHOLD = 5`, and `off`/`muted` never generate this type. `muted` affects only `community_post`.
 6. Monthly-credit rows are computed on notification reads and persisted lazily, with no scheduler. They use `monthly_credits:<UTC-last-claim-ISO-or-never>`, have no actor or target, and are removed in the successful wallet claim transaction. Unlike keeps existing rows.
 
-### Phase 3 frontend follow-ups
-- Register `mention`, `community_post`, and `monthly_credits` in `NOTIFICATION_TYPES`.
-- Support `actor: null` for system notifications.
-- Show the community name for `community_post` items.
-- Open the wallet screen when a `monthly_credits` item is selected.
-
+### Phase 3 frontend follow-ups: DONE
+Registered `mention`, `community_post`, `monthly_credits`; actor-less rows render as a coloured tile with a title; `community_post` shows the community name; `monthly_credits` opens the wallet.
 
 ## Backend requirements (foundation for implementation prompts)
 
@@ -115,11 +111,15 @@ Store IDs, not rendered text or snippets: snippets and the post snapshot are pro
 6. Visibility uses `IS DISTINCT FROM` for nullable target types and a community membership clause so notifications for community targets are hidden when the recipient is no longer a member.
 7. Notification items add `others_count` (integer, default `0`) and `community` (`{slug, name}` for community notifications; otherwise `null`).
 
-### Frontend follow-ups
-- Register `comment_like`, `post_quote`, and `community_join` in `NOTIFICATION_TYPES`.
-- Render aggregated likes as “A and N others”.
-- Add a `community_join` open handler using `community.slug`.
-- Refresh the bell badge from `unread_count` when outside the notifications screen.
+### Frontend follow-ups: DONE
+Registered `comment_like`, `post_quote`, `community_join`; aggregated likes render as "A and N others"; `community_join` opens the community by `community.slug`; the bell dot is refreshed from `unread_count` (`refreshNotificationBadge`) whenever the feed is shown, after an account switch, and when the app returns to the foreground (30 s throttle).
+
+### Frontend screen (static/js/notifications.js)
+- Rows are grouped under Today / This week / Earlier by the viewer's local calendar day (`notifGroupItems`). A header summarises unread ("You have 3 unread notifications" / "You're all caught up").
+- Row layout: unread dot + tint, avatar with a small type badge, headline `Name [and N others] verb <accent object>`, optional one-line preview, relative time, optional right-hand thumbnail (first image of the post snapshot).
+- Back from a community or wallet opened from a notification returns to the list (`'notifications'` is in `COMMUNITY_RETURN_VIEWS` and `WALLET_RETURN_VIEWS`).
+- Checks: `tests/test_notifications_ui.sh` (Node; skips when Node is missing).
+- Known gap: the bell refresh calls `GET /api/notifications?limit=1`, which also runs the list query. A dedicated count-only endpoint would be cheaper if polling is added.
 
 ### Phase 1 decisions
 1. Post snapshots are embedded in notification responses. No `GET /api/posts/<id>` endpoint was added.

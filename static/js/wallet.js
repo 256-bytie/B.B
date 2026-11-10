@@ -12,7 +12,7 @@ const WALLET_COLLAPSED_COUNT = 10;   // rows shown before "See all"
 const WALLET_PAGE_SIZE = 20;         // rows per page once expanded
 // Screens the Wallet can be opened from (side nav is reachable from all of
 // them); the back arrow returns to whichever one it came from.
-const WALLET_RETURN_VIEWS = ['feed', 'courses', 'library', 'businesses', 'search', 'chat', 'profile', 'user-profile'];
+const WALLET_RETURN_VIEWS = ['feed', 'courses', 'library', 'businesses', 'search', 'chat', 'profile', 'user-profile', 'notifications'];
 
 let walletReturnView = 'feed';
 let walletLoadToken = 0;   // discards responses from superseded loads

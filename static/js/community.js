@@ -305,7 +305,7 @@ async function communityCreateSubmit() {
 
 // ---- Community detail view ----
 
-const COMMUNITY_RETURN_VIEWS = ['feed', 'courses', 'library', 'businesses', 'search', 'chat', 'profile', 'user-profile', 'wallet', 'community-browse'];
+const COMMUNITY_RETURN_VIEWS = ['feed', 'courses', 'library', 'businesses', 'search', 'chat', 'profile', 'user-profile', 'wallet', 'community-browse', 'notifications'];
 let communityReturnView = 'feed';
 let communityCurrentSlug = null;
 let communityCurrentData = null;

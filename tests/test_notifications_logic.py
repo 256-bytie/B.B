@@ -118,5 +118,96 @@ class NotificationLogicTests(unittest.TestCase):
         self.assertEqual(recipient_one, 0)
 
 
+    def test_create_many_skips_actor_dedupes_and_reports_count(self):
+        self.conn.execute("INSERT INTO users (id, full_name, email, password_hash, username) VALUES (3, 'C', 'c@x.com', 'x', 'c')")
+        self.conn.commit()
+        cursor = self.conn.cursor()
+        inserted = notification_service.create_many(
+            cursor, [1, 2, 3, 2], 1, 'community_post', 'post', 5, 5
+        )
+        self.conn.commit()
+        self.assertEqual(inserted, 2)
+        rows = self.conn.execute(
+            'SELECT recipient_id, dedupe_key FROM notifications ORDER BY recipient_id'
+        ).fetchall()
+        self.assertEqual(rows, [(2, 'community_post:1:post:5'), (3, 'community_post:1:post:5')])
+        again = notification_service.create_many(
+            self.conn.cursor(), [2, 3], 1, 'community_post', 'post', 5, 5
+        )
+        self.conn.commit()
+        self.assertEqual(again, 0)
+        self.assertEqual(notification_service.create_many(self.conn.cursor(), [], 1, 'x', 'post', 1, 1), 0)
+        self.assertEqual(notification_service.create_many(self.conn.cursor(), [1], 1, 'x', 'post', 1, 1), 0)
+
+    def test_create_many_invalid_recipient_does_not_abort_outer_transaction(self):
+        cursor = self.conn.cursor()
+        inserted = notification_service.create_many(cursor, [999], 1, 'community_post', 'post', 5, 5)
+        self.assertEqual(inserted, 0)
+        cursor.execute("UPDATE users SET bio = 'after batch' WHERE id = 1")
+        self.conn.commit()
+        bio = self.conn.execute('SELECT bio FROM users WHERE id = 1').fetchone()[0]
+        self.assertEqual(bio, 'after batch')
+
+    def test_event_savepoint_swallows_failure_and_keeps_transaction(self):
+        cursor = self.conn.cursor()
+        with notification_service.event_savepoint(cursor):
+            cursor.execute('SELECT 1 / 0')
+        cursor.execute("UPDATE users SET bio = 'after event' WHERE id = 1")
+        self.conn.commit()
+        bio = self.conn.execute('SELECT bio FROM users WHERE id = 1').fetchone()[0]
+        self.assertEqual(bio, 'after event')
+
+    def test_create_system_inserts_null_fields_and_dedupes(self):
+        cursor = self.conn.cursor()
+        self.assertTrue(notification_service.create_system(cursor, 2, 'monthly_credits', 'monthly_credits:never'))
+        self.assertFalse(notification_service.create_system(cursor, 2, 'monthly_credits', 'monthly_credits:never'))
+        self.conn.commit()
+        row = self.conn.execute(
+            'SELECT actor_id, target_type, target_id, post_id, type FROM notifications WHERE recipient_id = 2'
+        ).fetchall()
+        self.assertEqual(row, [(None, None, None, None, 'monthly_credits')])
+
+    def test_clear_system_deletes_only_that_users_rows_of_that_type(self):
+        cursor = self.conn.cursor()
+        notification_service.create_system(cursor, 1, 'monthly_credits', 'monthly_credits:never')
+        notification_service.create_system(cursor, 2, 'monthly_credits', 'monthly_credits:never')
+        notification_service.create_system(cursor, 2, 'other_system', 'other:1')
+        notification_service.clear_system(cursor, 2, 'monthly_credits')
+        self.conn.commit()
+        rows = self.conn.execute(
+            'SELECT recipient_id, type FROM notifications ORDER BY recipient_id, type'
+        ).fetchall()
+        self.assertEqual(rows, [(1, 'monthly_credits'), (2, 'other_system')])
+
+    def test_ensure_monthly_credits_is_idempotent_and_respects_claims(self):
+        def count():
+            return self.conn.execute(
+                "SELECT COUNT(*) FROM notifications WHERE recipient_id = 1 AND type = 'monthly_credits'"
+            ).fetchone()[0]
+
+        notification_service.ensure_monthly_credits(self.conn, 1)
+        notification_service.ensure_monthly_credits(self.conn, 1)
+        self.assertEqual(count(), 1)
+
+        wallet.claim_monthly_reward(self.conn, 1)
+        self.assertEqual(count(), 0)
+
+        notification_service.ensure_monthly_credits(self.conn, 1)
+        self.assertEqual(count(), 0)
+
+        self.conn.execute(
+            "UPDATE credit_transactions SET created_at = created_at - interval '31 days' "
+            "WHERE user_id = 1 AND reason = 'monthly_reward'"
+        )
+        self.conn.commit()
+        notification_service.ensure_monthly_credits(self.conn, 1)
+        self.assertEqual(count(), 1)
+
+    def test_ensure_monthly_credits_ignores_unknown_user(self):
+        notification_service.ensure_monthly_credits(self.conn, 999)
+        count = self.conn.execute('SELECT COUNT(*) FROM notifications').fetchone()[0]
+        self.assertEqual(count, 0)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

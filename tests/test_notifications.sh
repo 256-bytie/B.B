@@ -8,13 +8,14 @@ JAR_B="notif_b_${RUN_ID}.txt"
 JAR_C="notif_c_${RUN_ID}.txt"
 JAR_D="notif_d_${RUN_ID}.txt"
 JAR_E="notif_e_${RUN_ID}.txt"
+JAR_F="notif_f_${RUN_ID}.txt"
 JAR_ANON="notif_anon_${RUN_ID}.txt"
 PASSED=0
 FAILED=0
 
 pass() { echo "✓ PASS: $1"; PASSED=$((PASSED + 1)); }
 fail() { echo "✗ FAIL: $1"; FAILED=$((FAILED + 1)); }
-cleanup() { rm -f "$JAR_A" "$JAR_B" "$JAR_C" "$JAR_D" "$JAR_E" "$JAR_ANON"; }
+cleanup() { rm -f "$JAR_A" "$JAR_B" "$JAR_C" "$JAR_D" "$JAR_E" "$JAR_F" "$JAR_ANON"; }
 trap cleanup EXIT
 
 signup() {
@@ -282,6 +283,95 @@ assert len(ids) == len(set(ids))
 assert ids == sorted(ids, reverse=True)
 assert pages[0]['unread_count'] == sum(not item['read'] for item in items)
 PY
+
+# ---------------------------------------------------------------------------
+# Phase 3: mention, community_post (all + popular), monthly_credits
+# ---------------------------------------------------------------------------
+F=$(signup "$JAR_F" "User F" "notif_f_${RUN_ID}@example.com")
+F_ID=$(echo "$F" | jq -r '.user.id')
+
+# monthly_credits: F has never claimed. Four parallel first reads must create one row.
+for _ in 1 2 3 4; do curl -s -b "$JAR_F" "$BASE_URL/api/notifications" >/dev/null & done
+wait
+[[ "$(pg_psql -c "SELECT COUNT(*) FROM notifications WHERE recipient_id=$F_ID AND type='monthly_credits';")" == "1" ]] \
+    && pass "Concurrent first reads create one monthly credits row" || fail "Concurrent monthly credits rows"
+api "$JAR_F" GET '/api/notifications'
+assert_py "Monthly credits item has null actor and post and counts as unread" "len(d['notifications']) == 1 and d['notifications'][0]['type'] == 'monthly_credits' and d['notifications'][0]['actor'] is None and d['notifications'][0]['post'] is None and d['notifications'][0]['preview'] is None and d['notifications'][0]['read'] is False and d['unread_count'] == 1"
+api "$JAR_F" POST '/api/wallet/claim'
+[[ "$CODE" == 201 ]] && pass "Fixture claim for F" || fail "Fixture claim for F: $CODE $BODY"
+api "$JAR_F" GET '/api/notifications'
+assert_py "Claiming removes monthly credits row and it is not re-created before next claim" "len(d['notifications']) == 0 and d['unread_count'] == 0"
+pg_psql -c "UPDATE credit_transactions SET created_at = created_at - interval '31 days' WHERE user_id=$F_ID AND reason='monthly_reward';" >/dev/null
+api "$JAR_F" GET '/api/notifications'
+assert_py "A new claim cycle creates a new monthly credits row" "len(d['notifications']) == 1 and d['notifications'][0]['type'] == 'monthly_credits' and d['unread_count'] == 1"
+api "$JAR_F" POST '/api/wallet/claim'
+
+# mention: post
+api "$JAR_B" POST '/api/posts' "{\"content\":\"hello @$A_USER mention post\"}"
+MENTION_POST=$(echo "$BODY" | jq -r '.id')
+api "$JAR_A" GET '/api/notifications?limit=50'
+assert_py "Post mention notifies with snapshot and preview" "sum(n['type'] == 'mention' and n['actor']['id'] == $B_ID and n['post']['id'] == $MENTION_POST and n['preview'] == 'hello @$A_USER mention post' and n['others_count'] == 0 for n in d['notifications']) == 1"
+api "$JAR_A" POST '/api/posts' "{\"content\":\"self @$A_USER mention\"}"
+api "$JAR_B" POST '/api/posts' "{\"content\":\"ping @nobody_$RUN_ID and a@b.com\"}"
+[[ "$CODE" == 201 ]] && pass "Unknown handle and email-like text do not break post creation" || fail "Unknown handle post: $CODE $BODY"
+api "$JAR_A" GET '/api/notifications?limit=50'
+assert_py "Self mention creates nothing" "all(not (n['type'] == 'mention' and (n['preview'] or '').startswith('self @')) for n in d['notifications'])"
+
+# mention precedence: quote
+api "$JAR_D" POST '/api/posts' "{\"content\":\"quote with @$A_USER\",\"quoted_post_id\":$QUOTE_SOURCE}"
+QUOTE_MENTION=$(echo "$BODY" | jq -r '.id')
+api "$JAR_A" GET '/api/notifications?limit=50'
+assert_py "Mention wins over post_quote for the same post" "[n['type'] for n in d['notifications'] if n['post'] and n['post']['id'] == $QUOTE_MENTION] == ['mention']"
+
+# mention precedence: top-level comment
+api "$JAR_C" POST "/api/posts/$SECOND_POST/comments" "{\"content\":\"@$A_USER precedence marker\"}"
+api "$JAR_A" GET '/api/notifications?limit=50'
+assert_py "Comment mention previews the comment and suppresses post_comment" "sum(n['type'] == 'mention' and n['actor']['id'] == $C_ID and n['post']['id'] == $SECOND_POST and 'precedence marker' in (n['preview'] or '') for n in d['notifications']) == 1 and all(not (n['type'] == 'post_comment' and 'precedence marker' in (n['preview'] or '')) for n in d['notifications'])"
+
+# mention precedence: reply
+api "$JAR_B" POST "/api/posts/$SECOND_POST/comments" '{"content":"parent for reply mention"}'
+REPLY_PARENT=$(echo "$BODY" | jq -r '.id')
+api "$JAR_A" POST "/api/posts/$SECOND_POST/comments" "{\"content\":\"@$B_USER reply mention\",\"parent_comment_id\":$REPLY_PARENT}"
+api "$JAR_B" GET '/api/notifications?limit=50'
+assert_py "Reply mention suppresses comment_reply" "sum(n['type'] == 'mention' and n['actor']['id'] == $A_ID and 'reply mention' in (n['preview'] or '') for n in d['notifications']) == 1 and all(not (n['type'] == 'comment_reply' and 'reply mention' in (n['preview'] or '')) for n in d['notifications'])"
+
+api "$JAR_B" DELETE "/api/posts/$MENTION_POST"
+api "$JAR_A" GET '/api/notifications?limit=50'
+assert_py "Deleting the post removes its mention" "all(not (n['post'] and n['post']['id'] == $MENTION_POST) for n in d['notifications']) and d['unread_count'] == sum(not n['read'] for n in d['notifications'])"
+
+# community_post
+CP_SLUG="notif-post-$RUN_ID"
+CP_COMM_ID=$(pg_psql -c "INSERT INTO communities (slug,name,description,topic,type,creator_id) VALUES ('$CP_SLUG','Post Notices','x','x','public',$A_ID) RETURNING id;" | head -n1)
+pg_psql -c "INSERT INTO community_members (community_id,user_id,role,notification_level) VALUES ($CP_COMM_ID,$A_ID,'creator','all'),($CP_COMM_ID,$B_ID,'member','all'),($CP_COMM_ID,$C_ID,'member','popular'),($CP_COMM_ID,$D_ID,'member','off'),($CP_COMM_ID,$E_ID,'member','muted');" >/dev/null
+api "$JAR_A" POST "/api/communities/$CP_SLUG/posts" '{"content":"community post notify"}'
+CP_POST=$(echo "$BODY" | jq -r '.id')
+api "$JAR_B" GET '/api/notifications?limit=50'
+assert_py "Level all member is notified with snapshot, preview and community" "sum(n['type'] == 'community_post' and n['actor']['id'] == $A_ID and n['post']['id'] == $CP_POST and n['preview'] == 'community post notify' and n['community'] == {'slug':'$CP_SLUG','name':'Post Notices'} for n in d['notifications']) == 1"
+for pair in "A:$JAR_A" "C:$JAR_C" "D:$JAR_D" "E:$JAR_E" "F:$JAR_F"; do
+    label="${pair%%:*}"; jar="${pair#*:}"
+    api "$jar" GET '/api/notifications?limit=50'
+    assert_py "User $label gets no community_post at creation (author, popular, off, muted, non-member)" "all(not (n['type'] == 'community_post' and n['post'] and n['post']['id'] == $CP_POST) for n in d['notifications'])"
+done
+
+# popular threshold: five likes (author included) notify popular members exactly once
+for jar in "$JAR_A" "$JAR_B" "$JAR_D" "$JAR_E"; do api "$jar" POST "/api/posts/$CP_POST/like"; done
+api "$JAR_C" GET '/api/notifications?limit=50'
+assert_py "Popular member is not notified before the threshold" "all(n['type'] != 'community_post' for n in d['notifications'])"
+api "$JAR_F" POST "/api/posts/$CP_POST/like"
+api "$JAR_C" GET '/api/notifications?limit=50'
+assert_py "Fifth like notifies popular member once" "sum(n['type'] == 'community_post' and n['actor']['id'] == $A_ID and n['post']['id'] == $CP_POST and n['community']['slug'] == '$CP_SLUG' for n in d['notifications']) == 1"
+api "$JAR_F" POST "/api/posts/$CP_POST/like"
+api "$JAR_F" POST "/api/posts/$CP_POST/like"
+api "$JAR_C" GET '/api/notifications?limit=50'
+assert_py "Re-crossing the threshold does not duplicate" "sum(n['type'] == 'community_post' for n in d['notifications']) == 1"
+api "$JAR_B" GET '/api/notifications?limit=50'
+assert_py "Level all member is not notified again at the threshold" "sum(n['type'] == 'community_post' and n['post']['id'] == $CP_POST for n in d['notifications']) == 1"
+
+api "$JAR_A" DELETE "/api/posts/$CP_POST"
+api "$JAR_B" GET '/api/notifications?limit=50'
+assert_py "Deleting the community post removes community_post rows and plain posts created none" "all(n['type'] != 'community_post' for n in d['notifications']) and d['unread_count'] == sum(not n['read'] for n in d['notifications'])"
+api "$JAR_C" GET '/api/notifications?limit=50'
+assert_py "Deleting the community post removes the popular notification" "all(n['type'] != 'community_post' for n in d['notifications'])"
 
 echo "Notifications: $PASSED passed, $FAILED failed"
 [[ "$FAILED" == 0 ]]

@@ -14,7 +14,7 @@ AGGREGATED_TYPES = ('post_like', 'comment_like')
 
 _LOG = logging.getLogger(__name__)
 POPULAR_LIKE_THRESHOLD = 5
-_MENTION_RE = re.compile(r'(?<![A-Za-z0-9_.@])@([A-Za-z0-9_.]{1,30})')
+_MENTION_RE = re.compile(r'(?<![A-Za-z0-9_.@])@([A-Za-z0-9_.]{1,30})(?![A-Za-z0-9_.])')
 _VISIBILITY_PREDICATE = '''
     (n.post_id IS NULL OR EXISTS (
         SELECT 1
@@ -352,11 +352,13 @@ def list_notifications(conn, user_id, limit=DEFAULT_LIMIT, cursor_id=None):
 
     # Community-post notifications target the post so their post snapshot can
     # be opened directly. Reuse the community payload already hydrated on the
-    # snapshot, with a small fallback for legacy snapshots.
+    # snapshot. Keyed by post id in its own dict: community ids and post ids
+    # are different key spaces and must never share a mapping.
+    post_communities = {}
     for post in posts.values():
         community = post.get('community')
         if community:
-            communities[post['id']] = {
+            post_communities[post['id']] = {
                 'slug': community['slug'],
                 'name': community['name'],
             }
@@ -374,7 +376,7 @@ def list_notifications(conn, user_id, limit=DEFAULT_LIMIT, cursor_id=None):
         if row[5] == 'community':
             community = communities.get(row[6])
         elif notification_type == 'community_post':
-            community = communities.get(row[7])
+            community = post_communities.get(row[7])
         else:
             community = None
         items.append(serialize_notification(

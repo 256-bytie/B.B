@@ -96,6 +96,7 @@ function showView(viewName, { skipUrlSync = false } = {}) {
     if (viewName === 'feed') {
         fetchAndRenderPosts();
         updateFeedHeaderAvatar();
+        if (typeof refreshNotificationBadge === 'function') refreshNotificationBadge();
     }
 
     // Refresh the profile header and the user's own posts each time it's shown
@@ -463,6 +464,7 @@ async function handleLogout() {
             // reusing it. checkSession()/updateSessionInfo() picks up a
             // fresh one on the next GET /api/session.
             csrfToken = null;
+            if (typeof setNotificationBadge === 'function') setNotificationBadge(0);
             document.getElementById('login-close-btn').classList.add('hidden');
             closeAccountSwitcher();
             showView('login');

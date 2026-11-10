@@ -4,9 +4,13 @@ ROOT="$(builtin cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [[ -n "${DATABASE_URL:-}" ]]; then
     python3 -B "$ROOT/tests/pg_support.py"
 fi
-SUITE=$(mktemp -d /tmp/beebo_test_suite_XXXXXX)
+SUITE=$(mktemp -d "${TMPDIR:-/tmp}/beebo_test_suite_XXXXXX")
 tar -C "$ROOT" --exclude=.git --exclude='*.db' --exclude=.env --exclude=__pycache__ --exclude=flask_session --exclude='cookies*.txt' -cf - . | tar -C "$SUITE" -xf -
 cd "$SUITE"
+# Termux has no writable /tmp: point hardcoded /tmp/ paths in the staged tests at $TMPDIR.
+if [[ -n "${TMPDIR:-}" && "${TMPDIR%/}" != /tmp ]]; then
+    sed -i "s#/tmp/#${TMPDIR%/}/#g" tests/*.sh tests/*.py
+fi
 export PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$SUITE${PYTHONPATH:+:$PYTHONPATH}"
 unset BEEBO_TEST_DB DATABASE_URL
 PASSED=0
