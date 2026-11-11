@@ -531,8 +531,6 @@ function syncAvatarAcrossRenderedPosts(userId, newAvatarUrl) {
 
 (function initProfileImageUploadListeners() {
     const pairs = [
-        ['profile-avatar-camera-btn', 'profile-avatar-input', 'avatar'],
-        ['profile-cover-camera-btn', 'profile-cover-input', 'cover'],
         ['edit-profile-avatar-camera-btn', 'edit-profile-avatar-input', 'avatar'],
         ['edit-profile-cover-camera-btn', 'edit-profile-cover-input', 'cover']
     ];

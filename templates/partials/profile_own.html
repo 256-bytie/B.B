@@ -29,13 +29,10 @@
 					<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
 				</svg>
 			</div>
-			<button type="button" id="profile-cover-camera-btn" aria-label="Change cover photo" class="absolute bottom-2.5 right-2.5 w-8 h-8 rounded-full bg-white/90 border border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.16)] flex items-center justify-center text-gray-700 hover:bg-white transition-colors active:scale-95 duration-100">
-				<i class="fa-solid fa-camera text-[13px]"></i>
-			</button>
 		</div>
 
 		<div class="flex flex-col items-center px-6 -mt-14">
-			<!-- Avatar with camera badge -->
+			<!-- Avatar -->
 			<div class="relative">
 				<div class="w-28 h-28 rounded-full border-[5px] border-white shadow-sm overflow-hidden bg-gray-100 relative">
 					<img id="profile-avatar-img" alt="" class="w-full h-full object-cover" src=""/>
@@ -46,13 +43,7 @@
 						</svg>
 					</div>
 				</div>
-				<button type="button" id="profile-avatar-camera-btn" aria-label="Change profile photo" class="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-white border border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.12)] flex items-center justify-center text-gray-600 hover:bg-gray-50 transition-colors active:scale-95 duration-100">
-					<i class="fa-solid fa-camera text-[13px]"></i>
-				</button>
 			</div>
-
-			<input type="file" id="profile-avatar-input" accept="image/*" class="hidden"/>
-			<input type="file" id="profile-cover-input" accept="image/*" class="hidden"/>
 
 			<!-- Name & handle -->
 			<h2 id="profile-name" class="text-[20px] font-bold text-gray-900 mt-3">&nbsp;</h2>
