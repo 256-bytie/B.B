@@ -2596,3 +2596,23 @@ html.dark .notif-row:active { background-color: rgba(255, 255, 255, 0.06); }
 @media (prefers-reduced-motion: reduce) {
 	.pf-tab, .pf-tab-label, .pf-tab-indicator { transition: none !important; }
 }
+
+/* Repost indicator: compact dark circle + white glyph beside a post's
+   timestamp (feed.js buildRepostBadgeHtml, comment_overlay.html).
+   Dark mode lifts the fill one step so it stays visible on #0B0C10. */
+.repost-badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 16px;
+	height: 16px;
+	border-radius: 9999px;
+	background-color: #111827;
+	color: #ffffff;
+}
+.repost-badge svg { width: 9px; height: 9px; display: block; }
+.repost-badge-lg { width: 18px; height: 18px; }
+.repost-badge-lg svg { width: 10px; height: 10px; }
+.repost-badge.hidden { display: none; }
+html.dark .repost-badge { background-color: #374151; }

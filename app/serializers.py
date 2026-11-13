@@ -24,7 +24,8 @@ def serialize_course_file(row):
 
 
 def serialize_post(
-    row, image_rows=None, liked_by_user=None, quoted_post=None, share_count=0
+    row, image_rows=None, liked_by_user=None, quoted_post=None, share_count=0,
+    reposted_by_user=False
 ):
     """Convert a posts+users joined row into a JSON-serializable dict.
     The handle is the user's username (falling back to the email
@@ -39,7 +40,12 @@ def serialize_post(
         image_rows: list of tuples [(image_path,), ...] for this post's images
         liked_by_user: boolean or int (0/1) indicating if current user liked this post
         quoted_post: one-level quote payload, unavailable stub, or None
-        share_count: number of existing quote posts referencing this post
+        share_count: number of quote posts plus reposts referencing this post
+        reposted_by_user: whether the viewer has reposted this post
+
+    is_repost / reposted_by / reposted_at describe the *entry*, not the post:
+    they are False/None here and filled in by the lists that surface a post
+    because someone reposted it (post_service.list_user_reposts).
     """
     if len(row) == 13:
         # Old format without liked_by_user in row (e.g., from create_post)
@@ -80,6 +86,10 @@ def serialize_post(
         'images': images,
         'share_count': int(share_count or 0),
         'quoted_post': quoted_post,
+        'reposted_by_user': bool(reposted_by_user),
+        'is_repost': False,
+        'reposted_by': None,
+        'reposted_at': None,
     }
 
 

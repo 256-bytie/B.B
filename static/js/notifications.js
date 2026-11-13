@@ -51,6 +51,7 @@ const NOTIF_ICON_PATHS = {
 	reply: '<path d="m9 17-5-5 5-5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M20 18v-2a4 4 0 0 0-4-4H4" stroke-linecap="round" stroke-linejoin="round"></path>',
 	follow: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" stroke-linecap="round" stroke-linejoin="round"></path><circle cx="9" cy="7" r="4"></circle><path d="M19 8v6M22 11h-6" stroke-linecap="round" stroke-linejoin="round"></path>',
 	quote: '<path d="M7 8h4v4a4 4 0 0 1-4 4M15 8h4v4a4 4 0 0 1-4 4" stroke-linecap="round" stroke-linejoin="round"></path>',
+	repost: '<path d="m17 2 4 4-4 4" stroke-linecap="round" stroke-linejoin="round"></path><path d="M3 11V9a4 4 0 0 1 4-4h14" stroke-linecap="round" stroke-linejoin="round"></path><path d="m7 22-4-4 4-4" stroke-linecap="round" stroke-linejoin="round"></path><path d="M21 13v2a4 4 0 0 1-4 4H3" stroke-linecap="round" stroke-linejoin="round"></path>',
 	at: '<path d="M16.5 12a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Zm0 0c0 1.657 1.007 3 2.25 3S21 13.657 21 12a9 9 0 1 0-2.636 6.364M16.5 12V8.25" stroke-linecap="round" stroke-linejoin="round"></path>',
 	users: '<circle cx="9" cy="8" r="3"></circle><path d="M3 20v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1" stroke-linecap="round" stroke-linejoin="round"></path><circle cx="17" cy="9" r="2.5"></circle><path d="M17 14a4 4 0 0 1 4 4v1" stroke-linecap="round" stroke-linejoin="round"></path>',
 	credits: '<circle cx="12" cy="12" r="9"></circle><path d="M12 8v8M8 12h8" stroke-linecap="round" stroke-linejoin="round"></path>'
@@ -96,6 +97,7 @@ const NOTIFICATION_TYPES = {
 	post_comment:    { icon: 'comment', tone: 'bg-blue-500',    accent: 'text-blue-500',   verb: function () { return 'commented on your'; },      object: function () { return 'post'; },    open: notifOpenPost },
 	comment_reply:   { icon: 'reply',   tone: 'bg-blue-500',    accent: 'text-blue-500',   verb: function () { return 'replied to your'; },        object: function () { return 'comment'; }, open: notifOpenPost },
 	post_quote:      { icon: 'quote',   tone: 'bg-indigo-500',  accent: 'text-indigo-500', verb: function () { return 'quoted your'; },            object: function () { return 'post'; },    open: notifOpenPost },
+	post_repost:     { icon: 'repost', tone: 'bg-emerald-600', accent: 'text-emerald-600', verb: function () { return 'reposted your'; },         object: function () { return 'post'; },    open: notifOpenPost },
 	mention:         { icon: 'at',      tone: 'bg-violet-500',  accent: '',                verb: function () { return 'mentioned you'; },         object: function () { return ''; },        open: notifOpenPost },
 	community_post:  { icon: 'users',   tone: 'bg-teal-500',    accent: 'text-teal-600',   verb: function () { return 'posted in'; },              object: notifCommunityName,                open: notifOpenPost },
 	community_join:  { icon: 'users',   tone: 'bg-teal-500',    accent: 'text-teal-600',   verb: function () { return 'joined'; },                 object: notifCommunityName,                open: notifOpenCommunity },

@@ -223,6 +223,83 @@ def like_post(post_id):
             conn.close()
 
 
+@bp.route('/api/posts/<int:post_id>/repost', methods=['POST'])
+def repost_post(post_id):
+    """Repost a post as the session user. Idempotent (not a toggle): a
+    repeated call, e.g. a double tap, leaves the repost in place."""
+    auth_error = _require_login()
+    if auth_error:
+        return auth_error
+
+    conn = None
+    try:
+        conn = get_db()
+        reposted, share_count = posts.create_repost(conn, session['user_id'], post_id)
+        return jsonify({'reposted': reposted, 'share_count': share_count}), 200
+    except posts.PostNotFoundError as e:
+        return jsonify({'error': str(e)}), 404
+    except posts.PostAccessError as e:
+        return jsonify({'error': str(e)}), 403
+    except PoolTimeout:
+        raise
+    except Exception as e:
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+@bp.route('/api/posts/<int:post_id>/repost', methods=['DELETE'])
+def unrepost_post(post_id):
+    """Undo the session user's repost of a post. Idempotent."""
+    auth_error = _require_login()
+    if auth_error:
+        return auth_error
+
+    conn = None
+    try:
+        conn = get_db()
+        reposted, share_count = posts.delete_repost(conn, session['user_id'], post_id)
+        return jsonify({'reposted': reposted, 'share_count': share_count}), 200
+    except posts.PostNotFoundError as e:
+        return jsonify({'error': str(e)}), 404
+    except PoolTimeout:
+        raise
+    except Exception as e:
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+@bp.route('/api/users/<int:user_id>/reposts', methods=['GET'])
+def get_user_reposts(user_id):
+    """A user's Reposts tab. Same {posts, next_cursor} shape and limit
+    clamping as GET /api/posts, but the cursor is a repost id and every item
+    carries is_repost=true plus reposted_by/reposted_at."""
+    auth_error = _require_login()
+    if auth_error:
+        return auth_error
+
+    limit = _clamp_limit(request.args.get('limit'), posts.DEFAULT_POSTS_LIMIT, posts.MAX_POSTS_LIMIT)
+    cursor_id = _parse_cursor(request.args.get('cursor'))
+
+    conn = None
+    try:
+        conn = get_db()
+        page, next_cursor = posts.list_user_reposts(
+            conn, session['user_id'], user_id, limit, cursor_id
+        )
+        return jsonify({'posts': page, 'next_cursor': next_cursor}), 200
+    except PoolTimeout:
+        raise
+    except Exception as e:
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
+    finally:
+        if conn is not None:
+            conn.close()
+
+
 @bp.route('/api/comments/<int:comment_id>/like', methods=['POST'])
 def like_comment(comment_id):
     """Toggle like on a comment"""

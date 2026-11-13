@@ -166,6 +166,8 @@ def _search_posts(cursor, q, current_user_id, limit, cursor_id):
         cursor, post_ids, current_user_id
     )
 
+    reposted_ids = post_service._reposted_by_viewer(cursor, post_ids, current_user_id)
+
     posts = []
     for row in page_rows:
         image_list = [(img,) for img in images_by_post.get(row[0], [])]
@@ -174,6 +176,7 @@ def _search_posts(cursor, q, current_user_id, limit, cursor_id):
                 row, image_list, row[13],
                 quoted_post=quoted_by_post.get(row[0]),
                 share_count=share_counts.get(row[0], 0),
+                reposted_by_user=row[0] in reposted_ids,
             )
         )
     return posts, next_cursor

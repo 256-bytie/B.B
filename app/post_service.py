@@ -15,6 +15,7 @@ from app/routes/posts.py, which is now the thin HTTP layer.
 import os
 import uuid
 
+import psycopg.errors
 from werkzeug.utils import secure_filename
 
 from app.serializers import timestamp_text, serialize_post, serialize_comment
@@ -258,7 +259,8 @@ def create_post(conn, user_id, content, audience, files, community_id=None, quot
 
 
 def fetch_post_quote_data(conn, post_ids, current_user_id):
-    """Build quote payloads and share counts for a page of selected posts.
+    """Build quote payloads and share counts (quotes + reposts) for a page of
+    selected posts.
 
     Relationship ids, original post/author rows, images, quote counts, and
     viewer-like state are fetched in batches. Missing or viewer-inaccessible
@@ -292,6 +294,19 @@ def fetch_post_quote_data(conn, post_ids, current_user_id):
         count_ids,
     )
     share_counts = {post_id: int(count) for post_id, count in cursor.fetchall()}
+    # share_count = quotes + reposts. Both are counted live (no denormalized
+    # column), so they can't drift from the rows that define them.
+    cursor.execute(
+        f'''
+        SELECT post_id, COUNT(*)
+        FROM reposts
+        WHERE post_id IN ({count_placeholders})
+        GROUP BY post_id
+        ''',
+        count_ids,
+    )
+    for repost_post_id, count in cursor.fetchall():
+        share_counts[repost_post_id] = share_counts.get(repost_post_id, 0) + int(count)
     payloads = {
         post_id: {'id': quoted_id, 'unavailable': True}
         for post_id, quoted_id in quote_target_by_post.items()
@@ -372,6 +387,19 @@ def fetch_post_quote_data(conn, post_ids, current_user_id):
     return payloads, share_counts
 
 
+def _reposted_by_viewer(cursor, post_ids, viewer_id):
+    """Subset of post_ids the viewer has reposted (empty for logged-out)."""
+    post_ids = list(post_ids or [])
+    if viewer_id is None or not post_ids:
+        return set()
+    placeholders = ','.join(['%s'] * len(post_ids))
+    cursor.execute(
+        f'SELECT post_id FROM reposts WHERE user_id = %s AND post_id IN ({placeholders})',
+        [viewer_id] + post_ids,
+    )
+    return {row[0] for row in cursor.fetchall()}
+
+
 def _hydrate_post_rows(conn, rows, current_user_id):
     """Hydrate selected post rows with images, communities, and quotes."""
     if not rows:
@@ -404,6 +432,7 @@ def _hydrate_post_rows(conn, rows, current_user_id):
     quoted_by_post, share_counts = fetch_post_quote_data(
         conn, post_ids, current_user_id
     )
+    reposted_ids = _reposted_by_viewer(cursor, post_ids, current_user_id)
 
     posts = []
     for row in rows:
@@ -414,6 +443,7 @@ def _hydrate_post_rows(conn, rows, current_user_id):
             row[13],
             quoted_post=quoted_by_post.get(row[0]),
             share_count=share_counts.get(row[0], 0),
+            reposted_by_user=row[0] in reposted_ids,
         )
         if row[0] in community_by_post:
             post['community'] = community_by_post[row[0]]
@@ -532,6 +562,155 @@ def list_posts(conn, current_user_id, audience_filter, user_id_filter, limit, cu
     next_cursor = page_rows[-1][0] if has_next and page_rows else None
 
     return _hydrate_post_rows(conn, page_rows, current_user_id), next_cursor
+
+
+def _share_count(cursor, post_id):
+    """Live quotes + reposts total for one post."""
+    cursor.execute(
+        '''SELECT (SELECT COUNT(*) FROM posts WHERE quoted_post_id = %s)
+                + (SELECT COUNT(*) FROM reposts WHERE post_id = %s)''',
+        (post_id, post_id),
+    )
+    return int(cursor.fetchone()[0])
+
+
+def create_repost(conn, user_id, post_id):
+    """Repost post_id as user_id. Idempotent: reposting something already
+    reposted succeeds without a second row or a second notification.
+    Returns (True, share_count).
+
+    Raises PostNotFoundError if the post doesn't exist or isn't visible to
+    user_id (same collapse as quoting, so a private post can't be probed),
+    and PostAccessError for posts in private communities: those are only
+    visible to members, so surfacing them on a profile would be a leak
+    vector for no benefit. Reposting your own post is allowed; it just never
+    notifies you.
+    """
+    cursor = conn.cursor()
+    cursor.execute('SELECT user_id FROM posts WHERE id = %s', (post_id,))
+    row = cursor.fetchone()
+    if not row:
+        raise PostNotFoundError('Post not found')
+    post_author_id = row[0]
+    _check_post_access(cursor, post_id, user_id, interact=False)
+    community = post_community(cursor, post_id)
+    if community is not None and community[1] == 'private':
+        raise PostAccessError("Posts in private communities can't be reposted")
+
+    try:
+        cursor.execute(
+            '''INSERT INTO reposts (user_id, post_id)
+               VALUES (%s, %s)
+               ON CONFLICT (user_id, post_id) DO NOTHING
+               RETURNING id''',
+            (user_id, post_id),
+        )
+        inserted = cursor.fetchone() is not None
+        if inserted:
+            from app import notification_service
+            with notification_service.event_savepoint(cursor):
+                notification_service.create(
+                    cursor, post_author_id, user_id, 'post_repost',
+                    'post', post_id, post_id
+                )
+        conn.commit()
+    except psycopg.errors.ForeignKeyViolation:
+        # The post was deleted between the existence check and the insert.
+        conn.rollback()
+        raise PostNotFoundError('Post not found')
+    except Exception:
+        conn.rollback()
+        raise
+    return True, _share_count(cursor, post_id)
+
+
+def delete_repost(conn, user_id, post_id):
+    """Undo user_id's repost of post_id. Idempotent. Returns (False,
+    share_count). No visibility check on purpose: someone who lost access to
+    a post must still be able to remove their own repost of it. The earlier
+    'post_repost' notification is left in place, matching un-liking.
+    """
+    cursor = conn.cursor()
+    cursor.execute('SELECT 1 FROM posts WHERE id = %s', (post_id,))
+    if not cursor.fetchone():
+        raise PostNotFoundError('Post not found')
+    try:
+        cursor.execute(
+            'DELETE FROM reposts WHERE user_id = %s AND post_id = %s',
+            (user_id, post_id),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    return False, _share_count(cursor, post_id)
+
+
+def list_user_reposts(conn, current_user_id, target_user_id, limit, cursor_id):
+    """Keyset-paginated page of the posts target_user_id has reposted, in
+    repost order (newest repost first). Same {posts, next_cursor} contract
+    as list_posts, except the cursor is a *repost* id (reposts.id), not a
+    post id, so reposting an old post sorts it to the top and pagination
+    stays stable.
+
+    Each item is the original post (author, content, counts, viewer's like
+    state) with is_repost=True plus reposted_by {id, name, handle, avatar},
+    reposted_at and repost_id. Posts in private communities the viewer can't
+    see are filtered in SQL (not after the fact) so pages stay full.
+    """
+    cursor = conn.cursor()
+    query = '''
+        SELECT posts.id, posts.user_id, posts.content, posts.audience,
+               posts.created_at, posts.comment_count, posts.like_count,
+               posts.view_count, users.full_name, users.email, users.profile_picture,
+               users.username, users.bio,
+               CASE WHEN likes.id IS NOT NULL THEN 1 ELSE 0 END as liked_by_user,
+               r.id, r.created_at,
+               ru.id, ru.full_name, ru.email, ru.username, ru.profile_picture
+        FROM reposts r
+        JOIN posts ON posts.id = r.post_id
+        JOIN users ON users.id = posts.user_id
+        JOIN users ru ON ru.id = r.user_id
+        LEFT JOIN communities c ON c.id = posts.community_id
+        LEFT JOIN likes ON likes.target_type = 'post'
+                       AND likes.target_id = posts.id
+                       AND likes.user_id = %s
+        WHERE r.user_id = %s
+          AND (posts.community_id IS NULL OR c.type <> 'private' OR EXISTS (
+              SELECT 1 FROM community_members m
+              WHERE m.community_id = posts.community_id AND m.user_id = %s
+          ))
+    '''
+    params = [current_user_id, target_user_id, current_user_id]
+    if cursor_id is not None:
+        query += ' AND r.id < %s'
+        params.append(cursor_id)
+    query += ' ORDER BY r.id DESC LIMIT %s'
+    params.append(limit + 1)
+
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+
+    has_next = len(rows) > limit
+    page_rows = rows[:limit]
+    next_cursor = page_rows[-1][14] if has_next and page_rows else None
+
+    # _hydrate_post_rows/serialize_post expect the 14-column post shape.
+    hydrated = _hydrate_post_rows(conn, [row[:14] for row in page_rows], current_user_id)
+    for post, row in zip(hydrated, page_rows):
+        (_pid, _uid, _content, _aud, _created, _cc, _lc, _vc, _fn, _em, _pp, _un, _bio, _liked,
+         repost_id, reposted_at,
+         reposter_id, reposter_name, reposter_email, reposter_username, reposter_avatar) = row
+        post['is_repost'] = True
+        post['repost_id'] = repost_id
+        post['reposted_at'] = timestamp_text(reposted_at)
+        post['reposted_by'] = {
+            'id': reposter_id,
+            'name': reposter_name,
+            'handle': reposter_username or reposter_email.split('@')[0],
+            'avatar': reposter_avatar,
+        }
+    return hydrated, next_cursor
 
 
 def get_comments(conn, post_id, current_user_id):

@@ -5,8 +5,10 @@
 // pressing Escape, or choosing an action.
 //
 // Quote opens the composer with the tapped post embedded (openQuoteComposer,
-// compose.js). Repost isn't built yet, so it closes the sheet and shows the
-// app's standard "Coming soon" toast rather than pretending.
+// compose.js). Repost calls POST /api/posts/<id>/repost (or DELETE to undo,
+// when the card's data-post-reposted is "true"; the row then reads "Undo
+// repost"). The server is idempotent, so the card state is only ever set
+// from its response.
 //
 // Loaded after comments.js (uses postCardContainerIds) and compose.js
 // (uses showToast).
@@ -29,6 +31,13 @@
 		if (isOpen) return;
 		isOpen = true;
 		lastTrigger = trigger || null;
+
+		// "Repost" vs "Undo repost" depends on the tapped card's state.
+		const triggerCard = trigger ? trigger.closest('article[data-post-id]') : null;
+		const repostLabel = sheet.querySelector('.share-sheet-repost-label');
+		if (repostLabel) {
+			repostLabel.textContent = triggerCard && triggerCard.dataset.postReposted === 'true' ? 'Undo repost' : 'Repost';
+		}
 
 		sheet.style.transition = '';
 		sheet.style.transform = '';
@@ -119,8 +128,49 @@
 			openQuoteComposer(getPostDataFromCard(postCard));
 			return;
 		}
-		showToast('Coming soon');
+		if (kind === 'repost') {
+			if (!postCard) {
+				showToast('Could not repost this post');
+				return;
+			}
+			setRepost(postCard, postCard.dataset.postReposted !== 'true');
+		}
 	});
+
+	// Repost / undo against the server, then sync every rendered copy of the
+	// post (feed, profile tabs, search, community) from the response.
+	async function setRepost(postCard, shouldRepost) {
+		const postId = postCard.dataset.postId;
+		try {
+			const response = await apiFetch(`/api/posts/${encodeURIComponent(postId)}/repost`, {
+				method: shouldRepost ? 'POST' : 'DELETE'
+			});
+			const data = await response.json().catch(function () { return {}; });
+			if (!response.ok) {
+				showToast(data.error || 'Could not update repost');
+				return;
+			}
+			document.querySelectorAll(`article[data-post-id="${postId}"]`).forEach(function (card) {
+				card.dataset.postReposted = data.reposted ? 'true' : 'false';
+				card.dataset.postShareCount = data.share_count;
+				setPostCountSpan(card.querySelector('.share-count'), data.share_count);
+			});
+			if (!data.reposted) {
+				// Undoing from your own Reposts tab removes the row.
+				const ownTab = document.getElementById('profile-reposts-container');
+				if (ownTab) {
+					ownTab.querySelectorAll(`article[data-post-id="${postId}"]`).forEach(function (card) { card.remove(); });
+					if (!ownTab.querySelector('article[data-post-id]') && !document.getElementById('profile-reposts-container-load-more-btn')) {
+						ownTab.innerHTML = '<div class="flex flex-col items-center justify-center py-16 text-gray-400 text-sm gap-2"><i class="fa-solid fa-retweet text-3xl text-gray-300"></i>No reposts yet</div>';
+					}
+				}
+			}
+			showToast(data.reposted ? 'Reposted' : 'Repost removed');
+		} catch (error) {
+			console.error('Repost failed:', error);
+			showToast('Could not update repost');
+		}
+	}
 
 	// ---- Drag down to dismiss (touch, pen and mouse via Pointer Events) ----
 	// The sheet has `touch-action: none` (style.css) so the browser doesn't

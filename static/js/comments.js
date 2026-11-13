@@ -26,7 +26,7 @@ function isCurrentUserPostOwner(authorId) {
 // community posts list (community-posts-list) — so a post found via
 // search or in a community gets real like/comment/menu/profile-nav
 // behavior instead of a read-only preview.
-const postCardContainerIds = ['feed-posts-container', 'profile-posts-container', 'user-profile-posts-container', 'search-posts-container', 'community-posts-list'];
+const postCardContainerIds = ['feed-posts-container', 'profile-posts-container', 'user-profile-posts-container', 'profile-reposts-container', 'user-profile-reposts-container', 'search-posts-container', 'community-posts-list'];
 
 // Delegated click listener for "See more" / "See less" toggling. The
 // feed only ever renders a truncated preview for long posts (see
@@ -104,7 +104,8 @@ function getPostDataFromCard(postCard) {
 		share_count: postCard.dataset.postShareCount,
 		liked_by_user: postCard.dataset.postLiked === 'true',
 		images: images,
-		quoted_post: parseQuotedPost(postCard.dataset.postQuoted)
+		quoted_post: parseQuotedPost(postCard.dataset.postQuoted),
+		is_repost: postCard.dataset.postIsRepost === 'true'
 	};
 }
 
@@ -453,6 +454,8 @@ function openCommentOverlay(postData) {
 		}
 	}
 	document.getElementById('overlay-post-time').textContent = formatPostTime(postData.created_at);
+	const overlayRepostBadge = document.getElementById('overlay-post-repost');
+	if (overlayRepostBadge) overlayRepostBadge.classList.toggle('hidden', !postData.is_repost);
 	setPostCountSpan(document.getElementById('overlay-post-comments'), postData.comment_count);
 	setPostCountSpan(document.getElementById('overlay-post-shares'), postData.share_count);
 

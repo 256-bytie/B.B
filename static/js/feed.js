@@ -226,6 +226,14 @@ ${buildQuoteImagesHtml(quoted.images)}${removeBtn}
 </div>`;
 }
 
+// Small dark circle with a white repost glyph, shown beside the timestamp
+// when post.is_repost is true (styles: .repost-badge in style.css).
+function buildRepostBadgeHtml(post) {
+    const by = post && post.reposted_by && post.reposted_by.name ? post.reposted_by.name : '';
+    const label = escapeHtml(by ? 'Reposted by ' + by : 'Reposted');
+    return '<span class="repost-badge" role="img" aria-label="' + label + '" title="' + label + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 014-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 01-4 4H3"></path></svg></span>';
+}
+
 // Build the markup for a single post row in the flat, full-width timeline
 // (border-b divider between rows, no per-post rounding/shadow/background
 // card treatment) - shared by the main feed, own-profile Posts tab, and
@@ -268,11 +276,12 @@ function buildPostCardHtml(post) {
     const showSeeLess = wordCount > 100;
     const imagesHtml = buildPostImagesHtml(post.images);
     const quoteHtml = buildQuoteCardHtml(post.quoted_post);
-    // Quotes + reposts combined (repost isn't built, so today this is quotes).
+    // Quotes + reposts combined (computed server-side).
     const shareCount = Math.max(0, Number(post.share_count) || 0);
+    const repostBadge = post.is_repost ? buildRepostBadgeHtml(post) : '';
 
     return `
-<article class="feed-card" data-post-id="${post.id}" data-post-user-id="${escapeHtml(String(post.user_id))}" data-post-author-name="${authorName}" data-post-author-handle="${authorHandle}" data-post-author-avatar="${escapeHtml(post.author_avatar || '')}" data-post-content="${content}" data-post-created-at="${escapeHtml(post.created_at)}" data-post-like-count="${post.like_count}" data-post-comment-count="${post.comment_count}" data-post-share-count="${shareCount}" data-post-liked="${post.liked_by_user}" data-post-images="${escapeHtml(JSON.stringify(post.images || []))}" data-post-quoted="${escapeHtml(JSON.stringify(post.quoted_post || null))}">
+<article class="feed-card" data-post-id="${post.id}" data-post-user-id="${escapeHtml(String(post.user_id))}" data-post-author-name="${authorName}" data-post-author-handle="${authorHandle}" data-post-author-avatar="${escapeHtml(post.author_avatar || '')}" data-post-content="${content}" data-post-created-at="${escapeHtml(post.created_at)}" data-post-like-count="${post.like_count}" data-post-comment-count="${post.comment_count}" data-post-share-count="${shareCount}" data-post-liked="${post.liked_by_user}" data-post-images="${escapeHtml(JSON.stringify(post.images || []))}" data-post-quoted="${escapeHtml(JSON.stringify(post.quoted_post || null))}" data-post-is-repost="${post.is_repost ? 'true' : 'false'}" data-post-reposted="${post.reposted_by_user ? 'true' : 'false'}">
 <div class="flex gap-3">
 <div class="feed-card-avatar-rail shrink-0 cursor-pointer" onclick="openProfileFromPostCard(this)">
 <img alt="${authorName}" class="w-11 h-11 rounded-full bg-gray-200 border border-gray-100 object-cover" src="${avatarUrl}"/>
@@ -281,7 +290,7 @@ function buildPostCardHtml(post) {
 <div class="flex items-start justify-between gap-2 mb-0.5">
 <div class="flex items-baseline gap-1.5 min-w-0 cursor-pointer" onclick="openProfileFromPostCard(this)">
 <h2 class="font-bold text-gray-900 text-[15px] leading-tight truncate">${authorName}</h2>
-<span class="text-gray-400 text-[13px] leading-tight shrink-0">· ${timeAgo}</span>
+<span class="text-gray-400 text-[13px] leading-tight shrink-0 inline-flex items-center gap-1.5">· ${timeAgo}${repostBadge}</span>
 </div>
 <button class="post-menu-btn text-gray-400 hover:text-gray-600 p-1 -mr-1 shrink-0" aria-label="More options">
 <svg class="w-4 h-4" fill="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

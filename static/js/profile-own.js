@@ -107,12 +107,21 @@ Loading posts...
 // against the user having navigated to a different profile before this
 // request resolved; pass null to skip that check (own profile can't change
 // mid-request).
-async function loadProfilePostsPage(userId, containerId, countElId, expectedUserIdGetter) {
+// `kind` is 'posts' (default: /api/posts?user_id=) or 'reposts'
+// (/api/users/<id>/reposts, cursor = repost id). Same response shape.
+function profileListUrl(userId, kind, cursor) {
+    const base = kind === 'reposts'
+        ? `/api/users/${encodeURIComponent(userId)}/reposts?limit=${FEED_PAGE_SIZE}`
+        : `/api/posts?user_id=${encodeURIComponent(userId)}&limit=${FEED_PAGE_SIZE}`;
+    return cursor == null ? base : `${base}&cursor=${cursor}`;
+}
+
+async function loadProfilePostsPage(userId, containerId, countElId, expectedUserIdGetter, kind = 'posts') {
     const container = document.getElementById(containerId);
     if (!container) return;
 
     try {
-        const response = await fetch(`/api/posts?user_id=${encodeURIComponent(userId)}&limit=${FEED_PAGE_SIZE}`);
+        const response = await fetch(profileListUrl(userId, kind));
         if (!response.ok) {
             throw new Error('Failed to load posts');
         }
@@ -126,8 +135,9 @@ async function loadProfilePostsPage(userId, containerId, countElId, expectedUser
             if (countEl) countEl.textContent = 0;
             container.innerHTML = `
 <div class="flex flex-col items-center justify-center py-16 text-gray-400 text-sm gap-2">
-<i class="fa-regular fa-note-sticky text-3xl text-gray-300"></i>
-No posts yet
+${kind === 'reposts'
+    ? '<i class="fa-solid fa-retweet text-3xl text-gray-300"></i>No reposts yet'
+    : '<i class="fa-regular fa-note-sticky text-3xl text-gray-300"></i>No posts yet'}
 </div>`;
             return;
         }
@@ -140,7 +150,7 @@ No posts yet
 
         if (data.next_cursor !== null) {
             appendLoadMoreButton(container, () =>
-                loadMoreProfilePosts(userId, containerId, countElId, data.next_cursor, expectedUserIdGetter)
+                loadMoreProfilePosts(userId, containerId, countElId, data.next_cursor, expectedUserIdGetter, kind)
             );
         }
     } catch (error) {
@@ -152,14 +162,14 @@ Couldn't load posts. Pull to refresh or try again later.
     }
 }
 
-async function loadMoreProfilePosts(userId, containerId, countElId, cursor, expectedUserIdGetter) {
+async function loadMoreProfilePosts(userId, containerId, countElId, cursor, expectedUserIdGetter, kind = 'posts') {
     const container = document.getElementById(containerId);
     if (!container) return;
     const btn = document.getElementById(`${containerId}-load-more-btn`);
     if (btn) { btn.disabled = true; btn.textContent = 'Loading...'; }
 
     try {
-        const response = await fetch(`/api/posts?user_id=${encodeURIComponent(userId)}&limit=${FEED_PAGE_SIZE}&cursor=${cursor}`);
+        const response = await fetch(profileListUrl(userId, kind, cursor));
         if (!response.ok) {
             throw new Error('Failed to load more posts');
         }
@@ -179,7 +189,7 @@ async function loadMoreProfilePosts(userId, containerId, countElId, cursor, expe
 
         if (data.next_cursor !== null) {
             appendLoadMoreButton(container, () =>
-                loadMoreProfilePosts(userId, containerId, countElId, data.next_cursor, expectedUserIdGetter)
+                loadMoreProfilePosts(userId, containerId, countElId, data.next_cursor, expectedUserIdGetter, kind)
             );
         }
     } catch (error) {
@@ -544,9 +554,10 @@ function syncAvatarAcrossRenderedPosts(userId, newAvatarUrl) {
     });
 })();
 
-// Switches the visible panel under the Profile tab bar. Only "posts" is
-// backed by real data right now; "saved", "likes" and "reposts" have no
-// backing feature yet, so they just show a placeholder state.
+// Switches the visible panel under the Profile tab bar. "posts" and
+// "reposts" are backed by real data (Reposts is re-fetched every time it is
+// opened so it never goes stale); "saved" and "likes" have no backing
+// feature yet, so they just show a placeholder state.
 function switchProfileTab(tabName) {
     const tabs = ['posts', 'saved', 'likes', 'reposts'];
     tabs.forEach(function(name) {
@@ -564,6 +575,17 @@ function switchProfileTab(tabName) {
             panel.classList.toggle('hidden', !isActive);
         }
     });
+
+    if (tabName === 'reposts' && session && session.user) {
+        const repostsContainer = document.getElementById('profile-reposts-container');
+        if (repostsContainer) {
+            repostsContainer.innerHTML = `
+<div class="flex items-center justify-center py-16 text-gray-400 text-sm">
+Loading reposts...
+</div>`;
+            loadProfilePostsPage(session.user.id, 'profile-reposts-container', null, null, 'reposts');
+        }
+    }
 }
 
 document.querySelectorAll('.profile-tab').forEach(function(tabBtn) {

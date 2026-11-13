@@ -213,6 +213,24 @@ function switchUserProfileTab(tabName) {
             panel.classList.toggle('hidden', !isActive);
         }
     });
+
+    // Reposts is re-fetched on every open (same loader as the Posts tab).
+    if (tabName === 'reposts' && currentUserProfileTarget) {
+        const repostsContainer = document.getElementById('user-profile-reposts-container');
+        if (repostsContainer) {
+            repostsContainer.innerHTML = `
+<div class="flex items-center justify-center py-16 text-gray-400 text-sm">
+Loading reposts...
+</div>`;
+            loadProfilePostsPage(
+                currentUserProfileTarget.id,
+                'user-profile-reposts-container',
+                null,
+                () => currentUserProfileTarget?.id,
+                'reposts'
+            );
+        }
+    }
 }
 
 document.querySelectorAll('.user-profile-tab').forEach(function(tabBtn) {

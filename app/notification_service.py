@@ -370,7 +370,7 @@ def list_notifications(conn, user_id, limit=DEFAULT_LIMIT, cursor_id=None):
         preview_content = None
         if row[5] == 'comment':
             preview_content = comment_content.get(row[6])
-        elif notification_type in ('post_like', 'post_quote', 'mention', 'community_post'):
+        elif notification_type in ('post_like', 'post_quote', 'post_repost', 'mention', 'community_post'):
             preview_content = post.get('content') if post else None
 
         if row[5] == 'community':
